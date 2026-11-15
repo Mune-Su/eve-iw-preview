@@ -8,7 +8,16 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <AssemblyName>AUTZ.IronWorks.Preview</AssemblyName>
     <RootNamespace>AUTZ.IronWorks.Preview</RootNamespace>
-    <Version>0.1.0</Version>
+    <Version>0.1.1</Version>
     <ApplicationManifest>app.manifest</ApplicationManifest>
+      <NoWarn>$(NoWarn);WFAC010</NoWarn>
   </PropertyGroup>
+
+  <!-- WPF + WinForms in one project: stop WinForms/Drawing being global usings,
+       otherwise Application, MessageBox, Color, Brushes, ColorConverter etc. become ambiguous. -->
+  <ItemGroup>
+    <Using Remove="System.Windows.Forms" />
+    <Using Remove="System.Drawing" />
+  </ItemGroup>
 </Project>
+

@@ -3,7 +3,7 @@ using AUTZ.IronWorks.Preview.Services;
 using AUTZ.IronWorks.Preview.Views;
 
 namespace AUTZ.IronWorks.Preview;
-public partial class App : Application
+public partial class App : System.Windows.Application
 {
     private MainWindow? _main;
     private NotifyIconService? _tray;

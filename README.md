@@ -2,6 +2,10 @@
 
 A lightweight Windows desktop utility for permanent live previews of running EVE Online clients and instant client switching.
 
+## v0.1.1
+
+Build fix release: resolves WPF/WinForms namespace clashes, rebuilds the preview card to register the DWM thumbnail against the top-level window, moves labels below each preview, uses a solid (non-transparent) window so thumbnails render, and adds the missing `app.manifest` (PerMonitorV2 DPI).
+
 ## v0.1.0 MVP
 
 - Detects visible EVE client windows automatically
