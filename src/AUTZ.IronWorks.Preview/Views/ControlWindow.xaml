@@ -2,7 +2,8 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="AUTZ IronWorks Preview"
-        Width="360" Height="360"
+        Icon="/Assets/app.ico"
+        Width="380" Height="380"
         ResizeMode="CanMinimize"
         WindowStartupLocation="CenterScreen"
         Background="#10151C" Foreground="#E5E7EB">
@@ -13,7 +14,11 @@
         </Style>
     </Window.Resources>
     <StackPanel Margin="20">
-        <TextBlock Text="AUTZ IRONWORKS PREVIEW" FontSize="18" FontWeight="Bold" Foreground="#F59E0B"/>
+        <StackPanel Orientation="Horizontal">
+            <Image Source="/Assets/logo.png" Width="52" Height="52" RenderOptions.BitmapScalingMode="HighQuality"/>
+            <TextBlock Text="AUTZ IRONWORKS PREVIEW" FontSize="18" FontWeight="Bold" Foreground="#F59E0B"
+                       VerticalAlignment="Center" Margin="12,0,0,0"/>
+        </StackPanel>
         <TextBlock x:Name="StatusText" Margin="0,12,0,4" Foreground="#E5E7EB"/>
         <TextBlock x:Name="ClientList" Margin="0,0,0,16" Foreground="#94A3B8" TextWrapping="Wrap"/>
 

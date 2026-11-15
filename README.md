@@ -4,6 +4,10 @@ A lightweight Windows utility for permanent live previews of your running EVE On
 
 **Run it:** double-click `AUTZ.IronWorks.Preview.exe` in this folder (needs the .NET 8 Desktop Runtime, already installed if you have the .NET SDK).
 
+## v0.4.2
+
+- Uses the AUTZ IronWorks emblem: exe icon, taskbar, system tray, window title bars, and shown in the control and settings windows (`src\\AUTZ.IronWorks.Preview\\Assets\\app.ico` and `logo.png` ship with the project)
+
 ## v0.4.1
 
 - Updates never touch a running app: `publish-exe.ps1` swaps the exe in the background and the new version starts the next time you open the app
@@ -50,7 +54,7 @@ dotnet build -c Release
 
 ## Icon
 
-Run `.\set-icon.ps1` from the repo root. It finds the icon your AUTZ IronWorks website uses, saves it as `src\AUTZ.IronWorks.Preview\Assets\app.ico` and rebuilds the exe. The icon is kept across updates.
+The AUTZ IronWorks emblem is built in: `src\AUTZ.IronWorks.Preview\Assets\app.ico` (exe, taskbar, tray and title bars) and `logo.png` (shown inside the app windows). To change it, replace those two files and rebuild.
 
 ## Update workflow
 

@@ -8,15 +8,18 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <AssemblyName>AUTZ.IronWorks.Preview</AssemblyName>
     <RootNamespace>AUTZ.IronWorks.Preview</RootNamespace>
-    <Version>0.4.1</Version>
+    <Version>0.4.2</Version>
+    <ApplicationIcon>Assets\app.ico</ApplicationIcon>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <NoWarn>$(NoWarn);WFAC010</NoWarn>
   </PropertyGroup>
 
-  <!-- Optional app icon: drop the AUTZ IronWorks icon in as Assets\app.ico and rebuild. -->
-  <PropertyGroup Condition="Exists('Assets\app.ico')">
-    <ApplicationIcon>Assets\app.ico</ApplicationIcon>
-  </PropertyGroup>
+
+  <!-- The AUTZ IronWorks emblem: used for the exe/taskbar/tray icon and shown inside the app windows. -->
+  <ItemGroup>
+    <Resource Include="Assets\app.ico" />
+    <Resource Include="Assets\logo.png" />
+  </ItemGroup>
 
   <!-- WPF + WinForms in one project: stop WinForms/Drawing being global usings,
        otherwise Application, MessageBox, Color, Brushes, ColorConverter etc. become ambiguous. -->
