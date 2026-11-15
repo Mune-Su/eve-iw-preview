@@ -21,6 +21,12 @@ public sealed class PreviewManager : IDisposable
     private SettingsWindow? _settingsWindow;
     private bool _visible = true;
 
+    public event Action? ClientsChanged;
+
+    public bool ThumbnailsVisible => _visible;
+
+    public IReadOnlyList<string> ClientNames => _clients.Select(c => c.CharacterName).ToList();
+
     public PreviewManager(AppSettings settings)
     {
         _settings = settings;
@@ -60,6 +66,7 @@ public sealed class PreviewManager : IDisposable
         }
 
         UpdateActive();
+        ClientsChanged?.Invoke();
     }
 
     private ThumbnailWindow CreateWindow(EveClientWindow client)
@@ -70,11 +77,15 @@ public sealed class PreviewManager : IDisposable
         var window = new ThumbnailWindow(client, _settings, width, height, left, top);
         window.Clicked += w => _eve.Activate(w.Client.Handle);
         window.Moved += OnMoved;
-        window.ContextMenu = BuildMenu();
+        window.Menu = BuildMenu();
+        window.SnapTargets = SnapTargetsFor;
         ApplyStyle(window);
         if (_visible) window.Show();
         return window;
     }
+
+    private IReadOnlyList<NativeMethods.RECT> SnapTargetsFor(ThumbnailWindow self) =>
+        _windows.Values.Where(w => w != self && w.IsVisible).Select(w => w.GetBounds()).ToList();
 
     // ---------- sizing, position, appearance ----------
 
@@ -96,7 +107,7 @@ public sealed class PreviewManager : IDisposable
         double top = 24;
         foreach (var w in _windows.Values)
         {
-            if (Math.Abs(w.Left - 24) < 1) top = Math.Max(top, w.Top + w.Height + 8);
+            if (Math.Abs(w.Left - 24) < 1) top = Math.Max(top, w.Top + w.Height);
         }
         return (24, top);
     }
@@ -165,7 +176,7 @@ public sealed class PreviewManager : IDisposable
         {
             w.Left = 24;
             w.Top = top;
-            top += w.Height + 8;
+            top += w.Height;
         }
     }
 
@@ -274,6 +285,7 @@ public sealed class PreviewManager : IDisposable
             if (_visible) w.Show();
             else w.Hide();
         }
+        ClientsChanged?.Invoke();
     }
 
     private ContextMenu BuildMenu()

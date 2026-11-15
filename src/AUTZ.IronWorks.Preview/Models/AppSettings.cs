@@ -21,6 +21,8 @@ public sealed class AppSettings
     public bool HighlightActive { get; set; } = false;
     public string ActiveBorderHex { get; set; } = "#F59E0B";
     public bool LockPositions { get; set; } = false;
+    public bool SnapEnabled { get; set; } = true;
+    public int SnapDistance { get; set; } = 15;
     public string CycleForwardHotkey { get; set; } = "Ctrl+Alt+Right";
     public string CycleBackHotkey { get; set; } = "Ctrl+Alt+Left";
     public Dictionary<string, CharacterSettings> Characters { get; set; } = new();

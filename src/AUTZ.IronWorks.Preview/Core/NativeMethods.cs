@@ -15,6 +15,9 @@ internal static class NativeMethods
     [DllImport("user32.dll")] internal static extern bool ShowWindow(nint hWnd, int command);
     [DllImport("user32.dll")] internal static extern bool IsIconic(nint hWnd);
     [DllImport("user32.dll")] internal static extern bool GetClientRect(nint hWnd, out RECT rect);
+    [DllImport("user32.dll")] internal static extern bool GetWindowRect(nint hWnd, out RECT rect);
+    [DllImport("user32.dll")] internal static extern bool GetCursorPos(out POINT point);
+    [DllImport("user32.dll")] internal static extern bool SetWindowPos(nint hWnd, nint hWndInsertAfter, int x, int y, int cx, int cy, uint flags);
 
     [DllImport("user32.dll")] internal static extern uint GetWindowThreadProcessId(nint hWnd, out uint processId);
     [DllImport("kernel32.dll")] internal static extern uint GetCurrentThreadId();
@@ -32,6 +35,10 @@ internal static class NativeMethods
 
     internal const int SW_RESTORE = 9;
 
+    internal const uint SWP_NOSIZE = 0x0001;
+    internal const uint SWP_NOZORDER = 0x0004;
+    internal const uint SWP_NOACTIVATE = 0x0010;
+
     internal const int GWL_EXSTYLE = -20;
     internal const int WS_EX_TRANSPARENT = 0x00000020;
     internal const int WS_EX_TOOLWINDOW = 0x00000080;
@@ -43,6 +50,7 @@ internal static class NativeMethods
     internal const uint DWM_TNP_SOURCECLIENTAREAONLY = 0x10;
 
     [StructLayout(LayoutKind.Sequential)] internal struct RECT { public int Left, Top, Right, Bottom; }
+    [StructLayout(LayoutKind.Sequential)] internal struct POINT { public int X, Y; }
 
     [StructLayout(LayoutKind.Sequential)]
     internal struct DWM_THUMBNAIL_PROPERTIES

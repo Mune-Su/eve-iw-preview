@@ -1,4 +1,6 @@
 using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Interop;
 using System.Windows.Media;
@@ -9,10 +11,13 @@ namespace AUTZ.IronWorks.Preview.Views;
 
 /// <summary>
 /// One borderless, always-on-top window per EVE client showing a live DWM thumbnail.
-/// Drag it anywhere; click it (without dragging) to switch to that client.
+/// Left-click switches to that client. Hold the RIGHT mouse button and drag to move it
+/// (it snaps to neighbouring thumbnails); a right-click without dragging opens the menu.
 /// </summary>
 public sealed class ThumbnailWindow : Window
 {
+    private const int DragThreshold = 4; // pixels before a right-click turns into a drag
+
     private readonly AppSettings _settings;
     private nint _thumbnail;
     private LabelWindow? _label;
@@ -22,7 +27,18 @@ public sealed class ThumbnailWindow : Window
     private bool _showLabel = true;
     private Brush? _highlight;
 
+    private bool _dragging;
+    private bool _dragMoved;
+    private NativeMethods.POINT _dragStartCursor;
+    private NativeMethods.RECT _dragStartRect;
+
     public EveClientWindow Client { get; }
+
+    /// <summary>Menu shown on a right-click that didn't drag.</summary>
+    public ContextMenu? Menu { get; set; }
+
+    /// <summary>Returns the screen rectangles of the other thumbnails, used for snapping.</summary>
+    internal Func<ThumbnailWindow, IReadOnlyList<NativeMethods.RECT>>? SnapTargets { get; set; }
 
     public event Action<ThumbnailWindow>? Clicked;
     public event Action<ThumbnailWindow>? Moved;
@@ -51,8 +67,19 @@ public sealed class ThumbnailWindow : Window
         SizeChanged += (_, _) => { UpdateThumbnail(); _label?.SyncToOwner(); };
         LocationChanged += (_, _) => _label?.SyncToOwner();
         DpiChanged += (_, _) => UpdateThumbnail();
-        MouseLeftButtonDown += OnMouseDown;
+        MouseLeftButtonDown += OnLeftDown;
+        MouseRightButtonDown += OnRightDown;
+        MouseMove += OnMouseMoved;
+        MouseRightButtonUp += OnRightUp;
+        LostMouseCapture += (_, _) => _dragging = false;
         Closed += OnClosed;
+    }
+
+    internal NativeMethods.RECT GetBounds()
+    {
+        nint hwnd = new WindowInteropHelper(this).Handle;
+        NativeMethods.GetWindowRect(hwnd, out var rect);
+        return rect;
     }
 
     public void SetLabel(string text, Brush brush, bool show)
@@ -69,11 +96,13 @@ public sealed class ThumbnailWindow : Window
         _label?.SetHighlight(brush);
     }
 
+    // ---------- thumbnail ----------
+
     private void OnSourceInitialized(object? sender, EventArgs e)
     {
         nint hwnd = new WindowInteropHelper(this).Handle;
 
-        // Keep thumbnails out of Alt+Tab.
+        // Keep thumbnails out of Alt+Tab and the taskbar.
         int style = NativeMethods.GetWindowLong(hwnd, NativeMethods.GWL_EXSTYLE);
         NativeMethods.SetWindowLong(hwnd, NativeMethods.GWL_EXSTYLE, style | NativeMethods.WS_EX_TOOLWINDOW);
 
@@ -116,19 +145,74 @@ public sealed class ThumbnailWindow : Window
         NativeMethods.DwmUpdateThumbnailProperties(_thumbnail, ref props);
     }
 
-    private void OnMouseDown(object sender, MouseButtonEventArgs e)
+    // ---------- mouse ----------
+
+    private void OnLeftDown(object sender, MouseButtonEventArgs e)
     {
-        if (e.ChangedButton != MouseButton.Left) return;
+        e.Handled = true;
+        Clicked?.Invoke(this);
+    }
 
-        double startLeft = Left, startTop = Top;
-        if (!_settings.LockPositions)
+    private void OnRightDown(object sender, MouseButtonEventArgs e)
+    {
+        e.Handled = true;
+        nint hwnd = new WindowInteropHelper(this).Handle;
+        NativeMethods.GetCursorPos(out _dragStartCursor);
+        NativeMethods.GetWindowRect(hwnd, out _dragStartRect);
+        _dragging = true;
+        _dragMoved = false;
+        CaptureMouse();
+    }
+
+    private void OnMouseMoved(object sender, MouseEventArgs e)
+    {
+        if (!_dragging) return;
+        if (e.RightButton != MouseButtonState.Pressed) { EndDrag(); return; }
+        if (_settings.LockPositions) return;
+
+        NativeMethods.GetCursorPos(out var cursor);
+        int dx = cursor.X - _dragStartCursor.X;
+        int dy = cursor.Y - _dragStartCursor.Y;
+        if (!_dragMoved && Math.Abs(dx) < DragThreshold && Math.Abs(dy) < DragThreshold) return;
+        _dragMoved = true;
+
+        int width = _dragStartRect.Right - _dragStartRect.Left;
+        int height = _dragStartRect.Bottom - _dragStartRect.Top;
+        int x = _dragStartRect.Left + dx;
+        int y = _dragStartRect.Top + dy;
+
+        if (_settings.SnapEnabled && SnapTargets is not null)
+            (x, y) = SnapHelper.Snap(x, y, width, height, SnapTargets(this), _settings.SnapDistance);
+
+        nint hwnd = new WindowInteropHelper(this).Handle;
+        NativeMethods.SetWindowPos(hwnd, 0, x, y, 0, 0,
+            NativeMethods.SWP_NOSIZE | NativeMethods.SWP_NOZORDER | NativeMethods.SWP_NOACTIVATE);
+    }
+
+    private void OnRightUp(object sender, MouseButtonEventArgs e)
+    {
+        e.Handled = true;
+        if (!_dragging) return;
+
+        bool moved = _dragMoved;
+        EndDrag();
+
+        if (moved)
         {
-            try { DragMove(); } // blocks until the mouse button is released
-            catch (InvalidOperationException) { }
+            Moved?.Invoke(this);
         }
+        else if (Menu is not null)
+        {
+            Menu.PlacementTarget = this;
+            Menu.Placement = PlacementMode.MousePoint;
+            Menu.IsOpen = true;
+        }
+    }
 
-        if (Math.Abs(Left - startLeft) < 2 && Math.Abs(Top - startTop) < 2) Clicked?.Invoke(this);
-        else Moved?.Invoke(this);
+    private void EndDrag()
+    {
+        _dragging = false;
+        if (IsMouseCaptured) ReleaseMouseCapture();
     }
 
     private void OnClosed(object? sender, EventArgs e)

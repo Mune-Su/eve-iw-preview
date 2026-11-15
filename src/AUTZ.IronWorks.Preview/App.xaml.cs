@@ -1,5 +1,6 @@
 using System.Windows;
 using AUTZ.IronWorks.Preview.Services;
+using AUTZ.IronWorks.Preview.Views;
 
 namespace AUTZ.IronWorks.Preview;
 
@@ -9,6 +10,7 @@ public partial class App : System.Windows.Application
     private bool _ownsMutex;
     private PreviewManager? _manager;
     private NotifyIconService? _tray;
+    private ControlWindow? _control;
 
     protected override void OnStartup(StartupEventArgs e)
     {
@@ -19,7 +21,7 @@ public partial class App : System.Windows.Application
         {
             _mutex.Dispose();
             _mutex = null;
-            MessageBox.Show("AUTZ IronWorks Preview is already running (look for it in the system tray).",
+            MessageBox.Show("AUTZ IronWorks Preview is already running (look for it in the taskbar or system tray).",
                 "AUTZ IronWorks Preview", MessageBoxButton.OK, MessageBoxImage.Information);
             Shutdown();
             return;
@@ -28,8 +30,22 @@ public partial class App : System.Windows.Application
 
         var settings = SettingsService.Load();
         _manager = new PreviewManager(settings);
-        _tray = new NotifyIconService(_manager, settings);
+
+        // The control window is what puts the app in the taskbar. It starts minimized so it stays out of the way.
+        _control = new ControlWindow(_manager) { WindowState = WindowState.Minimized, ShowActivated = false };
+        _control.Closed += (_, _) => Shutdown();
+
+        _tray = new NotifyIconService(_manager, settings, OpenControlWindow);
         _manager.Start();
+        _control.Show();
+    }
+
+    private void OpenControlWindow()
+    {
+        if (_control is null) return;
+        _control.Show();
+        if (_control.WindowState == WindowState.Minimized) _control.WindowState = WindowState.Normal;
+        _control.Activate();
     }
 
     protected override void OnExit(ExitEventArgs e)

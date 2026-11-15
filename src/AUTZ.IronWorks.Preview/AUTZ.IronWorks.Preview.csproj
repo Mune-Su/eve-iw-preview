@@ -8,12 +8,12 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <AssemblyName>AUTZ.IronWorks.Preview</AssemblyName>
     <RootNamespace>AUTZ.IronWorks.Preview</RootNamespace>
-    <Version>0.2.0</Version>
+    <Version>0.3.0</Version>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <NoWarn>$(NoWarn);WFAC010</NoWarn>
   </PropertyGroup>
 
-  <!-- Optional app icon: drop the AUTZ IronWorks favicon in as Assets\app.ico and rebuild. -->
+  <!-- Optional app icon: drop the AUTZ IronWorks icon in as Assets\app.ico and rebuild. -->
   <PropertyGroup Condition="Exists('Assets\app.ico')">
     <ApplicationIcon>Assets\app.ico</ApplicationIcon>
   </PropertyGroup>

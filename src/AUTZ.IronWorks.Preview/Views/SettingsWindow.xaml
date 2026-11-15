@@ -2,7 +2,7 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="AUTZ IronWorks Preview Settings"
-        Width="470" Height="740"
+        Width="470" Height="760"
         WindowStartupLocation="CenterScreen"
         Background="#10151C" Foreground="#E5E7EB"
         ResizeMode="NoResize" Topmost="True">
@@ -14,6 +14,9 @@
             <Setter Property="CaretBrush" Value="#E5E7EB"/>
             <Setter Property="Padding" Value="6"/>
             <Setter Property="Margin" Value="0,4,0,12"/>
+        </Style>
+        <Style TargetType="TextBlock">
+            <Setter Property="Foreground" Value="#E5E7EB"/>
         </Style>
     </Window.Resources>
     <Grid Margin="20">
@@ -35,23 +38,30 @@
                 <TextBlock Text="Client scan interval in milliseconds (500-10000)"/>
                 <TextBox x:Name="RefreshBox"/>
 
-                <CheckBox x:Name="LabelsBox" Content="Show character names on thumbnails" Margin="0,0,0,10"/>
+                <CheckBox x:Name="LabelsBox" Content="Show character names on thumbnails" Foreground="#E5E7EB" Margin="0,0,0,10"/>
 
                 <TextBlock Text="Default label colour (hex)"/>
                 <TextBox x:Name="LabelColourBox"/>
 
-                <CheckBox x:Name="HighlightBox" Content="Highlight the active client with a border" Margin="0,0,0,10"/>
+                <CheckBox x:Name="HighlightBox" Content="Highlight the active client with a border" Foreground="#E5E7EB" Margin="0,0,0,10"/>
 
                 <TextBlock Text="Highlight colour (hex)"/>
                 <TextBox x:Name="ColourBox"/>
 
-                <CheckBox x:Name="LockBox" Content="Lock thumbnail positions (no dragging)" Margin="0,0,0,18"/>
+                <CheckBox x:Name="LockBox" Content="Lock thumbnail positions (no dragging)" Foreground="#E5E7EB" Margin="0,0,0,10"/>
 
-                <TextBlock Text="HOTKEYS" FontWeight="Bold" Foreground="#F59E0B" Margin="0,0,0,8"/>
-                <TextBlock Text="Next client  (e.g. Ctrl+Alt+Right, leave empty to disable)"/>
-                <TextBox x:Name="ForwardBox"/>
+                <CheckBox x:Name="SnapBox" Content="Snap thumbnails together when dragged close" Foreground="#E5E7EB" Margin="0,0,0,10"/>
+
+                <TextBlock Text="Snap distance in pixels (1-100)"/>
+                <TextBox x:Name="SnapDistBox" Margin="0,4,0,18"/>
+
+                <TextBlock Text="HOTKEYS" FontWeight="Bold" Foreground="#F59E0B" Margin="0,0,0,4"/>
+                <TextBlock Text="Click a box, then press the keys you want. Backspace clears it." Foreground="#94A3B8" TextWrapping="Wrap" Margin="0,0,0,10"/>
+
+                <TextBlock Text="Next client"/>
+                <TextBox x:Name="ForwardBox" PreviewKeyDown="HotkeyBox_PreviewKeyDown" InputMethod.IsInputMethodEnabled="False"/>
                 <TextBlock Text="Previous client"/>
-                <TextBox x:Name="BackBox"/>
+                <TextBox x:Name="BackBox" PreviewKeyDown="HotkeyBox_PreviewKeyDown" InputMethod.IsInputMethodEnabled="False"/>
 
                 <TextBlock Text="PER-CHARACTER" FontWeight="Bold" Foreground="#F59E0B" Margin="0,6,0,8"/>
                 <TextBlock x:Name="NoCharText" Text="No characters known yet. Log in an EVE client, then reopen settings." Foreground="#94A3B8" TextWrapping="Wrap" Margin="0,0,0,12" Visibility="Collapsed"/>
@@ -65,8 +75,8 @@
                 <TextBox x:Name="CharWidthBox"/>
                 <TextBlock Text="Height (0 = automatic 16:9)"/>
                 <TextBox x:Name="CharHeightBox"/>
-                <TextBlock Text="Jump-to-this-client hotkey (e.g. Ctrl+Alt+1)"/>
-                <TextBox x:Name="CharHotkeyBox"/>
+                <TextBlock Text="Jump-to-this-client hotkey"/>
+                <TextBox x:Name="CharHotkeyBox" PreviewKeyDown="HotkeyBox_PreviewKeyDown" InputMethod.IsInputMethodEnabled="False"/>
             </StackPanel>
         </ScrollViewer>
 

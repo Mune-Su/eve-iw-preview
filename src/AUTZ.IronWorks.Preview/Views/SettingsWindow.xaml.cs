@@ -1,5 +1,6 @@
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 using System.Windows.Media;
 using AUTZ.IronWorks.Preview.Models;
 using AUTZ.IronWorks.Preview.Services;
@@ -25,6 +26,8 @@ public partial class SettingsWindow : Window
         HighlightBox.IsChecked = settings.HighlightActive;
         ColourBox.Text = settings.ActiveBorderHex;
         LockBox.IsChecked = settings.LockPositions;
+        SnapBox.IsChecked = settings.SnapEnabled;
+        SnapDistBox.Text = settings.SnapDistance.ToString();
         ForwardBox.Text = settings.CycleForwardHotkey;
         BackBox.Text = settings.CycleBackHotkey;
 
@@ -74,6 +77,36 @@ public partial class SettingsWindow : Window
         CharHotkeyBox.IsEnabled = enabled;
     }
 
+    /// <summary>Hotkey boxes record the key combination you press (including ` and other punctuation keys).</summary>
+    private void HotkeyBox_PreviewKeyDown(object sender, KeyEventArgs e)
+    {
+        var box = (TextBox)sender;
+        Key key = e.Key switch
+        {
+            Key.System => e.SystemKey,
+            Key.ImeProcessed => e.ImeProcessedKey,
+            Key.DeadCharProcessed => e.DeadCharProcessedKey,
+            _ => e.Key
+        };
+
+        if (key == Key.Tab) return; // let Tab move to the next box
+        e.Handled = true;
+
+        if (key is Key.None or Key.LeftCtrl or Key.RightCtrl or Key.LeftAlt or Key.RightAlt
+                or Key.LeftShift or Key.RightShift or Key.LWin or Key.RWin)
+            return; // wait for the real key
+
+        ModifierKeys modifiers = Keyboard.Modifiers;
+        if (modifiers == ModifierKeys.None && (key == Key.Back || key == Key.Delete))
+        {
+            box.Text = "";
+            return;
+        }
+
+        box.Text = HotkeyParser.ToText(modifiers, key);
+        box.CaretIndex = box.Text.Length;
+    }
+
     private void CharBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
         if (_loading) return;
@@ -97,7 +130,7 @@ public partial class SettingsWindow : Window
         CharHotkeyBox.Text = c.Hotkey;
     }
 
-    private bool IsValidColour(string text)
+    private static bool IsValidColour(string text)
     {
         if (string.IsNullOrWhiteSpace(text)) return true;
         try { _ = (Color)ColorConverter.ConvertFromString(text.Trim()); return true; }
@@ -132,7 +165,7 @@ public partial class SettingsWindow : Window
         }
         if (!IsValidHotkey(CharHotkeyBox.Text))
         {
-            MessageBox.Show(who + "hotkey not recognised. Use something like Ctrl+Alt+1 or Ctrl+Shift+F5.");
+            MessageBox.Show(who + "that hotkey isn't supported. Click the box and press the keys again.");
             return false;
         }
 
@@ -158,6 +191,11 @@ public partial class SettingsWindow : Window
             MessageBox.Show("Scan interval must be 500 to 10000 ms.");
             return;
         }
+        if (!int.TryParse(SnapDistBox.Text.Trim(), out int snap) || snap < 1 || snap > 100)
+        {
+            MessageBox.Show("Snap distance must be 1 to 100 pixels.");
+            return;
+        }
         if (!IsValidColour(LabelColourBox.Text) || !IsValidColour(ColourBox.Text))
         {
             MessageBox.Show("Enter valid hex colours such as #F59E0B.");
@@ -165,7 +203,7 @@ public partial class SettingsWindow : Window
         }
         if (!IsValidHotkey(ForwardBox.Text) || !IsValidHotkey(BackBox.Text))
         {
-            MessageBox.Show("Next/previous hotkey not recognised. Use something like Ctrl+Alt+Right, or leave it empty.");
+            MessageBox.Show("That hotkey isn't supported. Click the box and press the keys again, or press Backspace to clear it.");
             return;
         }
         if (!CommitCharacter()) return;
@@ -177,6 +215,8 @@ public partial class SettingsWindow : Window
         _settings.HighlightActive = HighlightBox.IsChecked == true;
         _settings.ActiveBorderHex = ColourBox.Text.Trim();
         _settings.LockPositions = LockBox.IsChecked == true;
+        _settings.SnapEnabled = SnapBox.IsChecked == true;
+        _settings.SnapDistance = snap;
         _settings.CycleForwardHotkey = ForwardBox.Text.Trim();
         _settings.CycleBackHotkey = BackBox.Text.Trim();
 
