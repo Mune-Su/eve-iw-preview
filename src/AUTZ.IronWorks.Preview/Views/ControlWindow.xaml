@@ -23,6 +23,6 @@
         <Button Content="Exit" Click="Exit_Click"/>
 
         <TextBlock Margin="0,8,0,0" Foreground="#64748B" TextWrapping="Wrap" FontSize="11"
-                   Text="Left-click a thumbnail to switch. Hold right-click and drag to move it."/>
+                   Text="Left-click a thumbnail to switch. Hold right-click and drag to move it. Drag the bottom-right corner to resize."/>
     </StackPanel>
 </Window>

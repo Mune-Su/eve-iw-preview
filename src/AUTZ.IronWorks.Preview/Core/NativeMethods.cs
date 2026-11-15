@@ -36,6 +36,7 @@ internal static class NativeMethods
     internal const int SW_RESTORE = 9;
 
     internal const uint SWP_NOSIZE = 0x0001;
+    internal const uint SWP_NOMOVE = 0x0002;
     internal const uint SWP_NOZORDER = 0x0004;
     internal const uint SWP_NOACTIVATE = 0x0010;
 

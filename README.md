@@ -4,6 +4,17 @@ A lightweight Windows utility for permanent live previews of your running EVE On
 
 **Run it:** double-click `AUTZ.IronWorks.Preview.exe` in this folder (needs the .NET 8 Desktop Runtime, already installed if you have the .NET SDK).
 
+## v0.4.1
+
+- Updates never touch a running app: `publish-exe.ps1` swaps the exe in the background and the new version starts the next time you open the app
+
+## v0.4.0
+
+- Drag the bottom-right corner of a thumbnail (left button) to resize it; the shape is kept and the size is remembered per character
+- Colour pickers in Settings: live swatch, "Pick..." (standard Windows colour dialog), quick presets and a live label preview
+- `set-icon.ps1` copies the AUTZ IronWorks website icon into the app (exe, taskbar and tray icon)
+- Lock option now covers both moving and resizing
+
 ## v0.3.0
 
 - Right-click and drag moves a thumbnail; left-click switches to that client
@@ -25,6 +36,7 @@ A lightweight Windows utility for permanent live previews of your running EVE On
 ## Using it
 
 - **Switch:** left-click a thumbnail.
+- **Resize:** drag the small triangle in the bottom-right corner with the left button. The thumbnail keeps its shape.
 - **Move:** hold the right mouse button on a thumbnail and drag. Right-click without dragging opens the menu (settings, lock, reset, exit).
 - **Hotkeys:** defaults are `Ctrl+Alt+Right` (next) and `Ctrl+Alt+Left` (previous), alphabetical by character. Change them in Settings by clicking the box and pressing the keys. A hotkey with no modifier (like `` ` ``) is grabbed system-wide, so you won't be able to type that key in other apps.
 - Settings are stored in `%LOCALAPPDATA%\AUTZ IronWorks Preview\settings.json`.
@@ -38,8 +50,8 @@ dotnet build -c Release
 
 ## Icon
 
-Put the AUTZ IronWorks icon at `src\AUTZ.IronWorks.Preview\Assets\app.ico` and rebuild. It becomes the exe, taskbar and tray icon.
+Run `.\set-icon.ps1` from the repo root. It finds the icon your AUTZ IronWorks website uses, saves it as `src\AUTZ.IronWorks.Preview\Assets\app.ico` and rebuilds the exe. The icon is kept across updates.
 
 ## Update workflow
 
-`update-preview.ps1` replaces the repo with the newest `AUTZ-IronWorks-Preview-v*.zip`, keeps Git history, LICENSE and the icon, builds, publishes the exe to the repo root, and stages the changes. It does not commit or push.
+`update-preview.ps1` replaces the repo with the newest `AUTZ-IronWorks-Preview-v*.zip`, keeps Git history, LICENSE and the icon, builds, publishes the exe to the repo root, and stages the changes. It does not commit or push. If the app is open it is left running; Windows lets the running exe be renamed, so the new exe takes its place and is used the next time you open the app. Always launch the exe in the repo root (not one from a `bin` folder).

@@ -22,14 +22,23 @@ public partial class SettingsWindow : Window
         WidthBox.Text = settings.PreviewWidth.ToString();
         RefreshBox.Text = settings.RefreshMilliseconds.ToString();
         LabelsBox.IsChecked = settings.ShowLabels;
-        LabelColourBox.Text = settings.DefaultLabelColourHex;
+        LabelColourBox.Hex = settings.DefaultLabelColourHex;
         HighlightBox.IsChecked = settings.HighlightActive;
-        ColourBox.Text = settings.ActiveBorderHex;
+        ColourBox.Hex = settings.ActiveBorderHex;
         LockBox.IsChecked = settings.LockPositions;
         SnapBox.IsChecked = settings.SnapEnabled;
         SnapDistBox.Text = settings.SnapDistance.ToString();
         ForwardBox.Text = settings.CycleForwardHotkey;
         BackBox.Text = settings.CycleBackHotkey;
+
+        // the per-character colour falls back to the default colour, so keep them in step
+        CharColourBox.FallbackHex = LabelColourBox.Hex;
+        LabelColourBox.HexChanged += () =>
+        {
+            CharColourBox.FallbackHex = LabelColourBox.IsValid && LabelColourBox.Hex.Length > 0 ? LabelColourBox.Hex : "#FFFFFF";
+            UpdatePreview();
+        };
+        CharColourBox.HexChanged += UpdatePreview;
 
         var names = settings.Characters.Keys
             .Concat(detectedCharacters)
@@ -55,6 +64,8 @@ public partial class SettingsWindow : Window
         {
             CharBox.SelectedIndex = 0;
         }
+
+        UpdatePreview();
     }
 
     private static CharacterSettings Clone(CharacterSettings c) => new()
@@ -76,6 +87,21 @@ public partial class SettingsWindow : Window
         CharHeightBox.IsEnabled = enabled;
         CharHotkeyBox.IsEnabled = enabled;
     }
+
+    /// <summary>Shows the label the way it will look: its text in its colour.</summary>
+    private void UpdatePreview()
+    {
+        if (LabelPreview is null || LabelBox is null || CharColourBox is null || LabelColourBox is null) return;
+
+        string text = LabelBox.Text.Trim();
+        if (text.Length == 0) text = _currentCharacter ?? "Character name";
+        LabelPreview.Text = text;
+
+        string hex = CharColourBox.Hex.Length > 0 ? CharColourBox.Hex : LabelColourBox.Hex;
+        LabelPreview.Foreground = ColourField.TryParse(hex, out var colour) ? new SolidColorBrush(colour) : Brushes.White;
+    }
+
+    private void LabelBox_TextChanged(object sender, TextChangedEventArgs e) => UpdatePreview();
 
     /// <summary>Hotkey boxes record the key combination you press (including ` and other punctuation keys).</summary>
     private void HotkeyBox_PreviewKeyDown(object sender, KeyEventArgs e)
@@ -124,17 +150,11 @@ public partial class SettingsWindow : Window
         if (_currentCharacter is null || !_edits.TryGetValue(_currentCharacter, out var c)) return;
 
         LabelBox.Text = c.Label;
-        CharColourBox.Text = c.LabelColourHex;
+        CharColourBox.Hex = c.LabelColourHex;
         CharWidthBox.Text = c.Width.ToString();
         CharHeightBox.Text = c.Height.ToString();
         CharHotkeyBox.Text = c.Hotkey;
-    }
-
-    private static bool IsValidColour(string text)
-    {
-        if (string.IsNullOrWhiteSpace(text)) return true;
-        try { _ = (Color)ColorConverter.ConvertFromString(text.Trim()); return true; }
-        catch { return false; }
+        UpdatePreview();
     }
 
     private static bool IsValidHotkey(string text) =>
@@ -158,9 +178,9 @@ public partial class SettingsWindow : Window
             MessageBox.Show(who + "height must be 0 (automatic) or 45 to 1200.");
             return false;
         }
-        if (!IsValidColour(CharColourBox.Text))
+        if (!CharColourBox.IsValid)
         {
-            MessageBox.Show(who + "enter a valid hex colour such as #F59E0B, or leave it empty.");
+            MessageBox.Show(who + "that isn't a valid colour. Use the Pick button, or type something like #F59E0B, or clear it.");
             return false;
         }
         if (!IsValidHotkey(CharHotkeyBox.Text))
@@ -172,7 +192,7 @@ public partial class SettingsWindow : Window
         c.Width = width;
         c.Height = height;
         c.Label = LabelBox.Text.Trim();
-        c.LabelColourHex = CharColourBox.Text.Trim();
+        c.LabelColourHex = CharColourBox.Hex;
         c.Hotkey = CharHotkeyBox.Text.Trim();
         return true;
     }
@@ -196,9 +216,9 @@ public partial class SettingsWindow : Window
             MessageBox.Show("Snap distance must be 1 to 100 pixels.");
             return;
         }
-        if (!IsValidColour(LabelColourBox.Text) || !IsValidColour(ColourBox.Text))
+        if (!LabelColourBox.IsValid || !ColourBox.IsValid)
         {
-            MessageBox.Show("Enter valid hex colours such as #F59E0B.");
+            MessageBox.Show("One of the colours isn't valid. Use the Pick button, or type something like #F59E0B.");
             return;
         }
         if (!IsValidHotkey(ForwardBox.Text) || !IsValidHotkey(BackBox.Text))
@@ -211,9 +231,9 @@ public partial class SettingsWindow : Window
         _settings.PreviewWidth = width;
         _settings.RefreshMilliseconds = refresh;
         _settings.ShowLabels = LabelsBox.IsChecked == true;
-        _settings.DefaultLabelColourHex = LabelColourBox.Text.Trim();
+        _settings.DefaultLabelColourHex = LabelColourBox.Hex.Length > 0 ? LabelColourBox.Hex : "#FFFFFF";
         _settings.HighlightActive = HighlightBox.IsChecked == true;
-        _settings.ActiveBorderHex = ColourBox.Text.Trim();
+        _settings.ActiveBorderHex = ColourBox.Hex.Length > 0 ? ColourBox.Hex : "#F59E0B";
         _settings.LockPositions = LockBox.IsChecked == true;
         _settings.SnapEnabled = SnapBox.IsChecked == true;
         _settings.SnapDistance = snap;

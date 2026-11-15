@@ -13,10 +13,15 @@ namespace AUTZ.IronWorks.Preview.Views;
 /// One borderless, always-on-top window per EVE client showing a live DWM thumbnail.
 /// Left-click switches to that client. Hold the RIGHT mouse button and drag to move it
 /// (it snaps to neighbouring thumbnails); a right-click without dragging opens the menu.
+/// Drag the bottom-right corner with the LEFT button to resize (the shape is kept).
 /// </summary>
 public sealed class ThumbnailWindow : Window
 {
-    private const int DragThreshold = 4; // pixels before a right-click turns into a drag
+    private const int DragThreshold = 4;     // pixels before a right-click turns into a drag
+    private const double GripSize = 18;      // size of the resize corner, in DIPs
+    private const double MinWidthDip = 80;
+    private const double MaxWidthDip = 1600;
+    private const double MinHeightDip = 45;
 
     private readonly AppSettings _settings;
     private nint _thumbnail;
@@ -32,6 +37,10 @@ public sealed class ThumbnailWindow : Window
     private NativeMethods.POINT _dragStartCursor;
     private NativeMethods.RECT _dragStartRect;
 
+    private bool _resizing;
+    private NativeMethods.POINT _resizeStartCursor;
+    private NativeMethods.RECT _resizeStartRect;
+
     public EveClientWindow Client { get; }
 
     /// <summary>Menu shown on a right-click that didn't drag.</summary>
@@ -42,6 +51,7 @@ public sealed class ThumbnailWindow : Window
 
     public event Action<ThumbnailWindow>? Clicked;
     public event Action<ThumbnailWindow>? Moved;
+    public event Action<ThumbnailWindow>? Resized;
 
     public ThumbnailWindow(EveClientWindow client, AppSettings settings, double width, double height, double left, double top)
     {
@@ -68,10 +78,13 @@ public sealed class ThumbnailWindow : Window
         LocationChanged += (_, _) => _label?.SyncToOwner();
         DpiChanged += (_, _) => UpdateThumbnail();
         MouseLeftButtonDown += OnLeftDown;
+        MouseLeftButtonUp += OnLeftUp;
         MouseRightButtonDown += OnRightDown;
         MouseMove += OnMouseMoved;
         MouseRightButtonUp += OnRightUp;
-        LostMouseCapture += (_, _) => _dragging = false;
+        MouseEnter += (_, _) => UpdateGrip();
+        MouseLeave += (_, _) => UpdateGrip();
+        LostMouseCapture += (_, _) => { _dragging = false; _resizing = false; UpdateGrip(); };
         Closed += OnClosed;
     }
 
@@ -95,6 +108,9 @@ public sealed class ThumbnailWindow : Window
         _highlight = brush;
         _label?.SetHighlight(brush);
     }
+
+    private void UpdateGrip() =>
+        _label?.SetGripVisible((IsMouseOver || _resizing) && !_settings.LockPositions);
 
     // ---------- thumbnail ----------
 
@@ -147,15 +163,76 @@ public sealed class ThumbnailWindow : Window
 
     // ---------- mouse ----------
 
+    private bool IsInGrip(Point p) => p.X >= ActualWidth - GripSize && p.Y >= ActualHeight - GripSize;
+
     private void OnLeftDown(object sender, MouseButtonEventArgs e)
     {
         e.Handled = true;
+
+        if (IsInGrip(e.GetPosition(this)))
+        {
+            if (!_settings.LockPositions) BeginResize();
+            return; // the corner never switches clients
+        }
+
         Clicked?.Invoke(this);
+    }
+
+    private void OnLeftUp(object sender, MouseButtonEventArgs e)
+    {
+        if (!_resizing) return;
+        e.Handled = true;
+        EndResize();
+    }
+
+    private void BeginResize()
+    {
+        nint hwnd = new WindowInteropHelper(this).Handle;
+        NativeMethods.GetCursorPos(out _resizeStartCursor);
+        NativeMethods.GetWindowRect(hwnd, out _resizeStartRect);
+        _resizing = true;
+        UpdateGrip();
+        CaptureMouse();
+    }
+
+    private void DoResize(MouseEventArgs e)
+    {
+        if (e.LeftButton != MouseButtonState.Pressed) { EndResize(); return; }
+
+        NativeMethods.GetCursorPos(out var cursor);
+        int dx = cursor.X - _resizeStartCursor.X;
+        int dy = cursor.Y - _resizeStartCursor.Y;
+
+        int startW = Math.Max(1, _resizeStartRect.Right - _resizeStartRect.Left);
+        int startH = Math.Max(1, _resizeStartRect.Bottom - _resizeStartRect.Top);
+        double ratio = startW / (double)startH;
+
+        var dpi = VisualTreeHelper.GetDpi(this);
+        double minW = Math.Max(MinWidthDip * dpi.DpiScaleX, MinHeightDip * dpi.DpiScaleY * ratio);
+        double maxW = Math.Max(MaxWidthDip * dpi.DpiScaleX, minW);
+
+        // follow whichever direction you pulled further, and keep the original shape
+        double scale = Math.Max((startW + dx) / (double)startW, (startH + dy) / (double)startH);
+        int newW = (int)Math.Round(Math.Clamp(startW * scale, minW, maxW));
+        int newH = Math.Max(1, (int)Math.Round(newW / ratio));
+
+        nint hwnd = new WindowInteropHelper(this).Handle;
+        NativeMethods.SetWindowPos(hwnd, 0, 0, 0, newW, newH,
+            NativeMethods.SWP_NOMOVE | NativeMethods.SWP_NOZORDER | NativeMethods.SWP_NOACTIVATE);
+    }
+
+    private void EndResize()
+    {
+        _resizing = false;
+        if (IsMouseCaptured) ReleaseMouseCapture();
+        UpdateGrip();
+        Resized?.Invoke(this);
     }
 
     private void OnRightDown(object sender, MouseButtonEventArgs e)
     {
         e.Handled = true;
+        if (_resizing) return;
         nint hwnd = new WindowInteropHelper(this).Handle;
         NativeMethods.GetCursorPos(out _dragStartCursor);
         NativeMethods.GetWindowRect(hwnd, out _dragStartRect);
@@ -166,7 +243,15 @@ public sealed class ThumbnailWindow : Window
 
     private void OnMouseMoved(object sender, MouseEventArgs e)
     {
-        if (!_dragging) return;
+        if (_resizing) { DoResize(e); return; }
+
+        if (!_dragging)
+        {
+            // show the diagonal-resize cursor over the corner
+            Cursor = !_settings.LockPositions && IsInGrip(e.GetPosition(this)) ? Cursors.SizeNWSE : Cursors.Hand;
+            return;
+        }
+
         if (e.RightButton != MouseButtonState.Pressed) { EndDrag(); return; }
         if (_settings.LockPositions) return;
 

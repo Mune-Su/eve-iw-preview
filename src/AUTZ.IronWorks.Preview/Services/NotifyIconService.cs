@@ -11,7 +11,7 @@ public sealed class NotifyIconService : IDisposable
 
     public NotifyIconService(PreviewManager manager, AppSettings settings, Action openControlWindow)
     {
-        var lockItem = new Forms.ToolStripMenuItem("Lock positions") { CheckOnClick = true };
+        var lockItem = new Forms.ToolStripMenuItem("Lock positions and sizes") { CheckOnClick = true };
         lockItem.Click += (_, _) =>
         {
             settings.LockPositions = lockItem.Checked;

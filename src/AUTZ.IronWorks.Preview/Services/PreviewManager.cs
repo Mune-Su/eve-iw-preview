@@ -77,6 +77,7 @@ public sealed class PreviewManager : IDisposable
         var window = new ThumbnailWindow(client, _settings, width, height, left, top);
         window.Clicked += w => _eve.Activate(w.Client.Handle);
         window.Moved += OnMoved;
+        window.Resized += OnResized;
         window.Menu = BuildMenu();
         window.SnapTargets = SnapTargetsFor;
         ApplyStyle(window);
@@ -159,6 +160,14 @@ public sealed class PreviewManager : IDisposable
         var c = _settings.GetOrAddCharacter(window.Client.CharacterName);
         c.Left = window.Left;
         c.Top = window.Top;
+        SettingsService.Save(_settings);
+    }
+
+    private void OnResized(ThumbnailWindow window)
+    {
+        var c = _settings.GetOrAddCharacter(window.Client.CharacterName);
+        c.Width = (int)Math.Round(window.ActualWidth);
+        c.Height = (int)Math.Round(window.ActualHeight);
         SettingsService.Save(_settings);
     }
 
@@ -295,7 +304,7 @@ public sealed class PreviewManager : IDisposable
         var settingsItem = new MenuItem { Header = "Settings…" };
         settingsItem.Click += (_, _) => OpenSettings();
 
-        var lockItem = new MenuItem { Header = "Lock positions", IsCheckable = true };
+        var lockItem = new MenuItem { Header = "Lock positions and sizes", IsCheckable = true };
         lockItem.Click += (_, _) =>
         {
             _settings.LockPositions = lockItem.IsChecked;

@@ -3,3 +3,5 @@ obj/
 .vs/
 publish/
 *.user
+*.exe.old*
+*.exe.new

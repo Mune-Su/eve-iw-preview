@@ -2,20 +2,22 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Interop;
 using System.Windows.Media;
+using System.Windows.Shapes;
 using AUTZ.IronWorks.Preview.Core;
 
 namespace AUTZ.IronWorks.Preview.Views;
 
 /// <summary>
-/// Click-through overlay that sits on top of a thumbnail window and draws the character label and the
-/// optional active-client highlight. It is a separate window because DWM thumbnails always paint above
-/// anything drawn inside the window that hosts them.
+/// Click-through overlay that sits on top of a thumbnail window and draws the character label, the
+/// optional active-client highlight and the resize grip. It is a separate window because DWM thumbnails
+/// always paint above anything drawn inside the window that hosts them.
 /// </summary>
 public sealed class LabelWindow : Window
 {
     private readonly Border _frame = new();
     private readonly Border _labelBox = new();
     private readonly TextBlock _text = new();
+    private readonly Polygon _grip = new();
 
     public LabelWindow()
     {
@@ -40,8 +42,22 @@ public sealed class LabelWindow : Window
         _labelBox.VerticalAlignment = VerticalAlignment.Top;
         _labelBox.Child = _text;
 
+        // little triangle in the bottom-right corner, only shown while hovering
+        _grip.Points = new PointCollection { new Point(0, 14), new Point(14, 0), new Point(14, 14) };
+        _grip.Fill = new SolidColorBrush(Color.FromArgb(200, 245, 158, 11));
+        _grip.Stroke = new SolidColorBrush(Color.FromArgb(160, 10, 15, 22));
+        _grip.StrokeThickness = 1;
+        _grip.HorizontalAlignment = HorizontalAlignment.Right;
+        _grip.VerticalAlignment = VerticalAlignment.Bottom;
+        _grip.Margin = new Thickness(0, 0, 3, 3);
+        _grip.Visibility = Visibility.Collapsed;
+
+        var root = new Grid();
+        root.Children.Add(_labelBox);
+        root.Children.Add(_grip);
+
         _frame.BorderThickness = new Thickness(0);
-        _frame.Child = _labelBox;
+        _frame.Child = root;
         Content = _frame;
 
         SourceInitialized += (_, _) => MakeClickThrough();
@@ -76,4 +92,7 @@ public sealed class LabelWindow : Window
         _frame.BorderBrush = brush;
         _frame.BorderThickness = new Thickness(brush is null ? 0 : 3);
     }
+
+    public void SetGripVisible(bool visible) =>
+        _grip.Visibility = visible ? Visibility.Visible : Visibility.Collapsed;
 }
