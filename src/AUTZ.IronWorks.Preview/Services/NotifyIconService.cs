@@ -1,23 +1,62 @@
 using System.Drawing;
 using System.Windows;
 using AUTZ.IronWorks.Preview.Models;
-using AUTZ.IronWorks.Preview.Views;
 using Forms = System.Windows.Forms;
 
 namespace AUTZ.IronWorks.Preview.Services;
+
 public sealed class NotifyIconService : IDisposable
 {
     private readonly Forms.NotifyIcon _icon;
-    public NotifyIconService(MainWindow main, AppSettings settings)
+
+    public NotifyIconService(PreviewManager manager, AppSettings settings)
     {
+        var lockItem = new Forms.ToolStripMenuItem("Lock positions") { CheckOnClick = true };
+        lockItem.Click += (_, _) =>
+        {
+            settings.LockPositions = lockItem.Checked;
+            SettingsService.Save(settings);
+        };
+
         var menu = new Forms.ContextMenuStrip();
-        menu.Items.Add("Show / Hide", null, (_,__) => main.ToggleVisibility());
-        menu.Items.Add("Refresh clients", null, (_,__) => main.RefreshClients());
-        menu.Items.Add("Settings", null, (_,__) => main.OpenSettings());
+        menu.Opening += (_, _) => lockItem.Checked = settings.LockPositions;
+        menu.Items.Add("Show / Hide thumbnails", null, (_, _) => manager.ToggleVisibility());
+        menu.Items.Add("Refresh clients", null, (_, _) => manager.Refresh());
+        menu.Items.Add("Settings…", null, (_, _) => manager.OpenSettings());
+        menu.Items.Add(lockItem);
+        menu.Items.Add("Reset all positions", null, (_, _) => manager.ResetPositions());
         menu.Items.Add(new Forms.ToolStripSeparator());
-        menu.Items.Add("Exit", null, (_,__) => { main.CloseForExit(); Application.Current.Shutdown(); });
-        _icon = new Forms.NotifyIcon { Text = "AUTZ IronWorks Preview", Icon = SystemIcons.Application, Visible = true, ContextMenuStrip = menu };
-        _icon.DoubleClick += (_,__) => main.ToggleVisibility();
+        menu.Items.Add("Exit", null, (_, _) => Application.Current.Shutdown());
+
+        _icon = new Forms.NotifyIcon
+        {
+            Text = "AUTZ IronWorks Preview",
+            Icon = LoadIcon(),
+            Visible = true,
+            ContextMenuStrip = menu
+        };
+        _icon.DoubleClick += (_, _) => manager.ToggleVisibility();
     }
-    public void Dispose() { _icon.Visible = false; _icon.Dispose(); }
+
+    /// <summary>Uses the exe's own icon (the AUTZ IronWorks icon once Assets\app.ico is in place).</summary>
+    private static Icon LoadIcon()
+    {
+        try
+        {
+            string? path = Environment.ProcessPath;
+            if (path is not null)
+            {
+                var icon = Icon.ExtractAssociatedIcon(path);
+                if (icon is not null) return icon;
+            }
+        }
+        catch { }
+        return SystemIcons.Application;
+    }
+
+    public void Dispose()
+    {
+        _icon.Visible = false;
+        _icon.Dispose();
+    }
 }

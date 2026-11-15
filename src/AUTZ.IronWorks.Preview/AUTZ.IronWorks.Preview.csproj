@@ -8,8 +8,14 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <AssemblyName>AUTZ.IronWorks.Preview</AssemblyName>
     <RootNamespace>AUTZ.IronWorks.Preview</RootNamespace>
-    <Version>0.1.1</Version>
+    <Version>0.2.0</Version>
     <ApplicationManifest>app.manifest</ApplicationManifest>
+    <NoWarn>$(NoWarn);WFAC010</NoWarn>
+  </PropertyGroup>
+
+  <!-- Optional app icon: drop the AUTZ IronWorks favicon in as Assets\app.ico and rebuild. -->
+  <PropertyGroup Condition="Exists('Assets\app.ico')">
+    <ApplicationIcon>Assets\app.ico</ApplicationIcon>
   </PropertyGroup>
 
   <!-- WPF + WinForms in one project: stop WinForms/Drawing being global usings,

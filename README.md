@@ -1,77 +1,39 @@
 # AUTZ IronWorks Preview
 
-A lightweight Windows desktop utility for permanent live previews of running EVE Online clients and instant client switching.
+A lightweight Windows utility for permanent live previews of your running EVE Online clients and instant client switching.
 
-## v0.1.1
+## v0.2.0
 
-Build fix release: resolves WPF/WinForms namespace clashes, rebuilds the preview card to register the DWM thumbnail against the top-level window, moves labels below each preview, uses a solid (non-transparent) window so thumbnails render, and adds the missing `app.manifest` (PerMonitorV2 DPI).
+- One borderless, always-on-top live thumbnail per EVE client (no frame, no title bar)
+- Drag any thumbnail anywhere; positions are remembered per character
+- Click a thumbnail (without dragging) to jump to that client
+- Global hotkeys: next / previous client, plus a jump-to hotkey per character
+- Per-character label text, label colour, width and height
+- Optional active-client highlight border (off by default)
+- Single-file exe in the repo root: `AUTZ IronWorks Preview.exe`
+- Tray icon: show/hide, refresh, settings, lock positions, reset positions, exit
+- Only one copy can run at a time
 
-## v0.1.0 MVP
+## Using it
 
-- Detects visible EVE client windows automatically
-- Creates permanent, always-on-top live DWM thumbnails
-- Click a preview to restore and activate that EVE client
-- Highlights the active EVE client
-- Draggable preview strip
-- Horizontal or vertical layout
-- Configurable preview width, refresh interval and active-border colour
-- Optional character labels parsed from window titles
-- System tray controls
-- Saves settings and overlay position locally
-- Does not broadcast input, read process memory, crop the client, or automate gameplay
+- **Move**: drag a thumbnail. **Switch**: click it. **Settings / lock / reset / exit**: right-click a thumbnail or use the tray icon.
+- **Default hotkeys**: `Ctrl+Alt+Right` = next client, `Ctrl+Alt+Left` = previous client (alphabetical by character). Change them, and set per-character hotkeys, in Settings.
+- Hotkey format: `Ctrl+Alt+1`, `Ctrl+Shift+F5`, `Win+Q` ... Leave empty to disable.
+- Settings are stored in `%LOCALAPPDATA%\AUTZ IronWorks Preview\settings.json`.
 
-## Requirements
-
-- Windows 10 or Windows 11
-- .NET 8 SDK to build
-- EVE Online clients running in Fixed Window or Windowed mode are recommended
-
-## Build
-
-Open PowerShell in the repository root:
+## Building
 
 ```powershell
-dotnet restore
 dotnet build -c Release
+.\publish-exe.ps1      # builds the single-file exe into the repo root
 ```
 
-## Run
+The exe needs the .NET 8 Desktop Runtime (already there if the SDK is installed).
 
-```powershell
-dotnet run --project .\src\AUTZ.IronWorks.Preview\AUTZ.IronWorks.Preview.csproj
-```
+## Icon
 
-## Publish a self-contained Windows executable
+Put the AUTZ IronWorks icon at `src\AUTZ.IronWorks.Preview\Assets\app.ico` and rebuild. It becomes the exe icon and the tray icon automatically.
 
-```powershell
-dotnet publish .\src\AUTZ.IronWorks.Preview\AUTZ.IronWorks.Preview.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -o .\publish
-```
+## Update workflow
 
-The executable will be in `publish\AUTZ.IronWorks.Preview.exe`.
-
-## Controls
-
-- Left-click a live preview: activate that EVE client
-- Drag the header: move the preview strip
-- Gear button: open settings
-- Tray icon: show/hide, refresh clients, settings, exit
-
-## Configuration
-
-Settings are stored at:
-
-`%LOCALAPPDATA%\AUTZ IronWorks Preview\settings.json`
-
-## Safety boundary
-
-AUTZ IronWorks Preview only uses documented Windows window-management and DWM thumbnail APIs. It does not transmit input to EVE, duplicate keystrokes, inspect EVE memory, or automate gameplay. Users remain responsible for compliance with CCP's current EULA and policies.
-
-## Roadmap
-
-- Per-character sizing and ordering
-- Global hotkeys and cycle groups
-- Multiple profiles
-- Layout locking
-- EVE log-based attention alerts
-- Optional sound and text-to-speech notifications
-- Installer and signed releases
+`update-preview.ps1` replaces the repo with the newest `AUTZ-IronWorks-Preview-v*.zip`, keeps Git history, LICENSE and the icon, builds, publishes the exe to the repo root, and stages the changes. It does not commit or push.
