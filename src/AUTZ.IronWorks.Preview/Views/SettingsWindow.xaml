@@ -4,10 +4,10 @@
         xmlns:local="clr-namespace:AUTZ.IronWorks.Preview.Views"
         Title="AUTZ IronWorks Preview Settings"
         Icon="/Assets/app.ico"
-        Width="480" Height="800"
+        Width="780" Height="580" MinWidth="680" MinHeight="480"
         WindowStartupLocation="CenterScreen"
         Background="#10151C" Foreground="#E5E7EB"
-        ResizeMode="NoResize" Topmost="True">
+        ShowInTaskbar="False" Topmost="True">
     <Window.Resources>
         <Style TargetType="TextBox">
             <Setter Property="Background" Value="#18202A"/>
@@ -20,6 +20,9 @@
         <Style TargetType="TextBlock">
             <Setter Property="Foreground" Value="#E5E7EB"/>
         </Style>
+        <Style TargetType="CheckBox">
+            <Setter Property="Foreground" Value="#E5E7EB"/>
+        </Style>
     </Window.Resources>
     <Grid Margin="20">
         <Grid.RowDefinitions>
@@ -27,70 +30,144 @@
             <RowDefinition Height="*"/>
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
-
         <StackPanel Orientation="Horizontal">
             <Image Source="/Assets/logo.png" Width="40" Height="40" RenderOptions.BitmapScalingMode="HighQuality"/>
             <TextBlock Text="PREVIEW SETTINGS" FontSize="22" FontWeight="Bold" Foreground="#F59E0B"
                        VerticalAlignment="Center" Margin="12,0,0,0"/>
         </StackPanel>
 
-        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" Margin="0,16,0,12">
-            <StackPanel Margin="0,0,14,0">
-                <TextBlock Text="GENERAL" FontWeight="Bold" Foreground="#F59E0B" Margin="0,0,0,8"/>
+        <Grid Grid.Row="1" Margin="0,16,0,12">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="170"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
 
-                <TextBlock Text="Default preview width (120-1200)"/>
-                <TextBox x:Name="WidthBox"/>
+            <!-- left-hand menu -->
+            <ListBox x:Name="Nav" Background="#0A0F16" BorderBrush="#334155" BorderThickness="1"
+                     Margin="0,0,16,0" SelectionChanged="Nav_SelectionChanged"
+                     ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                <ListBox.Resources>
+                    <Style TargetType="ListBoxItem">
+                        <Setter Property="Foreground" Value="#E5E7EB"/>
+                        <Setter Property="FontSize" Value="14"/>
+                        <Setter Property="Padding" Value="14,11"/>
+                        <Setter Property="Template">
+                            <Setter.Value>
+                                <ControlTemplate TargetType="ListBoxItem">
+                                    <Border x:Name="Bd" Background="Transparent" BorderBrush="Transparent"
+                                            BorderThickness="3,0,0,0" Padding="{TemplateBinding Padding}">
+                                        <TextBlock Text="{TemplateBinding Content}" Foreground="{TemplateBinding Foreground}"/>
+                                    </Border>
+                                    <ControlTemplate.Triggers>
+                                        <Trigger Property="IsMouseOver" Value="True">
+                                            <Setter TargetName="Bd" Property="Background" Value="#18202A"/>
+                                        </Trigger>
+                                        <Trigger Property="IsSelected" Value="True">
+                                            <Setter TargetName="Bd" Property="Background" Value="#1F2937"/>
+                                            <Setter TargetName="Bd" Property="BorderBrush" Value="#F59E0B"/>
+                                            <Setter Property="Foreground" Value="#F59E0B"/>
+                                        </Trigger>
+                                    </ControlTemplate.Triggers>
+                                </ControlTemplate>
+                            </Setter.Value>
+                        </Setter>
+                    </Style>
+                </ListBox.Resources>
+                <ListBoxItem Content="General"/>
+                <ListBoxItem Content="Appearance"/>
+                <ListBoxItem Content="Thumbnails"/>
+                <ListBoxItem Content="Hotkeys"/>
+                <ListBoxItem Content="Characters"/>
+            </ListBox>
 
-                <TextBlock Text="Client scan interval in milliseconds (500-10000)"/>
-                <TextBox x:Name="RefreshBox"/>
+            <!-- pages -->
+            <Grid Grid.Column="1">
+                <!-- GENERAL -->
+                <ScrollViewer x:Name="PageGeneral" VerticalScrollBarVisibility="Auto">
+                    <StackPanel Margin="0,0,14,0">
+                        <TextBlock Text="GENERAL" FontWeight="Bold" FontSize="16" Foreground="#F59E0B" Margin="0,0,0,12"/>
+                        <TextBlock Text="Default preview width (120-1200)"/>
+                        <TextBox x:Name="WidthBox"/>
+                        <TextBlock Text="Client scan interval in milliseconds (500-10000)"/>
+                        <TextBox x:Name="RefreshBox"/>
+                        <CheckBox x:Name="ClickableBox" Content="Thumbnails are clickable (untick to switch with hotkeys only)" Foreground="#E5E7EB" Margin="0,0,0,10"/>
+                        <CheckBox x:Name="LockBox" Content="Lock thumbnail positions and sizes (no moving or resizing)" Foreground="#E5E7EB" Margin="0,0,0,10"/>
+                        <CheckBox x:Name="SnapBox" Content="Snap thumbnails together when dragged close" Foreground="#E5E7EB" Margin="0,0,0,10"/>
+                        <TextBlock Text="Snap distance in pixels (1-100)"/>
+                        <TextBox x:Name="SnapDistBox"/>
+                    </StackPanel>
+                </ScrollViewer>
 
-                <CheckBox x:Name="LabelsBox" Content="Show character names on thumbnails" Foreground="#E5E7EB" Margin="0,0,0,10"/>
+                <!-- APPEARANCE -->
+                <ScrollViewer x:Name="PageAppearance" VerticalScrollBarVisibility="Auto" Visibility="Collapsed">
+                    <StackPanel Margin="0,0,14,0">
+                        <TextBlock Text="APPEARANCE" FontWeight="Bold" FontSize="16" Foreground="#F59E0B" Margin="0,0,0,12"/>
+                        <TextBlock Text="Thumbnail opacity % (10-100)"/>
+                        <TextBox x:Name="OpacityBox"/>
+                        <CheckBox x:Name="LabelsBox" Content="Show character names on thumbnails" Foreground="#E5E7EB" Margin="0,0,0,10"/>
+                        <TextBlock Text="Default label colour"/>
+                        <local:ColourField x:Name="LabelColourBox" FallbackHex="#FFFFFF"/>
+                        <CheckBox x:Name="HighlightBox" Content="Highlight the active client with a border" Foreground="#E5E7EB" Margin="0,0,0,10"/>
+                        <TextBlock Text="Highlight colour"/>
+                        <local:ColourField x:Name="ColourBox" FallbackHex="#F59E0B"/>
+                    </StackPanel>
+                </ScrollViewer>
 
-                <TextBlock Text="Default label colour"/>
-                <local:ColourField x:Name="LabelColourBox" FallbackHex="#FFFFFF"/>
+                <!-- THUMBNAILS: which clients to show -->
+                <ScrollViewer x:Name="PageThumbs" VerticalScrollBarVisibility="Auto" Visibility="Collapsed">
+                    <StackPanel Margin="0,0,14,0">
+                        <TextBlock Text="THUMBNAILS" FontWeight="Bold" FontSize="16" Foreground="#F59E0B" Margin="0,0,0,8"/>
+                        <TextBlock Text="Tick the clients you want a thumbnail for. Unticked clients get no thumbnail, but the hotkeys can still switch to them."
+                                   Foreground="#94A3B8" TextWrapping="Wrap" Margin="0,0,0,14"/>
+                        <StackPanel Orientation="Horizontal" Margin="0,0,0,12">
+                            <Button Content="Select all" Padding="14,4" Margin="0,0,8,0" Click="SelectAll_Click"/>
+                            <Button Content="Select none" Padding="14,4" Click="SelectNone_Click"/>
+                        </StackPanel>
+                        <CheckBox x:Name="LoginScreensBox" Content="Login screens (clients that aren't logged in yet)" Foreground="#E5E7EB" Margin="0,0,0,12"/>
+                        <TextBlock x:Name="NoThumbText" Text="No characters known yet. Log in an EVE client, then reopen settings."
+                                   Foreground="#94A3B8" TextWrapping="Wrap" Visibility="Collapsed"/>
+                        <StackPanel x:Name="ClientChecks"/>
+                    </StackPanel>
+                </ScrollViewer>
 
-                <CheckBox x:Name="HighlightBox" Content="Highlight the active client with a border" Foreground="#E5E7EB" Margin="0,0,0,10"/>
+                <!-- HOTKEYS -->
+                <ScrollViewer x:Name="PageHotkeys" VerticalScrollBarVisibility="Auto" Visibility="Collapsed">
+                    <StackPanel Margin="0,0,14,0">
+                        <TextBlock Text="HOTKEYS" FontWeight="Bold" FontSize="16" Foreground="#F59E0B" Margin="0,0,0,8"/>
+                        <TextBlock Text="Click a box, then press the keys you want. Backspace clears it. Next / previous go in the order the clients were opened."
+                                   Foreground="#94A3B8" TextWrapping="Wrap" Margin="0,0,0,12"/>
+                        <TextBlock Text="Next client"/>
+                        <TextBox x:Name="ForwardBox" PreviewKeyDown="HotkeyBox_PreviewKeyDown" InputMethod.IsInputMethodEnabled="False"/>
+                        <TextBlock Text="Previous client"/>
+                        <TextBox x:Name="BackBox" PreviewKeyDown="HotkeyBox_PreviewKeyDown" InputMethod.IsInputMethodEnabled="False"/>
+                    </StackPanel>
+                </ScrollViewer>
 
-                <TextBlock Text="Highlight colour"/>
-                <local:ColourField x:Name="ColourBox" FallbackHex="#F59E0B"/>
-
-                <CheckBox x:Name="LockBox" Content="Lock thumbnail positions and sizes (no moving or resizing)" Foreground="#E5E7EB" Margin="0,0,0,10"/>
-
-                <CheckBox x:Name="SnapBox" Content="Snap thumbnails together when dragged close" Foreground="#E5E7EB" Margin="0,0,0,10"/>
-
-                <TextBlock Text="Snap distance in pixels (1-100)"/>
-                <TextBox x:Name="SnapDistBox" Margin="0,4,0,18"/>
-
-                <TextBlock Text="HOTKEYS" FontWeight="Bold" Foreground="#F59E0B" Margin="0,0,0,4"/>
-                <TextBlock Text="Click a box, then press the keys you want. Backspace clears it." Foreground="#94A3B8" TextWrapping="Wrap" Margin="0,0,0,10"/>
-
-                <TextBlock Text="Next client"/>
-                <TextBox x:Name="ForwardBox" PreviewKeyDown="HotkeyBox_PreviewKeyDown" InputMethod.IsInputMethodEnabled="False"/>
-                <TextBlock Text="Previous client"/>
-                <TextBox x:Name="BackBox" PreviewKeyDown="HotkeyBox_PreviewKeyDown" InputMethod.IsInputMethodEnabled="False"/>
-
-                <TextBlock Text="PER-CHARACTER" FontWeight="Bold" Foreground="#F59E0B" Margin="0,6,0,8"/>
-                <TextBlock x:Name="NoCharText" Text="No characters known yet. Log in an EVE client, then reopen settings." Foreground="#94A3B8" TextWrapping="Wrap" Margin="0,0,0,12" Visibility="Collapsed"/>
-                <ComboBox x:Name="CharBox" Foreground="#111827" Margin="0,0,0,12" SelectionChanged="CharBox_SelectionChanged"/>
-
-                <TextBlock Text="Preview of this label"/>
-                <Border Background="#0A0F16" BorderBrush="#334155" BorderThickness="1" CornerRadius="4"
-                        Padding="10,6" Margin="0,4,0,12" HorizontalAlignment="Left">
-                    <TextBlock x:Name="LabelPreview" FontWeight="SemiBold" FontSize="14" Text="Character name"/>
-                </Border>
-
-                <TextBlock Text="Label text (empty = character name)"/>
-                <TextBox x:Name="LabelBox" TextChanged="LabelBox_TextChanged"/>
-                <TextBlock Text="Label colour (empty = default)"/>
-                <local:ColourField x:Name="CharColourBox" AllowEmpty="True"/>
-                <TextBlock Text="Width (0 = default)"/>
-                <TextBox x:Name="CharWidthBox"/>
-                <TextBlock Text="Height (0 = automatic 16:9)"/>
-                <TextBox x:Name="CharHeightBox"/>
-                <TextBlock Text="Jump-to-this-client hotkey"/>
-                <TextBox x:Name="CharHotkeyBox" PreviewKeyDown="HotkeyBox_PreviewKeyDown" InputMethod.IsInputMethodEnabled="False"/>
-            </StackPanel>
-        </ScrollViewer>
+                <!-- CHARACTERS -->
+                <ScrollViewer x:Name="PageCharacters" VerticalScrollBarVisibility="Auto" Visibility="Collapsed">
+                    <StackPanel Margin="0,0,14,0">
+                        <TextBlock Text="CHARACTERS" FontWeight="Bold" FontSize="16" Foreground="#F59E0B" Margin="0,0,0,12"/>
+                        <TextBlock x:Name="NoCharText" Text="No characters known yet. Log in an EVE client, then reopen settings." Foreground="#94A3B8" TextWrapping="Wrap" Margin="0,0,0,12" Visibility="Collapsed"/>
+                        <ComboBox x:Name="CharBox" Foreground="#111827" Margin="0,0,0,12" SelectionChanged="CharBox_SelectionChanged"/>
+                        <TextBlock Text="Preview of this label"/>
+                        <Border Background="#0A0F16" BorderBrush="#334155" BorderThickness="1" CornerRadius="4"
+                                Padding="10,6" Margin="0,4,0,12" HorizontalAlignment="Left">
+                            <TextBlock x:Name="LabelPreview" FontWeight="SemiBold" FontSize="14" Text="Character name"/>
+                        </Border>
+                        <TextBlock Text="Label text (empty = character name)"/>
+                        <TextBox x:Name="LabelBox" TextChanged="LabelBox_TextChanged"/>
+                        <TextBlock Text="Label colour (empty = default)"/>
+                        <local:ColourField x:Name="CharColourBox" AllowEmpty="True"/>
+                        <TextBlock Text="Width (0 = default)"/>
+                        <TextBox x:Name="CharWidthBox"/>
+                        <TextBlock Text="Height (0 = automatic 16:9)"/>
+                        <TextBox x:Name="CharHeightBox"/>
+                        <TextBlock Text="Jump-to-this-client hotkey"/>
+                        <TextBox x:Name="CharHotkeyBox" PreviewKeyDown="HotkeyBox_PreviewKeyDown" InputMethod.IsInputMethodEnabled="False"/>
+                    </StackPanel>
+                </ScrollViewer>
+            </Grid>
+        </Grid>
 
         <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right">
             <Button Content="Cancel" Width="90" Margin="0,0,10,0" Click="Cancel_Click"/>

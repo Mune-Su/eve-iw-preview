@@ -17,6 +17,8 @@ internal static class NativeMethods
     [DllImport("user32.dll")] internal static extern bool GetClientRect(nint hWnd, out RECT rect);
     [DllImport("user32.dll")] internal static extern bool GetWindowRect(nint hWnd, out RECT rect);
     [DllImport("user32.dll")] internal static extern bool GetCursorPos(out POINT point);
+    [DllImport("user32.dll")] internal static extern short GetAsyncKeyState(int vKey);
+    [DllImport("user32.dll")] internal static extern void SwitchToThisWindow(nint hWnd, bool altTab);
     [DllImport("user32.dll")] internal static extern bool SetWindowPos(nint hWnd, nint hWndInsertAfter, int x, int y, int cx, int cy, uint flags);
 
     [DllImport("user32.dll")] internal static extern uint GetWindowThreadProcessId(nint hWnd, out uint processId);
@@ -34,6 +36,7 @@ internal static class NativeMethods
     [DllImport("dwmapi.dll")] internal static extern int DwmUpdateThumbnailProperties(nint thumbnail, ref DWM_THUMBNAIL_PROPERTIES properties);
 
     internal const int SW_RESTORE = 9;
+    internal const int VK_SHIFT = 0x10;
 
     internal const uint SWP_NOSIZE = 0x0001;
     internal const uint SWP_NOMOVE = 0x0002;

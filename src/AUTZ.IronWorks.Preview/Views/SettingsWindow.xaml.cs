@@ -9,12 +9,21 @@ namespace AUTZ.IronWorks.Preview.Views;
 
 public partial class SettingsWindow : Window
 {
+    // order matches the left-hand menu
+    private const int PageGeneralIndex = 0;
+    private const int PageAppearanceIndex = 1;
+    private const int PageHotkeysIndex = 3;
+    private const int PageCharactersIndex = 4;
+
     private readonly AppSettings _settings;
     private readonly Dictionary<string, CharacterSettings> _edits = new(StringComparer.OrdinalIgnoreCase);
+    private readonly List<CheckBox> _showBoxes = new();
     private string? _currentCharacter;
     private bool _loading;
 
-    public SettingsWindow(AppSettings settings, IEnumerable<string> detectedCharacters)
+    /// <param name="characters">Known characters, logged-in ones first (in the order their clients opened).</param>
+    /// <param name="running">Characters that are logged in right now.</param>
+    public SettingsWindow(AppSettings settings, IReadOnlyList<string> characters, IReadOnlyCollection<string> running)
     {
         InitializeComponent();
         _settings = settings;
@@ -26,10 +35,13 @@ public partial class SettingsWindow : Window
         HighlightBox.IsChecked = settings.HighlightActive;
         ColourBox.Hex = settings.ActiveBorderHex;
         LockBox.IsChecked = settings.LockPositions;
+        ClickableBox.IsChecked = settings.ThumbnailsClickable;
+        OpacityBox.Text = settings.ThumbnailOpacityPercent.ToString();
         SnapBox.IsChecked = settings.SnapEnabled;
         SnapDistBox.Text = settings.SnapDistance.ToString();
         ForwardBox.Text = settings.CycleForwardHotkey;
         BackBox.Text = settings.CycleBackHotkey;
+        LoginScreensBox.IsChecked = settings.ShowLoginScreens;
 
         // the per-character colour falls back to the default colour, so keep them in step
         CharColourBox.FallbackHex = LabelColourBox.Hex;
@@ -40,23 +52,35 @@ public partial class SettingsWindow : Window
         };
         CharColourBox.HexChanged += UpdatePreview;
 
-        var names = settings.Characters.Keys
-            .Concat(detectedCharacters)
+        var runningSet = new HashSet<string>(running, StringComparer.OrdinalIgnoreCase);
+        var names = characters
+            .Concat(settings.Characters.Keys.Where(AppSettings.IsCharacterKey))
             .Distinct(StringComparer.OrdinalIgnoreCase)
-            .OrderBy(n => n, StringComparer.OrdinalIgnoreCase)
             .ToList();
 
         foreach (string name in names)
         {
-            _edits[name] = settings.Characters.TryGetValue(name, out var existing)
-                ? Clone(existing)
-                : new CharacterSettings();
+            var existing = settings.Characters.TryGetValue(name, out var found) ? found : null;
+            _edits[name] = existing is not null ? Clone(existing) : new CharacterSettings();
             CharBox.Items.Add(name);
+
+            string chosen = name;
+            var box = new CheckBox
+            {
+                Content = runningSet.Contains(name) ? name + "   (logged in)" : name,
+                IsChecked = !_edits[name].Hidden,
+                Foreground = new SolidColorBrush(Color.FromRgb(0xE5, 0xE7, 0xEB)),
+                Margin = new Thickness(0, 0, 0, 10)
+            };
+            box.Click += (_, _) => _edits[chosen].Hidden = box.IsChecked != true;
+            _showBoxes.Add(box);
+            ClientChecks.Children.Add(box);
         }
 
         if (names.Count == 0)
         {
             NoCharText.Visibility = Visibility.Visible;
+            NoThumbText.Visibility = Visibility.Visible;
             CharBox.IsEnabled = false;
             SetCharacterFieldsEnabled(false);
         }
@@ -66,6 +90,29 @@ public partial class SettingsWindow : Window
         }
 
         UpdatePreview();
+        Nav.SelectedIndex = 0;
+    }
+
+    private void Nav_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (PageCharacters is null) return;
+        var pages = new UIElement[] { PageGeneral, PageAppearance, PageThumbs, PageHotkeys, PageCharacters };
+        for (int i = 0; i < pages.Length; i++)
+            pages[i].Visibility = i == Nav.SelectedIndex ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    private void SelectAll_Click(object sender, RoutedEventArgs e) => SetAllShown(true);
+    private void SelectNone_Click(object sender, RoutedEventArgs e) => SetAllShown(false);
+
+    private void SetAllShown(bool shown)
+    {
+        LoginScreensBox.IsChecked = shown;
+        for (int i = 0; i < _showBoxes.Count; i++)
+        {
+            _showBoxes[i].IsChecked = shown;
+            string name = CharBox.Items[i] as string ?? "";
+            if (_edits.TryGetValue(name, out var c)) c.Hidden = !shown;
+        }
     }
 
     private static CharacterSettings Clone(CharacterSettings c) => new()
@@ -76,7 +123,8 @@ public partial class SettingsWindow : Window
         Height = c.Height,
         Label = c.Label,
         LabelColourHex = c.LabelColourHex,
-        Hotkey = c.Hotkey
+        Hotkey = c.Hotkey,
+        Hidden = c.Hidden
     };
 
     private void SetCharacterFieldsEnabled(bool enabled)
@@ -92,11 +140,9 @@ public partial class SettingsWindow : Window
     private void UpdatePreview()
     {
         if (LabelPreview is null || LabelBox is null || CharColourBox is null || LabelColourBox is null) return;
-
         string text = LabelBox.Text.Trim();
         if (text.Length == 0) text = _currentCharacter ?? "Character name";
         LabelPreview.Text = text;
-
         string hex = CharColourBox.Hex.Length > 0 ? CharColourBox.Hex : LabelColourBox.Hex;
         LabelPreview.Foreground = ColourField.TryParse(hex, out var colour) ? new SolidColorBrush(colour) : Brushes.White;
     }
@@ -114,10 +160,8 @@ public partial class SettingsWindow : Window
             Key.DeadCharProcessed => e.DeadCharProcessedKey,
             _ => e.Key
         };
-
         if (key == Key.Tab) return; // let Tab move to the next box
         e.Handled = true;
-
         if (key is Key.None or Key.LeftCtrl or Key.RightCtrl or Key.LeftAlt or Key.RightAlt
                 or Key.LeftShift or Key.RightShift or Key.LWin or Key.RWin)
             return; // wait for the real key
@@ -128,7 +172,6 @@ public partial class SettingsWindow : Window
             box.Text = "";
             return;
         }
-
         box.Text = HotkeyParser.ToText(modifiers, key);
         box.CaretIndex = box.Text.Length;
     }
@@ -148,7 +191,6 @@ public partial class SettingsWindow : Window
 
         _currentCharacter = CharBox.SelectedItem as string;
         if (_currentCharacter is null || !_edits.TryGetValue(_currentCharacter, out var c)) return;
-
         LabelBox.Text = c.Label;
         CharColourBox.Hex = c.LabelColourHex;
         CharWidthBox.Text = c.Width.ToString();
@@ -201,32 +243,48 @@ public partial class SettingsWindow : Window
 
     private void Save_Click(object sender, RoutedEventArgs e)
     {
+        // each check jumps to the page that holds the bad value
         if (!int.TryParse(WidthBox.Text.Trim(), out int width) || width < 120 || width > 1200)
         {
+            Nav.SelectedIndex = PageGeneralIndex;
             MessageBox.Show("Preview width must be 120 to 1200.");
             return;
         }
         if (!int.TryParse(RefreshBox.Text.Trim(), out int refresh) || refresh < 500 || refresh > 10000)
         {
+            Nav.SelectedIndex = PageGeneralIndex;
             MessageBox.Show("Scan interval must be 500 to 10000 ms.");
             return;
         }
         if (!int.TryParse(SnapDistBox.Text.Trim(), out int snap) || snap < 1 || snap > 100)
         {
+            Nav.SelectedIndex = PageGeneralIndex;
             MessageBox.Show("Snap distance must be 1 to 100 pixels.");
+            return;
+        }
+        if (!int.TryParse(OpacityBox.Text.Trim(), out int opacity) || opacity < 10 || opacity > 100)
+        {
+            Nav.SelectedIndex = PageAppearanceIndex;
+            MessageBox.Show("Thumbnail opacity must be 10 to 100.");
             return;
         }
         if (!LabelColourBox.IsValid || !ColourBox.IsValid)
         {
+            Nav.SelectedIndex = PageAppearanceIndex;
             MessageBox.Show("One of the colours isn't valid. Use the Pick button, or type something like #F59E0B.");
             return;
         }
         if (!IsValidHotkey(ForwardBox.Text) || !IsValidHotkey(BackBox.Text))
         {
+            Nav.SelectedIndex = PageHotkeysIndex;
             MessageBox.Show("That hotkey isn't supported. Click the box and press the keys again, or press Backspace to clear it.");
             return;
         }
-        if (!CommitCharacter()) return;
+        if (!CommitCharacter())
+        {
+            Nav.SelectedIndex = PageCharactersIndex;
+            return;
+        }
 
         _settings.PreviewWidth = width;
         _settings.RefreshMilliseconds = refresh;
@@ -235,8 +293,11 @@ public partial class SettingsWindow : Window
         _settings.HighlightActive = HighlightBox.IsChecked == true;
         _settings.ActiveBorderHex = ColourBox.Hex.Length > 0 ? ColourBox.Hex : "#F59E0B";
         _settings.LockPositions = LockBox.IsChecked == true;
+        _settings.ThumbnailsClickable = ClickableBox.IsChecked == true;
+        _settings.ThumbnailOpacityPercent = opacity;
         _settings.SnapEnabled = SnapBox.IsChecked == true;
         _settings.SnapDistance = snap;
+        _settings.ShowLoginScreens = LoginScreensBox.IsChecked == true;
         _settings.CycleForwardHotkey = ForwardBox.Text.Trim();
         _settings.CycleBackHotkey = BackBox.Text.Trim();
 
@@ -244,7 +305,7 @@ public partial class SettingsWindow : Window
         {
             CharacterSettings c = pair.Value;
             bool isEmpty = c.Width == 0 && c.Height == 0 && c.Label.Length == 0 && c.LabelColourHex.Length == 0 &&
-                           c.Hotkey.Length == 0 && c.Left is null && c.Top is null;
+                           c.Hotkey.Length == 0 && c.Left is null && c.Top is null && !c.Hidden;
             if (isEmpty) _settings.Characters.Remove(pair.Key);
             else _settings.Characters[pair.Key] = c;
         }

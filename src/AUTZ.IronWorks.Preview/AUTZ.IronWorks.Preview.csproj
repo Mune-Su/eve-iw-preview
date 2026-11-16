@@ -8,14 +8,13 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <AssemblyName>AUTZ.IronWorks.Preview</AssemblyName>
     <RootNamespace>AUTZ.IronWorks.Preview</RootNamespace>
-    <Version>0.4.2</Version>
+    <Version>0.5.0</Version>
     <ApplicationIcon>Assets\app.ico</ApplicationIcon>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <NoWarn>$(NoWarn);WFAC010</NoWarn>
   </PropertyGroup>
 
-
-  <!-- The AUTZ IronWorks emblem: used for the exe/taskbar/tray icon and shown inside the app windows. -->
+  <!-- The AUTZ IronWorks emblem: used for the exe/tray icon and shown inside the app windows. -->
   <ItemGroup>
     <Resource Include="Assets\app.ico" />
     <Resource Include="Assets\logo.png" />
