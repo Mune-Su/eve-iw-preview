@@ -13,7 +13,7 @@ public sealed class NotifyIconService : IDisposable
 
     public NotifyIconService(PreviewManager manager)
     {
-        var settingsItem = new Forms.ToolStripMenuItem("Configuration (Settings)");
+        var settingsItem = new Forms.ToolStripMenuItem("Configuration");
         settingsItem.Font = new Font(settingsItem.Font, System.Drawing.FontStyle.Bold);
         settingsItem.Click += (_, _) => manager.OpenSettings();
 
@@ -80,3 +80,4 @@ public sealed class NotifyIconService : IDisposable
         _icon.Dispose();
     }
 }
+

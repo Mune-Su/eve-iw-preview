@@ -4,7 +4,12 @@
 
 A lightweight Windows utility for permanent live previews of your running EVE Online clients and instant client switching.
 
-**Run it:** double-click `EVE-IW-Preview.exe` in this folder (needs the .NET 8 Desktop Runtime, already installed if you have the .NET SDK). It runs in the **system tray only** (no taskbar button): right-click the tray icon for the menu, double-click it for Settings (the configuration window).
+**Run it:** double-click `EVE-IW-Preview.exe` in this folder (needs the .NET 8 Desktop Runtime, already installed if you have the .NET SDK). It runs in the **system tray only** (no taskbar button): right-click the tray icon for the menu, double-click it for Configuration.
+
+## v0.9.3
+- "by AUTZ IronWorks · From planets to profit" (Settings sidebar and About) links to the AUTZ IronWorks website: https://autz-ironworks.vercel.app/#/home
+- The tray menu item is now just **Configuration**.
+- `update-preview.ps1` also looks for the versions folder inside `Documents\IronWorks`, and no longer copies itself into the versions folder. Run it from the repo: `.\update-preview.ps1`.
 
 ## v0.9.2
 - `update-preview.ps1` finds your repo and your versions folder by itself (it looks for `EVE IronWorks Preview versions` in Documents, and a repo named `EVE-IronWorks-Preview`, `EVE-IW-Preview` or `AUTZ-IronWorks-Preview` in `Projects`), so renaming them no longer breaks it. It keeps a copy of itself in the versions folder.
@@ -102,3 +107,4 @@ The AUTZ IronWorks emblem is built in: `src\AUTZ.IronWorks.Preview\Assets\app.ic
 
 ## Update workflow
 `update-preview.ps1` replaces the repo with the newest `EVE-IW-Preview-v*.zip` (or `AUTZ-IronWorks-Preview-v*.zip`, the name used before the rename), finds the repo and the versions folder by itself, keeps Git history, LICENSE and the Assets folder (icon + logo), builds, publishes the exe to the repo root, and stages the changes. It does not commit or push. If the app is open it is left running; Windows lets the running exe be renamed, so the new exe takes its place and is used the next time you open the app. Always launch the exe in the repo root (not one from a `bin` folder).
+

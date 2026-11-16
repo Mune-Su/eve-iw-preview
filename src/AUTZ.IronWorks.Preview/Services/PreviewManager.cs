@@ -1159,3 +1159,4 @@ public sealed class PreviewManager : IDisposable
         _meta.Clear();
     }
 }
+

@@ -43,6 +43,8 @@ internal static class AppInfo
     public const string ShortName = "EVE-IW-Preview";
 
     public const string Credit = "by AUTZ IronWorks \u00B7 From planets to profit";
+    /// <summary>Where the credit line links to.</summary>
+    public const string Website = "https://autz-ironworks.vercel.app/#/home";
 
     private static string LocalAppData => Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
 
@@ -61,3 +63,4 @@ internal static class AppInfo
         }
     }
 }
+

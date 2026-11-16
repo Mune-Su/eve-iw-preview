@@ -1,5 +1,6 @@
 # update-preview.ps1 - replace the EVE-IW-Preview repo with the newest EVE-IW-Preview-vX.Y.Z version.
-#  0. Finds your repo and your "versions" folder by itself (see the lookup below), so renaming them doesn't break it.
+#  0. Finds your repo and your "versions" folder by itself (see the lookup below), so renaming or moving them doesn't
+#     break it. Keep this script in the repo root and run it from there: .\update-preview.ps1
 #  1. Looks for the newest EVE-IW-Preview-v*.zip (or AUTZ-IronWorks-Preview-v*.zip, the name used before the rename)
 #     in Downloads and moves it into the versions folder.
 #  2. Picks the newest version (by version number) in that folder, zip or folder, and extracts it if needed.
@@ -15,17 +16,20 @@ $repoOverride     = ''
 
 $downloads = Join-Path $HOME 'Downloads'
 
-# the versions folder: the first of these that exists (OneDrive Documents is "My Documents" when OneDrive backs it up)
+# the versions folder: the first of these that exists. Documents\IronWorks is checked first, then Documents itself.
+# (OneDrive Documents is "My Documents" when OneDrive backs it up.)
 $versions = $versionsOverride
 if (-not $versions) {
-  $docsFolders  = @([Environment]::GetFolderPath('MyDocuments'), (Join-Path $HOME 'OneDrive\Documents'), (Join-Path $HOME 'Documents')) | Where-Object { $_ } | Select-Object -Unique
+  $myDocs       = [Environment]::GetFolderPath('MyDocuments')
+  $docsFolders  = @($myDocs, (Join-Path $HOME 'OneDrive\Documents'), (Join-Path $HOME 'Documents')) | Where-Object { $_ } | Select-Object -Unique
+  $searchIn     = @($docsFolders | ForEach-Object { Join-Path $_ 'IronWorks' }) + $docsFolders
   $versionNames = 'EVE IronWorks Preview versions', 'EVE-IW-Preview versions', 'AUTZ IronWorks Preview versions'
-  foreach ($d in $docsFolders) {
+  foreach ($d in $searchIn) {
     foreach ($n in $versionNames) {
       if (-not $versions -and (Test-Path (Join-Path $d $n))) { $versions = Join-Path $d $n }
     }
   }
-  if (-not $versions) { $versions = Join-Path ([Environment]::GetFolderPath('MyDocuments')) 'EVE IronWorks Preview versions' }
+  if (-not $versions) { $versions = Join-Path $myDocs 'IronWorks\EVE IronWorks Preview versions' }
 }
 
 # the repo: the folder this script sits in if that is a git repo, otherwise the first of these under Projects
@@ -47,7 +51,7 @@ function VersionOf($item) {
 }
 function Stop-Update($msg) { Write-Host $msg -ForegroundColor Red; exit 1 }
 
-if (-not (Test-Path $versions)) { New-Item -ItemType Directory -Path $versions | Out-Null }
+if (-not (Test-Path $versions)) { New-Item -ItemType Directory -Force -Path $versions | Out-Null; Write-Host "Created $versions" }
 Write-Host "Versions folder: $versions"
 Write-Host "Repo:            $(if ($repo) { $repo } else { '(not found)' })"
 
@@ -126,13 +130,6 @@ if ($LASTEXITCODE -ne 0) {
   Write-Host "BUILD/PUBLISH FAILED - send me the first error above before you commit." -ForegroundColor Red
 }
 
-# keep the current script next to the versions so it can be run from there too
-try {
-  $mine = Join-Path $repo 'update-preview.ps1'
-  $copy = Join-Path $versions 'update-preview.ps1'
-  if ((Test-Path $mine) -and ($mine -ne $copy)) { Copy-Item $mine $copy -Force; Unblock-File $copy }
-} catch { }
-
 git add --all 2>$null
 Write-Host ""
 Write-Host "Changes (A = added, M = modified, D = deleted, R = renamed):" -ForegroundColor Cyan
@@ -141,3 +138,4 @@ Write-Host ""
 Write-Host "If anything in src/ shows as D (deleted) that you didn't expect, stop and check. Otherwise:" -ForegroundColor Cyan
 Write-Host "  git commit -m `"v$ver`""
 Write-Host "  ppush"
+

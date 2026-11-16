@@ -117,3 +117,4 @@ internal static class NativeMethods
         [MarshalAs(UnmanagedType.Bool)] public bool SourceClientAreaOnly;
     }
 }
+

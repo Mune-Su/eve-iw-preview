@@ -7,6 +7,12 @@ internal static class Changelog
 {
     public static readonly ChangelogEntry[] Entries =
     {
+        new("0.9.3", "Website link", new[]
+        {
+            "\"by AUTZ IronWorks · From planets to profit\" in the Settings sidebar and on the About page is now a link to the AUTZ IronWorks website.",
+            "The tray menu item is now just \"Configuration\".",
+            "The update script also finds a versions folder inside Documents\\IronWorks, and it no longer keeps a second copy of itself in the versions folder (run it from the repo)."
+        }),
         new("0.9.2", "Update script finds its own folders", new[]
         {
             "The update script now finds your repo and your versions folder by itself, so renaming either folder no longer breaks it.",
@@ -86,3 +92,4 @@ internal static class Changelog
         })
     };
 }
+

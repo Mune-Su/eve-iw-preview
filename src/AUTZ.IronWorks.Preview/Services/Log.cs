@@ -20,3 +20,4 @@ internal static class Log
         catch { }
     }
 }
+

@@ -933,6 +933,13 @@ public partial class SettingsWindow : Window
         }
     }
 
+    /// <summary>The "by AUTZ IronWorks" line opens the website in the default browser.</summary>
+    private void Website_RequestNavigate(object sender, System.Windows.Navigation.RequestNavigateEventArgs e)
+    {
+        OpenPath(this, e.Uri.AbsoluteUri);
+        e.Handled = true;
+    }
+
     private void OpenFolder_Click(object sender, RoutedEventArgs e)
     {
         try { Directory.CreateDirectory(DataFolder); } catch { }
@@ -1318,3 +1325,4 @@ public partial class SettingsWindow : Window
         return true;
     }
 }
+

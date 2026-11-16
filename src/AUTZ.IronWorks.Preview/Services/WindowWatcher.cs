@@ -50,3 +50,4 @@ internal sealed class WindowWatcher : IDisposable
         _titleHook = 0;
     }
 }
+

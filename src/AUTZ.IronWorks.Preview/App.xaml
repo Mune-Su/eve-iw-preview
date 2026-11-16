@@ -406,6 +406,19 @@
             <Setter Property="Margin" Value="0,0,0,12"/>
         </Style>
 
+        <!-- "by AUTZ IronWorks · From planets to profit": a link to the website, muted until hovered -->
+        <Style x:Key="CreditLink" TargetType="Hyperlink">
+            <Setter Property="Foreground" Value="{StaticResource BrushMuted}"/>
+            <Setter Property="TextDecorations" Value="{x:Null}"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="ToolTip" Value="Open the AUTZ IronWorks website"/>
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Foreground" Value="{StaticResource BrushAccentHover}"/>
+                    <Setter Property="TextDecorations" Value="Underline"/>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
         <!-- website label: muted 13px -->
         <Style x:Key="FieldLabel" TargetType="TextBlock">
             <Setter Property="Foreground" Value="{StaticResource BrushMuted}"/>
@@ -414,3 +427,4 @@
         </Style>
     </Application.Resources>
 </Application>
+
