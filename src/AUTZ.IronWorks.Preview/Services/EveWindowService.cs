@@ -69,20 +69,61 @@ public sealed class EveWindowService
     private static string ParseCharacter(string title) =>
         title.StartsWith("EVE - ", StringComparison.OrdinalIgnoreCase) ? title[6..].Trim() : title;
 
-    /// <summary>Brings an EVE client to the front. Attaches to the current foreground thread so Windows allows it.</summary>
-    public bool Activate(nint handle)
-    {
-        if (NativeMethods.IsIconic(handle)) NativeMethods.ShowWindow(handle, NativeMethods.SW_RESTORE);
-        uint foregroundThread = NativeMethods.GetWindowThreadProcessId(NativeMethods.GetForegroundWindow(), out _);
-        uint thisThread = NativeMethods.GetCurrentThreadId();
-        bool attached = foregroundThread != 0 && foregroundThread != thisThread &&
-                        NativeMethods.AttachThreadInput(thisThread, foregroundThread, true);
-        NativeMethods.SetForegroundWindow(handle);
-        if (attached) NativeMethods.AttachThreadInput(thisThread, foregroundThread, false);
+    public bool Activate(nint handle) => Activate(handle, out _);
 
-        // Windows sometimes refuses; SwitchToThisWindow is the stronger fallback
-        if (NativeMethods.GetForegroundWindow() != handle)
-            NativeMethods.SwitchToThisWindow(handle, true);
-        return NativeMethods.GetForegroundWindow() == handle;
+    /// <summary>
+    /// Brings an EVE client to the front. The normal call is tried first (instant when Windows allows it);
+    /// only if Windows refuses do the slower fallbacks run. <paramref name="how"/> says which one worked.
+    /// </summary>
+    public bool Activate(nint handle, out string how)
+    {
+        how = "window gone";
+        if (!NativeMethods.IsWindow(handle)) return false;
+
+        if (NativeMethods.IsIconic(handle)) NativeMethods.ShowWindow(handle, NativeMethods.SW_RESTORE);
+
+        // fast path
+        NativeMethods.SetForegroundWindow(handle);
+        if (NativeMethods.GetForegroundWindow() == handle)
+        {
+            how = "direct";
+            return true;
+        }
+
+        nint foreground = NativeMethods.GetForegroundWindow();
+        uint foregroundThread = foreground == 0 ? 0 : NativeMethods.GetWindowThreadProcessId(foreground, out _);
+        uint targetThread = NativeMethods.GetWindowThreadProcessId(handle, out _);
+        uint thisThread = NativeMethods.GetCurrentThreadId();
+
+        // fallback 1: join the focused window's input queue to the target's (the way EVE-O Preview does it)
+        if (foregroundThread != 0 && targetThread != 0 && foregroundThread != targetThread &&
+            NativeMethods.AttachThreadInput(foregroundThread, targetThread, true))
+        {
+            NativeMethods.SetForegroundWindow(handle);
+            NativeMethods.AttachThreadInput(foregroundThread, targetThread, false);
+            if (NativeMethods.GetForegroundWindow() == handle) { how = "attach foreground->target"; return true; }
+        }
+
+        // fallback 2: join this app's input queue to the focused window's
+        if (foregroundThread != 0 && foregroundThread != thisThread &&
+            NativeMethods.AttachThreadInput(thisThread, foregroundThread, true))
+        {
+            NativeMethods.SetForegroundWindow(handle);
+            NativeMethods.AttachThreadInput(thisThread, foregroundThread, false);
+            if (NativeMethods.GetForegroundWindow() == handle) { how = "attach this->foreground"; return true; }
+        }
+
+        // fallback 3: a quick Alt tap makes Windows allow the focus change
+        NativeMethods.keybd_event(NativeMethods.VK_MENU, 0, 0, UIntPtr.Zero);
+        NativeMethods.keybd_event(NativeMethods.VK_MENU, 0, NativeMethods.KEYEVENTF_KEYUP, UIntPtr.Zero);
+        NativeMethods.SetForegroundWindow(handle);
+        if (NativeMethods.GetForegroundWindow() == handle) { how = "alt tap"; return true; }
+
+        // last resort
+        NativeMethods.SwitchToThisWindow(handle, true);
+        if (NativeMethods.GetForegroundWindow() == handle) { how = "switch-to-this-window"; return true; }
+
+        how = "refused by Windows";
+        return false;
     }
 }

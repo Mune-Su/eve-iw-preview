@@ -27,10 +27,9 @@ public sealed class ThumbnailWindow : Window
     private nint _thumbnail;
     private LabelWindow? _label;
 
-    private string _labelText = "";
-    private Brush _labelBrush = Brushes.White;
-    private bool _showLabel = true;
-    private Brush? _highlight;
+    private LabelSpec? _labelSpec;
+    private BorderSpec? _borderSpec;
+    private bool _excluded;
 
     private bool _dragging;
     private bool _dragMoved;
@@ -53,6 +52,9 @@ public sealed class ThumbnailWindow : Window
     public event Action<ThumbnailWindow>? Moved;
     public event Action<ThumbnailWindow>? Resized;
 
+    /// <summary>Raised while resizing, with the new size in DIPs, so other thumbnails can follow.</summary>
+    public event Action<ThumbnailWindow, double, double>? Resizing;
+
     public ThumbnailWindow(EveClientWindow client, AppSettings settings, double width, double height, double left, double top)
     {
         Client = client;
@@ -65,7 +67,7 @@ public sealed class ThumbnailWindow : Window
         ShowActivated = false;
         Topmost = true;
         Background = Brushes.Black;
-        Cursor = settings.ThumbnailsClickable ? Cursors.Hand : Cursors.Arrow;
+        Cursor = DefaultCursor;
         WindowStartupLocation = WindowStartupLocation.Manual;
         Width = width;
         Height = height;
@@ -86,13 +88,17 @@ public sealed class ThumbnailWindow : Window
         LostMouseCapture += (_, _) =>
         {
             bool moved = _dragging && _dragMoved;
+            bool resized = _resizing;
             _dragging = false;
             _resizing = false;
             UpdateGrip();
             if (moved) Moved?.Invoke(this);
+            if (resized) Resized?.Invoke(this);
         };
         Closed += OnClosed;
     }
+
+    private Cursor DefaultCursor => _settings.ThumbnailsClickable ? Cursors.Hand : Cursors.Arrow;
 
     internal NativeMethods.RECT GetBounds()
     {
@@ -101,21 +107,25 @@ public sealed class ThumbnailWindow : Window
         return rect;
     }
 
-    public void SetLabel(string text, Brush brush, bool show)
+    public void SetLabel(LabelSpec spec)
     {
-        _labelText = text;
-        _labelBrush = brush;
-        _showLabel = show;
-        _label?.SetLabel(text, brush, show);
+        _labelSpec = spec;
+        _label?.SetLabel(spec);
     }
 
-    public void SetHighlight(Brush? brush)
+    public void SetBorder(BorderSpec? spec)
     {
-        _highlight = brush;
-        _label?.SetHighlight(brush);
+        _borderSpec = spec;
+        _label?.SetBorder(spec);
     }
 
-    /// <summary>Re-applies size/opacity to the DWM thumbnail (used after settings change).</summary>
+    public void SetExcluded(bool excluded)
+    {
+        _excluded = excluded;
+        _label?.SetExcluded(excluded);
+    }
+
+    /// <summary>Re-applies size and opacity to the DWM thumbnail (used after settings change).</summary>
     public void RefreshThumbnail() => UpdateThumbnail();
 
     private static bool ShiftHeld() =>
@@ -142,8 +152,9 @@ public sealed class ThumbnailWindow : Window
     {
         if (_label is not null) return;
         _label = new LabelWindow { Owner = this };
-        _label.SetLabel(_labelText, _labelBrush, _showLabel);
-        _label.SetHighlight(_highlight);
+        if (_labelSpec is not null) _label.SetLabel(_labelSpec);
+        _label.SetBorder(_borderSpec);
+        _label.SetExcluded(_excluded);
         _label.SyncToOwner();
         _label.Show();
         UpdateThumbnail();
@@ -154,6 +165,8 @@ public sealed class ThumbnailWindow : Window
         if (_thumbnail == 0) return;
         nint hwnd = new WindowInteropHelper(this).Handle;
         if (hwnd == 0 || !NativeMethods.GetClientRect(hwnd, out var rect)) return;
+
+        byte opacity = (byte)Math.Clamp((int)Math.Round(_settings.ThumbnailOpacityPercent * 255 / 100.0), 25, 255);
 
         var props = new NativeMethods.DWM_THUMBNAIL_PROPERTIES
         {
@@ -166,7 +179,7 @@ public sealed class ThumbnailWindow : Window
                 Right = Math.Max(1, rect.Right),
                 Bottom = Math.Max(1, rect.Bottom)
             },
-            Opacity = (byte)Math.Clamp((int)Math.Round(_settings.ThumbnailOpacityPercent * 255 / 100.0), 25, 255),
+            Opacity = opacity,
             Visible = true,
             SourceClientAreaOnly = true
         };
@@ -190,7 +203,7 @@ public sealed class ThumbnailWindow : Window
         if (ShiftHeld())
         {
             if (!_settings.LockPositions) BeginDrag(); // Shift + left-drag moves the thumbnail
-            return; // shift-click never switches clients
+            return; // a shift-click never switches clients
         }
 
         if (_settings.ThumbnailsClickable) Clicked?.Invoke(this);
@@ -244,6 +257,8 @@ public sealed class ThumbnailWindow : Window
         nint hwnd = new WindowInteropHelper(this).Handle;
         NativeMethods.SetWindowPos(hwnd, 0, 0, 0, newW, newH,
             NativeMethods.SWP_NOMOVE | NativeMethods.SWP_NOZORDER | NativeMethods.SWP_NOACTIVATE);
+
+        Resizing?.Invoke(this, newW / dpi.DpiScaleX, newH / dpi.DpiScaleY);
     }
 
     private void EndResize()
@@ -267,14 +282,13 @@ public sealed class ThumbnailWindow : Window
     private void OnMouseMoved(object sender, MouseEventArgs e)
     {
         if (_resizing) { DoResize(e); return; }
+
         if (!_dragging)
         {
             // cursor hints: corner = resize, shift = move, otherwise a hand only when clicking does something
-            Cursor = _settings.LockPositions
-                ? (_settings.ThumbnailsClickable ? Cursors.Hand : Cursors.Arrow)
-                : IsInGrip(e.GetPosition(this)) ? Cursors.SizeNWSE
-                : ShiftHeld() ? Cursors.SizeAll
-                : _settings.ThumbnailsClickable ? Cursors.Hand : Cursors.Arrow;
+            if (!_settings.LockPositions && IsInGrip(e.GetPosition(this))) Cursor = Cursors.SizeNWSE;
+            else if (!_settings.LockPositions && ShiftHeld()) Cursor = Cursors.SizeAll;
+            else Cursor = DefaultCursor;
             return;
         }
 
@@ -291,6 +305,7 @@ public sealed class ThumbnailWindow : Window
         int height = _dragStartRect.Bottom - _dragStartRect.Top;
         int x = _dragStartRect.Left + dx;
         int y = _dragStartRect.Top + dy;
+
         if (_settings.SnapEnabled && SnapTargets is not null)
             (x, y) = SnapHelper.Snap(x, y, width, height, SnapTargets(this), _settings.SnapDistance);
 

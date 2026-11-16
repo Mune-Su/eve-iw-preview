@@ -14,6 +14,13 @@ public partial class App : System.Windows.Application
     {
         base.OnStartup(e);
 
+        // a bug in one handler should never take the whole app (and every thumbnail) down: log it and carry on
+        DispatcherUnhandledException += (_, args) =>
+        {
+            Log.Write("Unhandled error: " + args.Exception);
+            args.Handled = true;
+        };
+
         _mutex = new Mutex(true, "AUTZ.IronWorks.Preview.SingleInstance", out bool created);
         if (!created)
         {
@@ -26,11 +33,11 @@ public partial class App : System.Windows.Application
         }
         _ownsMutex = true;
 
-        var settings = SettingsService.Load();
-        _manager = new PreviewManager(settings);
+        var (settings, state) = ProfileStore.LoadActive();
+        _manager = new PreviewManager(settings, state);
 
         // No main window and no taskbar button: the app lives in the system tray (right-click the icon).
-        _tray = new NotifyIconService(_manager, settings);
+        _tray = new NotifyIconService(_manager);
         _manager.Start();
     }
 

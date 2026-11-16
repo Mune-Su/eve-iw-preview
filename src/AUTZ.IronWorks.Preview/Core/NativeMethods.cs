@@ -6,24 +6,32 @@ namespace AUTZ.IronWorks.Preview.Core;
 internal static class NativeMethods
 {
     internal delegate bool EnumWindowsProc(nint hWnd, nint lParam);
+    internal delegate void WinEventProc(nint hWinEventHook, uint eventType, nint hwnd, int idObject, int idChild, uint eventThread, uint eventTime);
+
     [DllImport("user32.dll")] internal static extern bool EnumWindows(EnumWindowsProc callback, nint lParam);
+    [DllImport("user32.dll")] internal static extern bool IsWindow(nint hWnd);
     [DllImport("user32.dll")] internal static extern bool IsWindowVisible(nint hWnd);
     [DllImport("user32.dll", CharSet = CharSet.Unicode)] internal static extern int GetWindowText(nint hWnd, StringBuilder text, int count);
     [DllImport("user32.dll")] internal static extern int GetWindowTextLength(nint hWnd);
     [DllImport("user32.dll")] internal static extern nint GetForegroundWindow();
     [DllImport("user32.dll")] internal static extern bool SetForegroundWindow(nint hWnd);
+    [DllImport("user32.dll")] internal static extern void SwitchToThisWindow(nint hWnd, bool altTab);
     [DllImport("user32.dll")] internal static extern bool ShowWindow(nint hWnd, int command);
+    [DllImport("user32.dll")] internal static extern bool ShowWindowAsync(nint hWnd, int command);
     [DllImport("user32.dll")] internal static extern bool IsIconic(nint hWnd);
     [DllImport("user32.dll")] internal static extern bool GetClientRect(nint hWnd, out RECT rect);
     [DllImport("user32.dll")] internal static extern bool GetWindowRect(nint hWnd, out RECT rect);
     [DllImport("user32.dll")] internal static extern bool GetCursorPos(out POINT point);
     [DllImport("user32.dll")] internal static extern short GetAsyncKeyState(int vKey);
-    [DllImport("user32.dll")] internal static extern void SwitchToThisWindow(nint hWnd, bool altTab);
+    [DllImport("user32.dll")] internal static extern void keybd_event(byte vk, byte scan, uint flags, UIntPtr extraInfo);
     [DllImport("user32.dll")] internal static extern bool SetWindowPos(nint hWnd, nint hWndInsertAfter, int x, int y, int cx, int cy, uint flags);
 
     [DllImport("user32.dll")] internal static extern uint GetWindowThreadProcessId(nint hWnd, out uint processId);
     [DllImport("kernel32.dll")] internal static extern uint GetCurrentThreadId();
     [DllImport("user32.dll")] internal static extern bool AttachThreadInput(uint idAttach, uint idAttachTo, bool attach);
+
+    [DllImport("user32.dll")] internal static extern nint SetWinEventHook(uint eventMin, uint eventMax, nint hmodWinEventProc, WinEventProc callback, uint idProcess, uint idThread, uint flags);
+    [DllImport("user32.dll")] internal static extern bool UnhookWinEvent(nint hook);
 
     [DllImport("user32.dll")] internal static extern bool RegisterHotKey(nint hWnd, int id, uint modifiers, uint vk);
     [DllImport("user32.dll")] internal static extern bool UnregisterHotKey(nint hWnd, int id);
@@ -35,8 +43,17 @@ internal static class NativeMethods
     [DllImport("dwmapi.dll")] internal static extern int DwmUnregisterThumbnail(nint thumbnail);
     [DllImport("dwmapi.dll")] internal static extern int DwmUpdateThumbnailProperties(nint thumbnail, ref DWM_THUMBNAIL_PROPERTIES properties);
 
+    internal const int SW_MINIMIZE = 6;
+    internal const int SW_SHOWMINNOACTIVE = 7;
     internal const int SW_RESTORE = 9;
+
     internal const int VK_SHIFT = 0x10;
+    internal const byte VK_MENU = 0x12;
+    internal const uint KEYEVENTF_KEYUP = 0x0002;
+
+    internal const uint EVENT_SYSTEM_FOREGROUND = 0x0003;
+    internal const uint EVENT_OBJECT_NAMECHANGE = 0x800C;
+    internal const uint WINEVENT_OUTOFCONTEXT = 0x0000;
 
     internal const uint SWP_NOSIZE = 0x0001;
     internal const uint SWP_NOMOVE = 0x0002;

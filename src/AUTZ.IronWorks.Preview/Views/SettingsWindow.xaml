@@ -4,7 +4,7 @@
         xmlns:local="clr-namespace:AUTZ.IronWorks.Preview.Views"
         Title="AUTZ IronWorks Preview Settings"
         Icon="/Assets/app.ico"
-        Width="780" Height="580" MinWidth="680" MinHeight="480"
+        Width="900" Height="700" MinWidth="780" MinHeight="520"
         WindowStartupLocation="CenterScreen"
         Background="#10151C" Foreground="#E5E7EB"
         ShowInTaskbar="False" Topmost="True">
@@ -17,11 +17,35 @@
             <Setter Property="Padding" Value="6"/>
             <Setter Property="Margin" Value="0,4,0,12"/>
         </Style>
-        <Style TargetType="TextBlock">
-            <Setter Property="Foreground" Value="#E5E7EB"/>
-        </Style>
         <Style TargetType="CheckBox">
             <Setter Property="Foreground" Value="#E5E7EB"/>
+            <Setter Property="Margin" Value="0,0,0,10"/>
+        </Style>
+        <Style TargetType="RadioButton">
+            <Setter Property="Foreground" Value="#E5E7EB"/>
+            <Setter Property="Margin" Value="0,0,0,8"/>
+        </Style>
+        <Style TargetType="ComboBox">
+            <Setter Property="Foreground" Value="#111827"/>
+            <Setter Property="Margin" Value="0,4,0,12"/>
+            <Setter Property="Padding" Value="6,4"/>
+        </Style>
+        <Style x:Key="PageTitle" TargetType="TextBlock">
+            <Setter Property="FontWeight" Value="Bold"/>
+            <Setter Property="FontSize" Value="16"/>
+            <Setter Property="Foreground" Value="#F59E0B"/>
+            <Setter Property="Margin" Value="0,0,0,12"/>
+        </Style>
+        <Style x:Key="GroupTitle" TargetType="TextBlock">
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="Foreground" Value="#F59E0B"/>
+            <Setter Property="Margin" Value="0,10,0,10"/>
+        </Style>
+        <Style x:Key="Hint" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="#94A3B8"/>
+            <Setter Property="TextWrapping" Value="Wrap"/>
+            <Setter Property="Margin" Value="0,0,0,12"/>
         </Style>
     </Window.Resources>
     <Grid Margin="20">
@@ -77,78 +101,183 @@
                 <ListBoxItem Content="Appearance"/>
                 <ListBoxItem Content="Thumbnails"/>
                 <ListBoxItem Content="Hotkeys"/>
+                <ListBoxItem Content="Clients"/>
                 <ListBoxItem Content="Characters"/>
+                <ListBoxItem Content="Profiles"/>
             </ListBox>
 
             <!-- pages -->
             <Grid Grid.Column="1">
+
                 <!-- GENERAL -->
                 <ScrollViewer x:Name="PageGeneral" VerticalScrollBarVisibility="Auto">
                     <StackPanel Margin="0,0,14,0">
-                        <TextBlock Text="GENERAL" FontWeight="Bold" FontSize="16" Foreground="#F59E0B" Margin="0,0,0,12"/>
-                        <TextBlock Text="Default preview width (120-1200)"/>
+                        <TextBlock Text="GENERAL" Style="{StaticResource PageTitle}"/>
+
+                        <TextBlock Text="Save thumbnail positions by" Style="{StaticResource GroupTitle}" Margin="0,0,0,10"/>
+                        <RadioButton x:Name="ModeCharacterRadio" GroupName="PositionMode"
+                                     >
+                            <TextBlock TextWrapping="Wrap" Text="Character: a character's thumbnail stays where you put it, whichever client they log in on"/>
+                        </RadioButton>
+                        <RadioButton x:Name="ModeClientRadio" GroupName="PositionMode"
+                                     >
+                            <TextBlock TextWrapping="Wrap" Text="Client: the 1st client to open always uses the 1st position, the 2nd the 2nd, and so on (login screens included)"/>
+                        </RadioButton>
+                        <CheckBox x:Name="InheritBox" Margin="0,8,0,10"
+                                  >
+                            <TextBlock TextWrapping="Wrap" Text="A new character takes the position and size of the login screen it replaces"/>
+                        </CheckBox>
+
+                        <TextBlock Text="Size" Style="{StaticResource GroupTitle}"/>
+                        <CheckBox x:Name="SameSizeBox"
+                                  >
+                            <TextBlock TextWrapping="Wrap" Text="Keep all thumbnails the same size (resize one and they all follow). Untick to size each one separately."/>
+                        </CheckBox>
+                        <TextBlock Text="Default / shared thumbnail width (120-1200)"/>
                         <TextBox x:Name="WidthBox"/>
-                        <TextBlock Text="Client scan interval in milliseconds (500-10000)"/>
-                        <TextBox x:Name="RefreshBox"/>
-                        <CheckBox x:Name="ClickableBox" Content="Thumbnails are clickable (untick to switch with hotkeys only)" Foreground="#E5E7EB" Margin="0,0,0,10"/>
-                        <CheckBox x:Name="LockBox" Content="Lock thumbnail positions and sizes (no moving or resizing)" Foreground="#E5E7EB" Margin="0,0,0,10"/>
-                        <CheckBox x:Name="SnapBox" Content="Snap thumbnails together when dragged close" Foreground="#E5E7EB" Margin="0,0,0,10"/>
+                        <TextBlock Text="Default / shared thumbnail height (0 = automatic 16:9, otherwise 45-1200)"/>
+                        <TextBox x:Name="HeightBox"/>
+
+                        <TextBlock Text="Behaviour" Style="{StaticResource GroupTitle}"/>
+                        <CheckBox x:Name="ClickableBox" >
+                            <TextBlock TextWrapping="Wrap" Text="Thumbnails are clickable (untick to switch with the hotkeys only)"/>
+                        </CheckBox>
+                        <CheckBox x:Name="LockBox" Content="Lock thumbnail positions and sizes (no moving or resizing)"/>
+                        <CheckBox x:Name="SnapBox" Content="Snap thumbnails together when dragged close"/>
                         <TextBlock Text="Snap distance in pixels (1-100)"/>
                         <TextBox x:Name="SnapDistBox"/>
+                        <TextBlock Text="Client scan interval in milliseconds (500-10000)"/>
+                        <TextBox x:Name="RefreshBox"/>
+                        <TextBlock Text="Hold Shift and drag with the left mouse button to move a thumbnail. Drag the small triangle in its bottom-right corner to resize it."
+                                   Style="{StaticResource Hint}"/>
                     </StackPanel>
                 </ScrollViewer>
 
                 <!-- APPEARANCE -->
                 <ScrollViewer x:Name="PageAppearance" VerticalScrollBarVisibility="Auto" Visibility="Collapsed">
                     <StackPanel Margin="0,0,14,0">
-                        <TextBlock Text="APPEARANCE" FontWeight="Bold" FontSize="16" Foreground="#F59E0B" Margin="0,0,0,12"/>
+                        <TextBlock Text="APPEARANCE" Style="{StaticResource PageTitle}"/>
+
                         <TextBlock Text="Thumbnail opacity % (10-100)"/>
                         <TextBox x:Name="OpacityBox"/>
-                        <CheckBox x:Name="LabelsBox" Content="Show character names on thumbnails" Foreground="#E5E7EB" Margin="0,0,0,10"/>
-                        <TextBlock Text="Default label colour"/>
+
+                        <TextBlock Text="Text label" Style="{StaticResource GroupTitle}"/>
+                        <CheckBox x:Name="LabelsBox" Content="Show character names on thumbnails"/>
+                        <TextBlock Text="Font"/>
+                        <ComboBox x:Name="FontBox" IsEditable="True"/>
+                        <TextBlock Text="Font size (6-72)"/>
+                        <TextBox x:Name="FontSizeBox"/>
+                        <CheckBox x:Name="BoldBox" Content="Bold"/>
+                        <TextBlock Text="Default text colour"/>
                         <local:ColourField x:Name="LabelColourBox" FallbackHex="#FFFFFF"/>
-                        <CheckBox x:Name="HighlightBox" Content="Highlight the active client with a border" Foreground="#E5E7EB" Margin="0,0,0,10"/>
-                        <TextBlock Text="Highlight colour"/>
+                        <TextBlock Text="Text background colour"/>
+                        <local:ColourField x:Name="LabelBgBox" FallbackHex="#0A0F16"/>
+                        <TextBlock Text="Text background opacity % (0-100, 0 = no background)"/>
+                        <TextBox x:Name="LabelBgOpacityBox"/>
+                        <TextBlock Text="Text position"/>
+                        <ComboBox x:Name="LabelPositionBox"/>
+                        <TextBlock Text="Horizontal offset in pixels (-300 to 300)"/>
+                        <TextBox x:Name="OffsetXBox"/>
+                        <TextBlock Text="Vertical offset in pixels (-300 to 300)"/>
+                        <TextBox x:Name="OffsetYBox"/>
+
+                        <TextBlock Text="Border on the client you're in" Style="{StaticResource GroupTitle}"/>
+                        <CheckBox x:Name="HighlightBox" Content="Show a border on the active client's thumbnail"/>
+                        <TextBlock Text="Colour"/>
                         <local:ColourField x:Name="ColourBox" FallbackHex="#F59E0B"/>
+                        <TextBlock Text="Width in pixels (1-20)"/>
+                        <TextBox x:Name="ActiveWidthBox"/>
+                        <TextBlock Text="Style"/>
+                        <ComboBox x:Name="ActiveStyleBox"/>
+
+                        <TextBlock Text="Border on the other clients" Style="{StaticResource GroupTitle}"/>
+                        <CheckBox x:Name="InactiveBox" Content="Show a border on inactive clients' thumbnails"/>
+                        <TextBlock Text="Colour"/>
+                        <local:ColourField x:Name="InactiveColourBox" FallbackHex="#606060"/>
+                        <TextBlock Text="Width in pixels (1-20)"/>
+                        <TextBox x:Name="InactiveWidthBox"/>
+                        <TextBlock Text="Style"/>
+                        <ComboBox x:Name="InactiveStyleBox"/>
                     </StackPanel>
                 </ScrollViewer>
 
                 <!-- THUMBNAILS: which clients to show -->
                 <ScrollViewer x:Name="PageThumbs" VerticalScrollBarVisibility="Auto" Visibility="Collapsed">
                     <StackPanel Margin="0,0,14,0">
-                        <TextBlock Text="THUMBNAILS" FontWeight="Bold" FontSize="16" Foreground="#F59E0B" Margin="0,0,0,8"/>
+                        <TextBlock Text="THUMBNAILS" Style="{StaticResource PageTitle}"/>
                         <TextBlock Text="Tick the clients you want a thumbnail for. Unticked clients get no thumbnail, but the hotkeys can still switch to them."
-                                   Foreground="#94A3B8" TextWrapping="Wrap" Margin="0,0,0,14"/>
+                                   Style="{StaticResource Hint}"/>
                         <StackPanel Orientation="Horizontal" Margin="0,0,0,12">
                             <Button Content="Select all" Padding="14,4" Margin="0,0,8,0" Click="SelectAll_Click"/>
                             <Button Content="Select none" Padding="14,4" Click="SelectNone_Click"/>
                         </StackPanel>
-                        <CheckBox x:Name="LoginScreensBox" Content="Login screens (clients that aren't logged in yet)" Foreground="#E5E7EB" Margin="0,0,0,12"/>
+                        <CheckBox x:Name="LoginScreensBox" Content="Login screens (clients that aren't logged in yet)" Margin="0,0,0,12"/>
                         <TextBlock x:Name="NoThumbText" Text="No characters known yet. Log in an EVE client, then reopen settings."
-                                   Foreground="#94A3B8" TextWrapping="Wrap" Visibility="Collapsed"/>
+                                   Style="{StaticResource Hint}" Visibility="Collapsed"/>
                         <StackPanel x:Name="ClientChecks"/>
+
+                        <TextBlock Text="Hiding" Style="{StaticResource GroupTitle}"/>
+                        <CheckBox x:Name="HideActiveBox" >
+                            <TextBlock TextWrapping="Wrap" Text="Hide the thumbnail of the client I'm currently in"/>
+                        </CheckBox>
+                        <CheckBox x:Name="HideUnfocusedBox" >
+                            <TextBlock TextWrapping="Wrap" Text="Hide all thumbnails while EVE isn't the window in front"/>
+                        </CheckBox>
+                        <TextBlock Text="Delay before hiding in milliseconds (0-5000)"/>
+                        <TextBox x:Name="HideDelayBox"/>
                     </StackPanel>
                 </ScrollViewer>
 
                 <!-- HOTKEYS -->
                 <ScrollViewer x:Name="PageHotkeys" VerticalScrollBarVisibility="Auto" Visibility="Collapsed">
                     <StackPanel Margin="0,0,14,0">
-                        <TextBlock Text="HOTKEYS" FontWeight="Bold" FontSize="16" Foreground="#F59E0B" Margin="0,0,0,8"/>
-                        <TextBlock Text="Click a box, then press the keys you want. Backspace clears it. Next / previous go in the order the clients were opened."
-                                   Foreground="#94A3B8" TextWrapping="Wrap" Margin="0,0,0,12"/>
+                        <TextBlock Text="HOTKEYS" Style="{StaticResource PageTitle}"/>
+                        <TextBlock Text="Click a box, then press the keys you want. Backspace clears it. Next and previous go in the order the clients were opened."
+                                   Style="{StaticResource Hint}"/>
                         <TextBlock Text="Next client"/>
                         <TextBox x:Name="ForwardBox" PreviewKeyDown="HotkeyBox_PreviewKeyDown" InputMethod.IsInputMethodEnabled="False"/>
                         <TextBlock Text="Previous client"/>
                         <TextBox x:Name="BackBox" PreviewKeyDown="HotkeyBox_PreviewKeyDown" InputMethod.IsInputMethodEnabled="False"/>
+
+                        <TextBlock Text="Cycling" Style="{StaticResource GroupTitle}"/>
+                        <CheckBox x:Name="CycleLoginBox" >
+                            <TextBlock TextWrapping="Wrap" Text="Include clients that are still on the login screen"/>
+                        </CheckBox>
+                        <CheckBox x:Name="ShowExcludedBox" >
+                            <TextBlock TextWrapping="Wrap" Text="Show a red X on thumbnails that the next / previous hotkeys skip"/>
+                        </CheckBox>
+                        <TextBlock Text="Tick a client to make the next / previous hotkeys skip it. You can still switch to it by clicking its thumbnail or with its own hotkey."
+                                   Style="{StaticResource Hint}"/>
+                        <TextBlock x:Name="NoSkipText" Text="No characters known yet. Log in an EVE client, then reopen settings."
+                                   Style="{StaticResource Hint}" Visibility="Collapsed"/>
+                        <StackPanel x:Name="SkipChecks"/>
+                    </StackPanel>
+                </ScrollViewer>
+
+                <!-- CLIENTS -->
+                <ScrollViewer x:Name="PageClients" VerticalScrollBarVisibility="Auto" Visibility="Collapsed">
+                    <StackPanel Margin="0,0,14,0">
+                        <TextBlock Text="CLIENTS" Style="{StaticResource PageTitle}"/>
+                        <CheckBox x:Name="AutoMinBox" >
+                            <TextBlock TextWrapping="Wrap" Text="Automatically minimise the other EVE clients when I switch to one (saves GPU and CPU)"/>
+                        </CheckBox>
+                        <TextBlock Text="Delay before minimising in seconds (0-600, 0 = straight away)"/>
+                        <TextBox x:Name="AutoMinDelayBox"/>
+                        <TextBlock Text="Windows animates a minimised client back up when you switch to it, so switching to a minimised client is a little slower. Login screens are never minimised."
+                                   Style="{StaticResource Hint}"/>
+                        <TextBlock Text="Never minimise these clients" Style="{StaticResource GroupTitle}"/>
+                        <TextBlock x:Name="NoMinText" Text="No characters known yet. Log in an EVE client, then reopen settings."
+                                   Style="{StaticResource Hint}" Visibility="Collapsed"/>
+                        <StackPanel x:Name="MinChecks"/>
                     </StackPanel>
                 </ScrollViewer>
 
                 <!-- CHARACTERS -->
                 <ScrollViewer x:Name="PageCharacters" VerticalScrollBarVisibility="Auto" Visibility="Collapsed">
                     <StackPanel Margin="0,0,14,0">
-                        <TextBlock Text="CHARACTERS" FontWeight="Bold" FontSize="16" Foreground="#F59E0B" Margin="0,0,0,12"/>
-                        <TextBlock x:Name="NoCharText" Text="No characters known yet. Log in an EVE client, then reopen settings." Foreground="#94A3B8" TextWrapping="Wrap" Margin="0,0,0,12" Visibility="Collapsed"/>
-                        <ComboBox x:Name="CharBox" Foreground="#111827" Margin="0,0,0,12" SelectionChanged="CharBox_SelectionChanged"/>
+                        <TextBlock Text="CHARACTERS" Style="{StaticResource PageTitle}"/>
+                        <TextBlock x:Name="NoCharText" Text="No characters known yet. Log in an EVE client, then reopen settings." Style="{StaticResource Hint}" Visibility="Collapsed"/>
+                        <ComboBox x:Name="CharBox" SelectionChanged="CharBox_SelectionChanged"/>
                         <TextBlock Text="Preview of this label"/>
                         <Border Background="#0A0F16" BorderBrush="#334155" BorderThickness="1" CornerRadius="4"
                                 Padding="10,6" Margin="0,4,0,12" HorizontalAlignment="Left">
@@ -158,12 +287,36 @@
                         <TextBox x:Name="LabelBox" TextChanged="LabelBox_TextChanged"/>
                         <TextBlock Text="Label colour (empty = default)"/>
                         <local:ColourField x:Name="CharColourBox" AllowEmpty="True"/>
-                        <TextBlock Text="Width (0 = default)"/>
+                        <TextBlock Text="Width (0 = default). Ignored while all thumbnails are kept the same size."/>
                         <TextBox x:Name="CharWidthBox"/>
                         <TextBlock Text="Height (0 = automatic 16:9)"/>
                         <TextBox x:Name="CharHeightBox"/>
                         <TextBlock Text="Jump-to-this-client hotkey"/>
                         <TextBox x:Name="CharHotkeyBox" PreviewKeyDown="HotkeyBox_PreviewKeyDown" InputMethod.IsInputMethodEnabled="False"/>
+                    </StackPanel>
+                </ScrollViewer>
+
+                <!-- PROFILES -->
+                <ScrollViewer x:Name="PageProfiles" VerticalScrollBarVisibility="Auto" Visibility="Collapsed">
+                    <StackPanel Margin="0,0,14,0">
+                        <TextBlock Text="PROFILES" Style="{StaticResource PageTitle}"/>
+                        <TextBlock Text="A profile is a whole saved layout: positions, sizes, look, hotkeys and per-character settings. Switching profiles swaps all of it. New, duplicate, rename and delete happen straight away."
+                                   Style="{StaticResource Hint}"/>
+                        <ListBox x:Name="ProfileList" Height="150" Background="#0A0F16" Foreground="#E5E7EB"
+                                 BorderBrush="#334155" Margin="0,0,0,12" SelectionChanged="ProfileList_SelectionChanged"/>
+                        <WrapPanel Margin="0,0,0,12">
+                            <Button Content="Switch to selected" Padding="12,4" Margin="0,0,8,8" Click="SwitchProfile_Click"/>
+                            <Button Content="New…" Padding="12,4" Margin="0,0,8,8" Click="NewProfile_Click"/>
+                            <Button Content="Duplicate…" Padding="12,4" Margin="0,0,8,8" Click="DuplicateProfile_Click"/>
+                            <Button Content="Rename…" Padding="12,4" Margin="0,0,8,8" Click="RenameProfile_Click"/>
+                            <Button Content="Delete" Padding="12,4" Margin="0,0,8,8" Click="DeleteProfile_Click"/>
+                        </WrapPanel>
+                        <TextBlock Text="Hotkey that switches to the selected profile"/>
+                        <TextBox x:Name="ProfileHotkeyBox" PreviewKeyDown="HotkeyBox_PreviewKeyDown" InputMethod.IsInputMethodEnabled="False"/>
+                        <TextBlock Text="Next profile hotkey"/>
+                        <TextBox x:Name="NextProfileBox" PreviewKeyDown="HotkeyBox_PreviewKeyDown" InputMethod.IsInputMethodEnabled="False"/>
+                        <TextBlock Text="Previous profile hotkey"/>
+                        <TextBox x:Name="PrevProfileBox" PreviewKeyDown="HotkeyBox_PreviewKeyDown" InputMethod.IsInputMethodEnabled="False"/>
                     </StackPanel>
                 </ScrollViewer>
             </Grid>
