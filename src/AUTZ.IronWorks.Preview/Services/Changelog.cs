@@ -7,6 +7,16 @@ internal static class Changelog
 {
     public static readonly ChangelogEntry[] Entries =
     {
+        new("0.9.2", "Update script finds its own folders", new[]
+        {
+            "The update script now finds your repo and your versions folder by itself, so renaming either folder no longer breaks it.",
+            "It keeps a copy of itself in the versions folder, so you can run it from there. Everything from 0.9.1 is included."
+        }),
+        new("0.9.1", "Name tweaks", new[]
+        {
+            "The name in the Settings sidebar and the what's-new window now uses the IronWorks casing: EVE-IronWorks.",
+            "The tray icon tooltip now says EVE-IW-Preview."
+        }),
         new("0.9.0", "Now EVE-IW-Preview (EVE-IronWorks-Preview)", new[]
         {
             "Renamed. EVE-IW-Preview is the short name for the exe file, the GitHub repository, Discord and Reddit. EVE-IronWorks-Preview is the name shown in the windows, the tray and About. Made by AUTZ IronWorks: from planets to profit.",

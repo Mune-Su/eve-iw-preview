@@ -47,7 +47,7 @@ public sealed class NotifyIconService : IDisposable
 
         _icon = new Forms.NotifyIcon
         {
-            Text = AppInfo.Name,
+            Text = AppInfo.ShortName,          // the tray tooltip uses the short name
             Icon = LoadIcon(),
             Visible = true,
             ContextMenuStrip = menu

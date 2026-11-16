@@ -6,6 +6,12 @@ A lightweight Windows utility for permanent live previews of your running EVE On
 
 **Run it:** double-click `EVE-IW-Preview.exe` in this folder (needs the .NET 8 Desktop Runtime, already installed if you have the .NET SDK). It runs in the **system tray only** (no taskbar button): right-click the tray icon for the menu, double-click it for Settings (the configuration window).
 
+## v0.9.2
+- `update-preview.ps1` finds your repo and your versions folder by itself (it looks for `EVE IronWorks Preview versions` in Documents, and a repo named `EVE-IronWorks-Preview`, `EVE-IW-Preview` or `AUTZ-IronWorks-Preview` in `Projects`), so renaming them no longer breaks it. It keeps a copy of itself in the versions folder.
+
+## v0.9.1
+- The name in the Settings sidebar and the what's-new window uses the IronWorks casing (EVE-IronWorks), and the tray icon tooltip says EVE-IW-Preview.
+
 ## v0.9.0
 - **Renamed: EVE-IW-Preview (EVE-IronWorks-Preview).** EVE-IW-Preview is the short name used for the exe (`EVE-IW-Preview.exe`), the GitHub repository (`eve-iw-preview`), Discord and Reddit. EVE-IronWorks-Preview is the name shown in the windows, the tray and the About page, with "by AUTZ IronWorks · From planets to profit" under it.
 - **Your settings carry over:** they now live in `%LOCALAPPDATA%\EVE-IronWorks-Preview`. Profiles, positions and hotkeys are copied across from the old `AUTZ IronWorks Preview` folder the first time it starts, and the old folder is left untouched. The Run on Startup entry moves to the new name too.
@@ -95,4 +101,4 @@ dotnet build -c Release
 The AUTZ IronWorks emblem is built in: `src\AUTZ.IronWorks.Preview\Assets\app.ico` (exe, tray and title bars) and `logo.png` (shown inside the app windows). To change it, replace those two files and rebuild.
 
 ## Update workflow
-`update-preview.ps1` replaces the repo with the newest `EVE-IW-Preview-v*.zip` (or `AUTZ-IronWorks-Preview-v*.zip`, the name used before the rename), keeps Git history, LICENSE and the Assets folder (icon + logo), builds, publishes the exe to the repo root, and stages the changes. It does not commit or push. If the app is open it is left running; Windows lets the running exe be renamed, so the new exe takes its place and is used the next time you open the app. Always launch the exe in the repo root (not one from a `bin` folder).
+`update-preview.ps1` replaces the repo with the newest `EVE-IW-Preview-v*.zip` (or `AUTZ-IronWorks-Preview-v*.zip`, the name used before the rename), finds the repo and the versions folder by itself, keeps Git history, LICENSE and the Assets folder (icon + logo), builds, publishes the exe to the repo root, and stages the changes. It does not commit or push. If the app is open it is left running; Windows lets the running exe be renamed, so the new exe takes its place and is used the next time you open the app. Always launch the exe in the repo root (not one from a `bin` folder).

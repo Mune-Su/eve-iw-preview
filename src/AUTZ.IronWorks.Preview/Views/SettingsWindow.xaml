@@ -28,7 +28,7 @@
                 <StackPanel Grid.Row="0" Margin="18,20,14,18">
                     <Image Source="/Assets/logo.png" Width="40" Height="40" HorizontalAlignment="Left"
                            RenderOptions.BitmapScalingMode="HighQuality" Margin="0,0,0,8"/>
-                    <TextBlock Text="EVE-IRONWORKS" FontSize="19" FontWeight="Black" Foreground="{StaticResource BrushText}"/>
+                    <TextBlock Text="EVE-IronWorks" FontSize="19" FontWeight="Black" Foreground="{StaticResource BrushText}"/>
                     <TextBlock Text="PREVIEW" FontSize="11" FontWeight="ExtraBold" Foreground="{StaticResource BrushAccent}" Margin="0,1,0,0"/>
                     <TextBlock Text="by AUTZ IronWorks · From planets to profit" FontSize="11" TextWrapping="Wrap" Foreground="{StaticResource BrushMuted}" Margin="0,6,0,0"/>
                 </StackPanel>
