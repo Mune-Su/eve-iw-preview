@@ -30,6 +30,18 @@ public sealed class NotifyIconService : IDisposable
                 manager.ResetPositions();
         };
 
+        var debugItem = new Forms.ToolStripMenuItem("Detailed Logging") { CheckOnClick = false };
+        debugItem.Click += (_, _) => manager.SetDebugLogging(!Log.Verbose);
+        var openDebugItem = new Forms.ToolStripMenuItem("Open Debug Log");
+        openDebugItem.Click += (_, _) =>
+        {
+            try
+            {
+                if (!System.IO.File.Exists(Log.DebugPath)) { Dialogs.Info(null, "There's no debug log yet. Turn on Detailed Logging first, then use the app."); return; }
+                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(Log.DebugPath) { UseShellExecute = true });
+            }
+            catch (Exception ex) { Dialogs.Info(null, "Couldn't open the debug log: " + ex.Message); }
+        };
         var exitItem = new Forms.ToolStripMenuItem("Exit");
         exitItem.Click += (_, _) => Application.Current.Shutdown();
 
@@ -40,10 +52,16 @@ public sealed class NotifyIconService : IDisposable
         menu.Items.Add(refreshItem);
         menu.Items.Add(resetItem);
         menu.Items.Add(new Forms.ToolStripSeparator());
+        menu.Items.Add(debugItem);
+        menu.Items.Add(openDebugItem);
+        menu.Items.Add(new Forms.ToolStripSeparator());
         menu.Items.Add(exitItem);
 
         menu.Opening += (_, _) =>
+        {
             toggleItem.Text = manager.ThumbnailsVisible ? "Hide All Thumbnails" : "Show All Thumbnails";
+            debugItem.Checked = Log.Verbose;
+        };
 
         _icon = new Forms.NotifyIcon
         {
@@ -80,4 +98,5 @@ public sealed class NotifyIconService : IDisposable
         _icon.Dispose();
     }
 }
+
 

@@ -56,6 +56,7 @@ public sealed class PreviewManager : IDisposable
     private nint _lastActive;              // the EVE client that had focus most recently
     private nint _lastActivated;           // last client we switched to (used by the next / previous hotkeys)
     private string _alertHex = "#EF4444";
+    private string _lastClientList = "";    // detailed log: only log the client list when it changes
     private bool _blink;
 
     public bool ThumbnailsVisible => _visible;
@@ -80,6 +81,7 @@ public sealed class PreviewManager : IDisposable
         {
             _hideTimer.Stop();
             _hiddenByFocus = true;
+            Log.Debug("THUMB", "EVE not in front for the hide delay -> hiding all thumbnails");
             ApplyVisibility();
         };
         _minimiseTimer.Tick += (_, _) =>
@@ -99,11 +101,19 @@ public sealed class PreviewManager : IDisposable
             Refresh();
         };
 
-        _watcher.ForegroundChanged += hwnd => SyncForeground(hwnd);
+        _watcher.ForegroundChanged += hwnd =>
+        {
+            Log.Debug("WINEVENT", $"foreground -> {Log.Win(hwnd)}");
+            SyncForeground(hwnd);
+        };
         _watcher.TitleChanged += hwnd =>
         {
             // a known client changed its title (login screen -> character): refresh right away
-            if (_clientHandles.Contains(hwnd) && !_refreshSoonTimer.IsEnabled) _refreshSoonTimer.Start();
+            if (_clientHandles.Contains(hwnd) && !_refreshSoonTimer.IsEnabled)
+            {
+                Log.Debug("WINEVENT", $"client title changed {Log.Win(hwnd)} -> refresh");
+                _refreshSoonTimer.Start();
+            }
         };
 
         _logs.EventRaised += OnLogEvent;
@@ -121,6 +131,15 @@ public sealed class PreviewManager : IDisposable
     public void Refresh()
     {
         _clients = _eve.FindClients();   // already in the order the clients were opened
+        if (Log.Verbose)
+        {
+            string list = string.Join(", ", _clients.Select((c, i) => $"#{i + 1} {(c.IsLoginScreen ? "[login]" : c.CharacterName)} 0x{c.Handle:X}"));
+            if (list != _lastClientList)
+            {
+                _lastClientList = list;
+                Log.Debug("CLIENTS", $"{_clients.Count} client(s): {(list.Length == 0 ? "none" : list)}");
+            }
+        }
         _clientHandles.Clear();
         foreach (var c in _clients) _clientHandles.Add(c.Handle);
         var live = _clients.ToDictionary(c => c.Handle);
@@ -172,6 +191,7 @@ public sealed class PreviewManager : IDisposable
     private void CloseWindow(nint handle, bool rememberGeometry)
     {
         if (!_windows.TryGetValue(handle, out var window)) return;
+        Log.Debug("THUMB", $"close thumbnail of '{window.Client.CharacterName}' 0x{handle:X}{(rememberGeometry ? " (login -> character, position kept)" : "")}");
         if (rememberGeometry)
             _inherit[handle] = new SavedBox(window.Left, window.Top, window.ActualWidth, window.ActualHeight);
         window.Close();
@@ -251,6 +271,7 @@ public sealed class PreviewManager : IDisposable
         var (width, height) = SizeFor(key);
         var (left, top) = PositionFor(key);
         var window = new ThumbnailWindow(client, _settings, width, height, left, top);
+        Log.Debug("THUMB", $"create thumbnail for slot {slot} '{client.CharacterName}' 0x{client.Handle:X} key '{key}' at {left:0},{top:0} size {width:0}x{height:0}");
         _meta[window] = new Meta { LayoutKey = key, Slot = slot };
         window.Clicked += w => ActivateClient(w.Client.Handle);
         window.Moved += OnMoved;
@@ -516,6 +537,7 @@ public sealed class PreviewManager : IDisposable
         bool changed = active != _activeClient;
         _activeClient = active;
 
+        if (changed) Log.Debug("FOCUS", $"active EVE client: {(previous == 0 ? "none" : Log.Win(previous))} -> {(active == 0 ? "none (" + Log.Win(hwnd) + " is in front)" : Log.Win(active))}");
         if (active != 0)
         {
             _lastActive = active;
@@ -536,7 +558,10 @@ public sealed class PreviewManager : IDisposable
         if (client is null || client.IsLoginScreen) return;
         var c = _settings.TryGetCharacter(client.CharacterName);
         if (c is not null && c.MinimiseOnLeave && NativeMethods.IsWindow(previous) && !NativeMethods.IsIconic(previous))
+        {
+            Log.Debug("WINDOW", $"minimise on leave (per-character setting) {Log.Win(previous)}");
             NativeMethods.ShowWindowAsync(previous, NativeMethods.SW_SHOWMINNOACTIVE);
+        }
     }
 
     private void UpdateFocusState(bool eveFocused)
@@ -556,6 +581,7 @@ public sealed class PreviewManager : IDisposable
         else if (!_hiddenByFocus && !_hideTimer.IsEnabled)
         {
             _hideTimer.Interval = TimeSpan.FromMilliseconds(Math.Max(1, _settings.HideDelayMs));
+            Log.Debug("THUMB", $"EVE lost focus -> thumbnails hide in {_settings.HideDelayMs} ms unless an EVE client comes back");
             _hideTimer.Start();
         }
     }
@@ -569,8 +595,17 @@ public sealed class PreviewManager : IDisposable
         foreach (var w in _windows.Values)
         {
             bool show = ShouldBeVisible(w);
-            if (show && !w.IsVisible) w.Show();
-            else if (!show && w.IsVisible) w.Hide();
+            if (show && !w.IsVisible)
+            {
+                Log.Debug("THUMB", $"show thumbnail '{w.Client.CharacterName}'");
+                w.Show();
+            }
+            else if (!show && w.IsVisible)
+            {
+                string why = !_visible ? "hidden from the tray" : _hiddenByFocus ? "EVE not in front" : "it is the active client (hide active)";
+                Log.Debug("THUMB", $"hide thumbnail '{w.Client.CharacterName}' ({why})");
+                w.Hide();
+            }
         }
     }
 
@@ -592,6 +627,7 @@ public sealed class PreviewManager : IDisposable
         {
             _minimiseTimer.Stop();
             _minimiseTimer.Interval = TimeSpan.FromSeconds(seconds);
+            Log.Debug("WINDOW", $"auto-minimise scheduled in {seconds} s");
             _minimiseTimer.Start();
         }
     }
@@ -619,6 +655,7 @@ public sealed class PreviewManager : IDisposable
             var c = client.IsLoginScreen ? null : _settings.TryGetCharacter(client.CharacterName);
             if (c is not null && c.NeverMinimise) continue;
             if (!NativeMethods.IsWindow(client.Handle) || NativeMethods.IsIconic(client.Handle)) continue;
+            Log.Debug("WINDOW", $"auto-minimise {Log.Win(client.Handle)} (keeping {Log.Win(keep)})");
             NativeMethods.ShowWindowAsync(client.Handle, NativeMethods.SW_SHOWMINNOACTIVE);
         }
     }
@@ -649,6 +686,7 @@ public sealed class PreviewManager : IDisposable
     public void ApplySettings()
     {
         _scanTimer.Interval = TimeSpan.FromMilliseconds(Math.Clamp(_settings.RefreshMilliseconds, 500, 10000));
+        LogSettings("settings applied");
 
         foreach (var w in _windows.Values)
         {
@@ -671,6 +709,39 @@ public sealed class PreviewManager : IDisposable
         UpdateBorders();
         ApplyVisibility();
         RegisterHotkeys();
+    }
+
+    /// <summary>Detailed log: the settings that change what happens when you switch clients.</summary>
+    private void LogSettings(string why)
+    {
+        if (!Log.Verbose) return;
+        var s = _settings;
+        Log.Debug("SETTINGS", $"{why}: profile '{_state.ActiveProfile}'" +
+            $" | auto-minimise {(s.AutoMinimiseInactive ? $"ON delay {s.AutoMinimiseDelaySeconds}s keepLast {s.AutoMinimiseKeepLastActive} onStart {s.AutoMinimiseOnStart}" : "off")}" +
+            $" | hide active {s.HideActiveThumbnail} | hide when EVE not in front {s.HideWhenEveNotFocused} ({s.HideDelayMs} ms)" +
+            $" | highlight {s.HighlightActive} | always on top {s.AlwaysOnTop} | clickable {s.ThumbnailsClickable}" +
+            $" | hotkeys only in EVE {s.HotkeysOnlyInEve} pass-through {s.HotkeyPassThrough} | scan {s.RefreshMilliseconds} ms");
+        foreach (var pair in s.Characters.Where(p => AppSettings.IsCharacterKey(p.Key) &&
+                     (p.Value.ActivateAction != "None" || p.Value.MinimiseOnLeave || p.Value.NeverMinimise || p.Value.ExcludeFromCycling)))
+        {
+            var c = pair.Value;
+            Log.Debug("SETTINGS", $"  '{pair.Key}': on switch-to {c.ActivateAction}, minimise on leave {c.MinimiseOnLeave}, never minimise {c.NeverMinimise}, skipped by cycling {c.ExcludeFromCycling}");
+        }
+    }
+
+    /// <summary>Turns detailed (admin) logging on or off and remembers it (tray menu / settings).</summary>
+    public void SetDebugLogging(bool on)
+    {
+        _state.DebugLogging = on;
+        Log.Verbose = on;
+        ProfileStore.SaveState(_state);
+        if (on)
+        {
+            _lastClientList = "";
+            LogSettings("current settings");
+            Refresh();
+        }
+        Toast?.Invoke(AppInfo.Name, on ? "Detailed logging is on. Reproduce the problem, then open debug.log." : "Detailed logging is off.");
     }
 
     private void ConfigureLogs()
@@ -792,6 +863,8 @@ public sealed class PreviewManager : IDisposable
         _state.WhatsNewMode = disk.WhatsNewMode;
         _state.RunOnStartup = disk.RunOnStartup;
         StartupService.Set(_state.RunOnStartup);
+        _state.DebugLogging = disk.DebugLogging;
+        Log.Verbose = disk.DebugLogging;
 
         var saved = ProfileStore.Exists(disk.ActiveProfile) ? ProfileStore.Load(disk.ActiveProfile) : new AppSettings();
         if (sameProfile)
@@ -824,6 +897,8 @@ public sealed class PreviewManager : IDisposable
         _state.WhatsNewMode = global.WhatsNewMode;
         _state.RunOnStartup = global.RunOnStartup;
         StartupService.Set(_state.RunOnStartup);
+        _state.DebugLogging = global.DebugLogging;
+        Log.Verbose = global.DebugLogging;
     }
 
     /// <summary>
@@ -899,6 +974,7 @@ public sealed class PreviewManager : IDisposable
         {
             if (string.IsNullOrWhiteSpace(text)) return;
             if (!_hotkeys.Register(text, action)) invalid.Add(what + ": " + text);
+            else Log.Debug("HOTKEY", $"registered '{text}' = {what}");
         }
 
         Register(_settings.CycleForwardHotkey, "Next client", () => Cycle(1));
@@ -991,8 +1067,13 @@ public sealed class PreviewManager : IDisposable
         {
             position = ((position + step) % count + count) % count;
             var client = all[position];
-            if (!IsCyclable(client)) continue;
+            if (!IsCyclable(client))
+            {
+                Log.Debug("SWITCH", $"  skip #{position + 1} '{client.CharacterName}' (excluded from cycling)");
+                continue;
+            }
             if (client.Handle == foreground) continue;
+            Log.Debug("SWITCH", $"  try #{position + 1} '{client.CharacterName}'");
 
             bool ok = SwitchTo(client, out string how);
             log.Append($" -> #{position + 1} '{client.CharacterName}' {(ok ? "ok" : "FAILED")} ({how})");
@@ -1017,9 +1098,15 @@ public sealed class PreviewManager : IDisposable
         if (c is not null)
         {
             if (c.ActivateAction == "Maximise")
+            {
+                Log.Debug("WINDOW", $"switch-to action: ShowWindowAsync(MAXIMIZE) {Log.Win(client.Handle)}");
                 NativeMethods.ShowWindowAsync(client.Handle, NativeMethods.SW_MAXIMIZE);
+            }
             else if (c.ActivateAction == "Restore" && NativeMethods.IsZoomed(client.Handle))
+            {
+                Log.Debug("WINDOW", $"switch-to action: ShowWindowAsync(RESTORE) {Log.Win(client.Handle)}");
                 NativeMethods.ShowWindowAsync(client.Handle, NativeMethods.SW_RESTORE);
+            }
         }
 
         SyncForeground(client.Handle);
@@ -1030,6 +1117,7 @@ public sealed class PreviewManager : IDisposable
     {
         var client = _clients.FirstOrDefault(c => c.Handle == handle);
         if (client is null) return;
+        Log.Debug("SWITCH", $"thumbnail clicked: '{client.CharacterName}'");
         if (!SwitchTo(client, out string how)) Log.Write($"Click switch to '{client.CharacterName}' failed ({how})");
     }
 
@@ -1037,7 +1125,12 @@ public sealed class PreviewManager : IDisposable
     {
         var client = CurrentClients()
             .FirstOrDefault(c => c.CharacterName.Equals(name, StringComparison.OrdinalIgnoreCase));
-        if (client is null) return;
+        if (client is null)
+        {
+            Log.Debug("SWITCH", $"character hotkey '{name}': that character isn't logged in");
+            return;
+        }
+        Log.Debug("SWITCH", $"character hotkey -> '{name}'");
         if (!SwitchTo(client, out string how)) Log.Write($"Hotkey switch to '{name}' failed ({how})");
     }
 
@@ -1051,6 +1144,7 @@ public sealed class PreviewManager : IDisposable
             return;
         }
         var client = list[slot - 1];
+        Log.Debug("SWITCH", $"client {slot} hotkey -> '{client.CharacterName}'");
         if (!SwitchTo(client, out string how)) Log.Write($"Client {slot} hotkey: '{client.CharacterName}' failed ({how})");
     }
 
@@ -1159,4 +1253,5 @@ public sealed class PreviewManager : IDisposable
         _meta.Clear();
     }
 }
+
 

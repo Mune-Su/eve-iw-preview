@@ -37,6 +37,7 @@ public partial class App : System.Windows.Application
         _ownsMutex = true;
 
         var (settings, state) = ProfileStore.LoadActive();
+        Log.Verbose = state.DebugLogging;
         _manager = new PreviewManager(settings, state);
 
         // No main window and no taskbar button: the app lives in the system tray (right-click the icon).
@@ -83,4 +84,5 @@ public partial class App : System.Windows.Application
         base.OnExit(e);
     }
 }
+
 

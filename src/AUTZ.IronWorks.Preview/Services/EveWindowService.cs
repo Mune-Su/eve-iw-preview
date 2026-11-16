@@ -93,20 +93,31 @@ public sealed class EveWindowService
     /// </summary>
     public bool Activate(nint handle, out string how)
     {
+        long t0 = Log.Ms;
+        bool ok = ActivateCore(handle, out how);
+        Log.Debug("FOCUS", $"activate {Log.Win(handle)} -> {(ok ? "OK" : "FAILED")} via '{how}' in {Log.Ms - t0} ms; foreground now {Log.Win(NativeMethods.GetForegroundWindow())}");
+        return ok;
+    }
+
+    private bool ActivateCore(nint handle, out string how)
+    {
         how = "window gone";
         if (!NativeMethods.IsWindow(handle)) return false;
-
         if (NativeMethods.IsHungAppWindow(handle))
         {
             how = "not responding";
             return false;
         }
-
+        Log.Debug("FOCUS", $"  start: target {Log.Win(handle)}, foreground {Log.Win(NativeMethods.GetForegroundWindow())}");
         // asynchronous: a busy client can never block this app
-        if (NativeMethods.IsIconic(handle)) NativeMethods.ShowWindowAsync(handle, NativeMethods.SW_RESTORE);
-
+        if (NativeMethods.IsIconic(handle))
+        {
+            Log.Debug("WINDOW", $"  target is minimised -> ShowWindowAsync(RESTORE) {Log.Win(handle)}");
+            NativeMethods.ShowWindowAsync(handle, NativeMethods.SW_RESTORE);
+        }
         // fast path
-        NativeMethods.SetForegroundWindow(handle);
+        bool set = NativeMethods.SetForegroundWindow(handle);
+        Log.Debug("FOCUS", $"  step 1 SetForegroundWindow returned {set}");
         if (NativeMethods.GetForegroundWindow() == handle)
         {
             how = "direct";
@@ -119,6 +130,7 @@ public sealed class EveWindowService
         uint targetThread = NativeMethods.GetWindowThreadProcessId(handle, out _);
         uint thisThread = NativeMethods.GetCurrentThreadId();
 
+        Log.Debug("FOCUS", $"  step 1 refused by Windows; foreground {Log.Win(foreground)}{(foregroundHung ? " is HUNG (skipping input attach)" : "")}");
         // attaching input queues to a frozen window can hang input for everything, so never do it then
         if (!foregroundHung)
         {
@@ -129,6 +141,7 @@ public sealed class EveWindowService
                 NativeMethods.SetForegroundWindow(handle);
                 NativeMethods.AttachThreadInput(foregroundThread, targetThread, false);
                 if (NativeMethods.GetForegroundWindow() == handle) { how = "attach foreground->target"; return true; }
+                Log.Debug("FOCUS", "  step 2 attach foreground->target: refused");
             }
 
             // fallback 2: join this app's input queue to the focused window's
@@ -138,16 +151,19 @@ public sealed class EveWindowService
                 NativeMethods.SetForegroundWindow(handle);
                 NativeMethods.AttachThreadInput(thisThread, foregroundThread, false);
                 if (NativeMethods.GetForegroundWindow() == handle) { how = "attach this->foreground"; return true; }
+                Log.Debug("FOCUS", "  step 3 attach this->foreground: refused");
             }
         }
 
         // fallback 3: a quick Alt tap makes Windows allow the focus change
+        Log.Debug("FOCUS", "  step 4 sending an Alt tap (EVE may briefly see Alt)");
         NativeMethods.keybd_event(NativeMethods.VK_MENU, 0, 0, UIntPtr.Zero);
         NativeMethods.keybd_event(NativeMethods.VK_MENU, 0, NativeMethods.KEYEVENTF_KEYUP, UIntPtr.Zero);
         NativeMethods.SetForegroundWindow(handle);
         if (NativeMethods.GetForegroundWindow() == handle) { how = "alt tap"; return true; }
 
         // last resort
+        Log.Debug("FOCUS", "  step 5 SwitchToThisWindow (last resort)");
         NativeMethods.SwitchToThisWindow(handle, true);
         if (NativeMethods.GetForegroundWindow() == handle) { how = "switch-to-this-window"; return true; }
 
@@ -155,4 +171,5 @@ public sealed class EveWindowService
         return false;
     }
 }
+
 

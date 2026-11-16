@@ -190,8 +190,11 @@ public sealed class AppState
     /// <summary>"Update" = when the version changes, "Always" = every start, "Never".</summary>
     public string WhatsNewMode { get; set; } = "Update";
     public string LastSeenVersion { get; set; } = "";
+    /// <summary>Detailed (admin) logging to debug.log. App-wide, not per profile.</summary>
+    public bool DebugLogging { get; set; } = false;
 
     public AppState Clone() =>
         JsonSerializer.Deserialize<AppState>(JsonSerializer.Serialize(this)) ?? new AppState();
 }
+
 

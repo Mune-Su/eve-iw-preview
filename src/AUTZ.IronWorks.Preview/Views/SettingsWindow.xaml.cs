@@ -101,6 +101,7 @@ public partial class SettingsWindow : Window
         NextProfileBox.Text = _state.NextProfileHotkey;
         PrevProfileBox.Text = _state.PreviousProfileHotkey;
         RunOnStartupBox.IsChecked = _state.RunOnStartup;
+        DebugLogBox.IsChecked = _state.DebugLogging;
         WhatsNewCombo.SelectedIndex = _state.WhatsNewMode switch { "Always" => 1, "Never" => 2, _ => 0 };
 
         VersionText.Text = "v" + AppInfo.Version;
@@ -131,7 +132,7 @@ public partial class SettingsWindow : Window
         _pages.Add(new PageDef("Clients", PageClients, new Control[] { CardAutoMin, CardNeverMin }));
         _pages.Add(new PageDef("Notifications", PageNotifications, new Control[] { CardNotifyMain, CardNotifyHow }));
         _pages.Add(new PageDef("Log Monitoring", PageLogs, new Control[] { CardLogMain, CardLogFolders, CardLogEvents, CardLogSystem }));
-        _pages.Add(new PageDef("About", PageAbout, new Control[] { CardAbout, CardWhatsNew, CardFiles }));
+        _pages.Add(new PageDef("About", PageAbout, new Control[] { CardAbout, CardWhatsNew, CardFiles, CardDiagnostics }));
 
         for (int i = 0; i < _pages.Count; i++)
         {
@@ -946,6 +947,22 @@ public partial class SettingsWindow : Window
         OpenPath(this, DataFolder);
     }
 
+    private void OpenDebugLog_Click(object sender, RoutedEventArgs e)
+    {
+        if (!File.Exists(Log.DebugPath))
+        {
+            Dialogs.Info(this, "There's no debug log yet. Tick Detailed logging, press Apply or Save, then use the app.");
+            return;
+        }
+        OpenPath(this, Log.DebugPath);
+    }
+
+    private void ClearDebugLog_Click(object sender, RoutedEventArgs e)
+    {
+        Log.ClearDebug();
+        SetStatus("Debug log cleared.", true);
+    }
+
     private void OpenLog_Click(object sender, RoutedEventArgs e)
     {
         if (!File.Exists(LogPath))
@@ -1034,7 +1051,7 @@ public partial class SettingsWindow : Window
     }
 
     private string StateSnapshot() => string.Join("|",
-        _state.NextProfileHotkey, _state.PreviousProfileHotkey, _state.RunOnStartup, _state.WhatsNewMode,
+        _state.NextProfileHotkey, _state.PreviousProfileHotkey, _state.RunOnStartup, _state.WhatsNewMode, _state.DebugLogging,
         string.Join(",", _profileHotkeys.OrderBy(p => p.Key, StringComparer.OrdinalIgnoreCase)
             .Where(p => p.Value.Length > 0).Select(p => p.Key + "=" + p.Value)));
 
@@ -1048,6 +1065,7 @@ public partial class SettingsWindow : Window
             .Where(p => p.Value.Length > 0 && existing.Contains(p.Key))
             .ToDictionary(p => p.Key, p => p.Value);
         _state.RunOnStartup = RunOnStartupBox.IsChecked == true;
+        _state.DebugLogging = DebugLogBox.IsChecked == true;
         _state.WhatsNewMode = WhatsNewCombo.SelectedIndex switch { 1 => "Always", 2 => "Never", _ => "Update" };
     }
 
@@ -1325,4 +1343,5 @@ public partial class SettingsWindow : Window
         return true;
     }
 }
+
 

@@ -7,6 +7,12 @@ internal static class Changelog
 {
     public static readonly ChangelogEntry[] Entries =
     {
+        new("0.9.4", "Detailed (admin) logging", new[]
+        {
+            "New: Detailed Logging. Turn it on from the tray menu or Settings > About > Diagnostics, reproduce a problem, then use Open Debug Log.",
+            "debug.log records every step with millisecond timestamps: each hotkey press and how long it took to run, each focus attempt and which method Windows accepted (including when an Alt tap or the last-resort switch was needed), every minimise, restore and maximise sent to a client and why, thumbnails shown, hidden, created and closed and why, every focus change Windows reports, the client list when it changes, and the settings that affect switching.",
+            "It is written by a background thread, so it doesn't slow switching down, and it rolls over to debug.old.log at about 4 MB. preview.log is unchanged."
+        }),
         new("0.9.3", "Website link", new[]
         {
             "\"by AUTZ IronWorks · From planets to profit\" in the Settings sidebar and on the About page is now a link to the AUTZ IronWorks website.",
@@ -92,4 +98,5 @@ internal static class Changelog
         })
     };
 }
+
 

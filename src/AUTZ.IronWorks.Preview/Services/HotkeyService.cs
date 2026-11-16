@@ -14,6 +14,7 @@ public sealed class HotkeyService : IDisposable
     private sealed class Binding
     {
         public HotkeySpec Spec = new();
+        public string Text = "";
         public Action Action = () => { };
         public int Weight => Spec.Inputs.Count * 4 + Spec.Modifiers.Count;
     }
@@ -50,7 +51,7 @@ public sealed class HotkeyService : IDisposable
     public bool Register(string? text, Action action)
     {
         if (!HotkeyParser.TryParse(text, out var spec)) return false;
-        _bindings.Add(new Binding { Spec = spec, Action = action });
+        _bindings.Add(new Binding { Spec = spec, Text = text ?? "", Action = action });
         UpdateHooks();
         return true;
     }
@@ -75,6 +76,7 @@ public sealed class HotkeyService : IDisposable
         {
             _keyHook = NativeMethods.SetWindowsHookEx(NativeMethods.WH_KEYBOARD_LL, _keyProc, NativeMethods.GetModuleHandle(null), 0);
             if (_keyHook == 0) Log.Write("Couldn't install the keyboard hook (error " + Marshal.GetLastWin32Error() + ")");
+            else Log.Debug("HOTKEY", "keyboard hook installed");
         }
         else if (!needKeys && _keyHook != 0)
         {
@@ -86,6 +88,7 @@ public sealed class HotkeyService : IDisposable
         {
             _mouseHook = NativeMethods.SetWindowsHookEx(NativeMethods.WH_MOUSE_LL, _mouseProc, NativeMethods.GetModuleHandle(null), 0);
             if (_mouseHook == 0) Log.Write("Couldn't install the mouse hook (error " + Marshal.GetLastWin32Error() + ")");
+            else Log.Debug("HOTKEY", "mouse hook installed");
         }
         else if (!needMouse && _mouseHook != 0)
         {
@@ -98,8 +101,11 @@ public sealed class HotkeyService : IDisposable
 
     private void Fire(Binding binding)
     {
+        long pressed = Log.Ms;
+        Log.Debug("HOTKEY", $"'{binding.Text}' matched (swallowed: {!PassThrough})");
         _dispatcher.BeginInvoke(new Action(() =>
         {
+            Log.Debug("HOTKEY", $"'{binding.Text}' running ({Log.Ms - pressed} ms after the key)");
             try { binding.Action(); }
             catch (Exception ex) { Log.Write("Hotkey action failed: " + ex.Message); }
         }));
@@ -328,4 +334,5 @@ public sealed class HotkeyService : IDisposable
         _mouseHook = 0;
     }
 }
+
 
