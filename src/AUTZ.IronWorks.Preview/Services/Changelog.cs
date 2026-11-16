@@ -7,6 +7,12 @@ internal static class Changelog
 {
     public static readonly ChangelogEntry[] Entries =
     {
+        new("0.9.5", "Smooth hotkey switching", new[]
+        {
+            "Fixed: the Next / Previous client hotkey flashed through every other client and landed on the wrong one.",
+            "Cause (found with the debug log): Windows accepts the switch but for a few milliseconds nothing is in front. The app read that gap as a refusal and tried the next client, then the next, so every client got activated in turn.",
+            "Now an accepted switch counts as done (the app waits up to 40 ms for Windows to finish), so one press makes exactly one switch and no Alt keypress is sent to EVE."
+        }),
         new("0.9.4", "Detailed (admin) logging", new[]
         {
             "New: Detailed Logging. Turn it on from the tray menu or Settings > About > Diagnostics, reproduce a problem, then use Open Debug Log.",

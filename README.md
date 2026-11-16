@@ -6,6 +6,9 @@ A lightweight Windows utility for permanent live previews of your running EVE On
 
 **Run it:** double-click `EVE-IW-Preview.exe` in this folder (needs the .NET 8 Desktop Runtime, already installed if you have the .NET SDK). It runs in the **system tray only** (no taskbar button): right-click the tray icon for the menu, double-click it for Configuration.
 
+## v0.9.5
+- Fixed the Next / Previous client hotkey flashing through every client and landing on the wrong one. Windows briefly has nothing in front while it switches; that gap was being read as a refusal, so every other client was tried in turn. An accepted switch now counts as done, so one press = one switch, and no Alt keypress is sent to EVE.
+
 ## v0.9.4
 - **Detailed (admin) logging:** tray menu **Detailed Logging** / **Open Debug Log**, or Settings > About > Diagnostics. Writes `%LOCALAPPDATA%\EVE-IronWorks-Preview\debug.log`: hotkeys, every focus attempt and the method that worked, every minimise / restore / maximise sent to a client, thumbnails shown / hidden / created / closed, focus changes and client-list changes, with millisecond timestamps. Background writer, rolls over at ~4 MB.
 

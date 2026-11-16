@@ -118,9 +118,17 @@ public sealed class EveWindowService
         // fast path
         bool set = NativeMethods.SetForegroundWindow(handle);
         Log.Debug("FOCUS", $"  step 1 SetForegroundWindow returned {set}");
-        if (NativeMethods.GetForegroundWindow() == handle)
+        if (Settled(handle, set))
         {
             how = "direct";
+            return true;
+        }
+        // v0.9.5: Windows said yes but is still mid-switch (nothing in front for a few ms). That is NOT a refusal:
+        // the switch completes on its own. Treating it as a refusal made cycling try every other client in turn,
+        // so each press flashed through all of them and landed on the wrong one.
+        if (set)
+        {
+            how = "direct (Windows finishing the switch)";
             return true;
         }
 
@@ -138,9 +146,9 @@ public sealed class EveWindowService
             if (foregroundThread != 0 && targetThread != 0 && foregroundThread != targetThread &&
                 NativeMethods.AttachThreadInput(foregroundThread, targetThread, true))
             {
-                NativeMethods.SetForegroundWindow(handle);
+                bool ok1 = NativeMethods.SetForegroundWindow(handle);
                 NativeMethods.AttachThreadInput(foregroundThread, targetThread, false);
-                if (NativeMethods.GetForegroundWindow() == handle) { how = "attach foreground->target"; return true; }
+                if (Settled(handle, ok1) || ok1) { how = "attach foreground->target"; return true; }
                 Log.Debug("FOCUS", "  step 2 attach foreground->target: refused");
             }
 
@@ -148,9 +156,9 @@ public sealed class EveWindowService
             if (foregroundThread != 0 && foregroundThread != thisThread &&
                 NativeMethods.AttachThreadInput(thisThread, foregroundThread, true))
             {
-                NativeMethods.SetForegroundWindow(handle);
+                bool ok2 = NativeMethods.SetForegroundWindow(handle);
                 NativeMethods.AttachThreadInput(thisThread, foregroundThread, false);
-                if (NativeMethods.GetForegroundWindow() == handle) { how = "attach this->foreground"; return true; }
+                if (Settled(handle, ok2) || ok2) { how = "attach this->foreground"; return true; }
                 Log.Debug("FOCUS", "  step 3 attach this->foreground: refused");
             }
         }
@@ -159,16 +167,35 @@ public sealed class EveWindowService
         Log.Debug("FOCUS", "  step 4 sending an Alt tap (EVE may briefly see Alt)");
         NativeMethods.keybd_event(NativeMethods.VK_MENU, 0, 0, UIntPtr.Zero);
         NativeMethods.keybd_event(NativeMethods.VK_MENU, 0, NativeMethods.KEYEVENTF_KEYUP, UIntPtr.Zero);
-        NativeMethods.SetForegroundWindow(handle);
-        if (NativeMethods.GetForegroundWindow() == handle) { how = "alt tap"; return true; }
+        bool ok3 = NativeMethods.SetForegroundWindow(handle);
+        if (Settled(handle, ok3) || ok3) { how = "alt tap"; return true; }
 
         // last resort
         Log.Debug("FOCUS", "  step 5 SwitchToThisWindow (last resort)");
         NativeMethods.SwitchToThisWindow(handle, true);
-        if (NativeMethods.GetForegroundWindow() == handle) { how = "switch-to-this-window"; return true; }
+        if (Settled(handle, true)) { how = "switch-to-this-window"; return true; }
 
         how = "refused by Windows";
         return false;
+    }
+
+    /// <summary>
+    /// True once the target is in front. While Windows is mid-switch the foreground is briefly nothing (0x0); if the
+    /// call was accepted, wait up to 40 ms for it to settle instead of reading that gap as a refusal.
+    /// </summary>
+    private static bool Settled(nint handle, bool accepted)
+    {
+        nint fg = NativeMethods.GetForegroundWindow();
+        if (fg == handle) return true;
+        if (!accepted) return false;
+        for (int i = 0; i < 8 && fg != handle; i++)
+        {
+            Thread.Sleep(5);
+            fg = NativeMethods.GetForegroundWindow();
+            if (fg != 0 && fg != handle) break;     // something else really took the front: stop waiting
+        }
+        if (fg != handle) Log.Debug("FOCUS", $"  settle: foreground {Log.Win(fg)} after waiting");
+        return fg == handle;
     }
 }
 
