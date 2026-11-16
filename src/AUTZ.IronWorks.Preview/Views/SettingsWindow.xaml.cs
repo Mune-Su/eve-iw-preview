@@ -1,7 +1,13 @@
+using System.ComponentModel;
+using System.Diagnostics;
+using System.IO;
+using System.Text;
+using System.Text.Json;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
+using AUTZ.IronWorks.Preview.Core;
 using AUTZ.IronWorks.Preview.Models;
 using AUTZ.IronWorks.Preview.Services;
 
@@ -10,13 +16,16 @@ namespace AUTZ.IronWorks.Preview.Views;
 public partial class SettingsWindow : Window
 {
     // order matches the left-hand menu
-    private const int PageGeneralIndex = 0;
-    private const int PageAppearanceIndex = 1;
-    private const int PageThumbsIndex = 2;
-    private const int PageHotkeysIndex = 3;
-    private const int PageClientsIndex = 4;
-    private const int PageCharactersIndex = 5;
-    private const int PageProfilesIndex = 6;
+    private const int PageGeneral_ = 0;
+    private const int PageAppearance_ = 1;
+    private const int PageThumbs_ = 2;
+    private const int PageCharacters_ = 3;
+    private const int PageHotkeys_ = 4;
+    private const int PageClients_ = 5;
+    private const int PageNotifications_ = 6;
+    private const int PageLogs_ = 7;
+
+    private const int SlotCount = 10;
 
     private static readonly string[] Positions =
     {
@@ -25,93 +34,60 @@ public partial class SettingsWindow : Window
     };
 
     private static readonly string[] BorderStyles = { "Solid", "Dashed", "Dotted", "DashDot", "Double", "CornerBrackets" };
+    private static readonly string[] ActionTexts = { "Do nothing", "Maximise it", "Restore it (un-maximise)" };
+    private static readonly string[] ActionValues = { "None", "Maximise", "Restore" };
+    private static readonly string[] WhatsNewTexts = { "When the app has been updated", "Every time it starts", "Never" };
 
-    private readonly AppSettings _work;                       // a copy: Cancel leaves the real settings untouched
-    private readonly List<string> _characters;
-    private readonly HashSet<string> _running;
-    private readonly List<CheckBox> _showBoxes = new();
-    private AppState _state;
+    private sealed record PageDef(string Title, ScrollViewer Page, Control[] Cards);
+
+    private readonly PreviewManager _manager;
+    private readonly List<PageDef> _pages = new();
+    private readonly List<Border> _navItems = new();
+    private readonly List<Border> _navBars = new();
+    private readonly List<TextBlock> _navTexts = new();
+    private int _pageIndex = -1;
+
+    private readonly Dictionary<string, AppSettings> _edited = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, string> _baseline = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, string> _profileHotkeys = new(StringComparer.OrdinalIgnoreCase);
+    private readonly List<(string Name, CheckBox Box)> _rosterBoxes = new();
+    private readonly List<(string Name, CheckBox Box)> _scanBoxes = new();
+    private readonly List<HotkeyField> _slotFields = new();
+    private HashSet<string> _running;
+    private List<string> _characters = new();
+    private AppSettings _work;                 // the profile shown right now (a copy: nothing real changes until APPLY or SAVE)
+    private AppState _state;
+    private string _stateBaseline = "";
+    private string _activeProfile;
+    private string _shownProfile;
     private string? _currentCharacter;
-    private string? _selectedProfile;
     private bool _loading;
+    private bool _quiet;                       // validate without showing messages or jumping pages
+    private bool _closing;
 
-    /// <summary>The edited settings. Only valid after the dialog returned true.</summary>
-    public AppSettings Result => _work;
-
-    /// <summary>If set, the app should switch to this profile after saving.</summary>
-    public string? SwitchToProfile { get; private set; }
-
-    /// <param name="characters">Known characters, logged-in ones first (in the order their clients opened).</param>
-    /// <param name="running">Characters that are logged in right now.</param>
-    public SettingsWindow(AppSettings settings, IReadOnlyList<string> characters, IReadOnlyCollection<string> running)
+    public SettingsWindow(PreviewManager manager)
     {
         InitializeComponent();
-        _work = settings.Clone();
-        _state = ProfileStore.LoadState();
-        _running = new HashSet<string>(running, StringComparer.OrdinalIgnoreCase);
-        _characters = characters
-            .Concat(_work.Characters.Keys.Where(AppSettings.IsCharacterKey))
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .ToList();
+        _manager = manager;
+
+        _state = manager.State.Clone();
+        _state.RunOnStartup = StartupService.IsEnabled();
+        _activeProfile = _state.ActiveProfile;
+        _shownProfile = _activeProfile;
+        _work = manager.Settings.Clone();
+        _edited[_shownProfile] = _work;
+        _running = new HashSet<string>(manager.RunningCharacters(), StringComparer.OrdinalIgnoreCase);
 
         // drop-down contents
         FontBox.ItemsSource = Fonts.SystemFontFamilies.Select(f => f.Source).OrderBy(n => n, StringComparer.OrdinalIgnoreCase).ToList();
         LabelPositionBox.ItemsSource = Positions;
         ActiveStyleBox.ItemsSource = BorderStyles;
         InactiveStyleBox.ItemsSource = BorderStyles;
+        CharActionBox.ItemsSource = ActionTexts;
+        NotifySoundCombo.ItemsSource = NotificationService.SoundNames;
+        WhatsNewCombo.ItemsSource = WhatsNewTexts;
 
-        // General
-        (_work.PositionMode == AppSettings.ModeClient ? ModeClientRadio : ModeCharacterRadio).IsChecked = true;
-        InheritBox.IsChecked = _work.NewCharactersInheritPosition;
-        SameSizeBox.IsChecked = _work.SameSizeForAll;
-        WidthBox.Text = _work.PreviewWidth.ToString();
-        HeightBox.Text = _work.PreviewHeight.ToString();
-        ClickableBox.IsChecked = _work.ThumbnailsClickable;
-        LockBox.IsChecked = _work.LockPositions;
-        SnapBox.IsChecked = _work.SnapEnabled;
-        SnapDistBox.Text = _work.SnapDistance.ToString();
-        RefreshBox.Text = _work.RefreshMilliseconds.ToString();
-
-        // Appearance
-        OpacityBox.Text = _work.ThumbnailOpacityPercent.ToString();
-        LabelsBox.IsChecked = _work.ShowLabels;
-        FontBox.Text = _work.LabelFontName;
-        FontSizeBox.Text = _work.LabelFontSize.ToString();
-        BoldBox.IsChecked = _work.LabelBold;
-        LabelColourBox.Hex = _work.DefaultLabelColourHex;
-        LabelBgBox.Hex = _work.LabelBackgroundHex;
-        LabelBgOpacityBox.Text = _work.LabelBackgroundOpacityPercent.ToString();
-        LabelPositionBox.SelectedItem = Positions.Contains(_work.LabelPosition) ? _work.LabelPosition : "TopLeft";
-        OffsetXBox.Text = _work.LabelOffsetX.ToString();
-        OffsetYBox.Text = _work.LabelOffsetY.ToString();
-        HighlightBox.IsChecked = _work.HighlightActive;
-        ColourBox.Hex = _work.ActiveBorderHex;
-        ActiveWidthBox.Text = _work.ActiveBorderWidth.ToString();
-        ActiveStyleBox.SelectedItem = BorderStyles.Contains(_work.ActiveBorderStyle) ? _work.ActiveBorderStyle : "Solid";
-        InactiveBox.IsChecked = _work.ShowInactiveBorder;
-        InactiveColourBox.Hex = _work.InactiveBorderHex;
-        InactiveWidthBox.Text = _work.InactiveBorderWidth.ToString();
-        InactiveStyleBox.SelectedItem = BorderStyles.Contains(_work.InactiveBorderStyle) ? _work.InactiveBorderStyle : "Solid";
-
-        // Thumbnails
-        LoginScreensBox.IsChecked = _work.ShowLoginScreens;
-        HideActiveBox.IsChecked = _work.HideActiveThumbnail;
-        HideUnfocusedBox.IsChecked = _work.HideWhenEveNotFocused;
-        HideDelayBox.Text = _work.HideDelayMs.ToString();
-
-        // Hotkeys
-        ForwardBox.Text = _work.CycleForwardHotkey;
-        BackBox.Text = _work.CycleBackHotkey;
-        CycleLoginBox.IsChecked = _work.CycleIncludeLoginScreens;
-        ShowExcludedBox.IsChecked = _work.ShowExcludedOverlay;
-
-        // Clients
-        AutoMinBox.IsChecked = _work.AutoMinimiseInactive;
-        AutoMinDelayBox.Text = _work.AutoMinimiseDelaySeconds.ToString();
-
-        // the per-colour fallbacks and the label preview
-        CharColourBox.FallbackHex = ColourField.TryParse(LabelColourBox.Hex, out _) ? LabelColourBox.Hex : "#FFFFFF";
+        // the per-character colour falls back to the default colour, so keep them in step
         LabelColourBox.HexChanged += () =>
         {
             CharColourBox.FallbackHex = ColourField.TryParse(LabelColourBox.Hex, out _) ? LabelColourBox.Hex : "#FFFFFF";
@@ -119,55 +95,365 @@ public partial class SettingsWindow : Window
         };
         CharColourBox.HexChanged += UpdatePreview;
 
-        // the three "one tick per character" lists
-        _showBoxes.AddRange(BuildList(ClientChecks, true, c => !c.Hidden, (c, v) => c.Hidden = !v));
-        BuildList(SkipChecks, false, c => c.ExcludeFromCycling, (c, v) => c.ExcludeFromCycling = v);
-        BuildList(MinChecks, false, c => c.NeverMinimise, (c, v) => c.NeverMinimise = v);
+        BuildSlotRows();
 
-        if (_characters.Count == 0)
+        foreach (var pair in _state.ProfileHotkeys) _profileHotkeys[pair.Key] = pair.Value;
+        NextProfileBox.Text = _state.NextProfileHotkey;
+        PrevProfileBox.Text = _state.PreviousProfileHotkey;
+        RunOnStartupBox.IsChecked = _state.RunOnStartup;
+        WhatsNewCombo.SelectedIndex = _state.WhatsNewMode switch { "Always" => 1, "Never" => 2, _ => 0 };
+
+        VersionText.Text = "v" + AppInfo.Version;
+        SidebarVersion.Text = "Version " + AppInfo.Version;
+        FolderText.Text = "Settings:  " + DataFolder + "\nLog:       " + LogPath;
+
+        BuildNav();
+        RefreshProfileBox();
+        LoadFrom();
+        CaptureBaseline(_shownProfile);
+        _stateBaseline = StateSnapshot();
+        SelectPage(0);
+    }
+
+    private static string DataFolder => Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "AUTZ IronWorks Preview");
+
+    private static string LogPath => Path.Combine(DataFolder, "preview.log");
+
+    // ---------- left-hand menu ----------
+
+    private void BuildNav()
+    {
+        _pages.Add(new PageDef("General", PageGeneral, new Control[] { CardPositions, CardSize, CardInteraction, CardStartup, CardScanning }));
+        _pages.Add(new PageDef("Appearance", PageAppearance, new Control[] { CardOpacity, CardLabel, CardLabelBg, CardActiveBorder, CardInactiveBorder }));
+        _pages.Add(new PageDef("Thumbnails", PageThumbs, new Control[] { CardRoster, CardScan, CardHiding }));
+        _pages.Add(new PageDef("Characters", PageCharacters, new Control[] { CardCharacter, CardCharSize, CardCharHotkey, CardCharActions }));
+        _pages.Add(new PageDef("Hotkeys", PageHotkeys, new Control[] { CardCycling, CardHotkeyOptions, CardSlotKeys, CardSkipped, CardProfileKeys }));
+        _pages.Add(new PageDef("Clients", PageClients, new Control[] { CardAutoMin, CardNeverMin }));
+        _pages.Add(new PageDef("Notifications", PageNotifications, new Control[] { CardNotifyMain, CardNotifyHow }));
+        _pages.Add(new PageDef("Log Monitoring", PageLogs, new Control[] { CardLogMain, CardLogFolders, CardLogEvents, CardLogSystem }));
+        _pages.Add(new PageDef("About", PageAbout, new Control[] { CardAbout, CardWhatsNew, CardFiles }));
+
+        for (int i = 0; i < _pages.Count; i++)
         {
-            NoThumbText.Visibility = Visibility.Visible;
-            NoSkipText.Visibility = Visibility.Visible;
-            NoMinText.Visibility = Visibility.Visible;
-            NoCharText.Visibility = Visibility.Visible;
-            CharBox.IsEnabled = false;
-            SetCharacterFieldsEnabled(false);
+            int index = i;
+            var bar = new Border { Width = 3, CornerRadius = new CornerRadius(2, 0, 0, 2), Background = Brushes.Transparent };
+            var text = new TextBlock
+            {
+                Text = _pages[i].Title,
+                FontSize = 13.5,
+                FontWeight = FontWeights.Bold,
+                Margin = new Thickness(11, 9, 10, 9),
+                VerticalAlignment = VerticalAlignment.Center
+            };
+            var grid = new Grid();
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            Grid.SetColumn(text, 1);
+            grid.Children.Add(bar);
+            grid.Children.Add(text);
+
+            var item = new Border
+            {
+                Child = grid,
+                Background = Brushes.Transparent,
+                BorderBrush = Brushes.Transparent,
+                BorderThickness = new Thickness(1),
+                CornerRadius = new CornerRadius(3),
+                Margin = new Thickness(0, 0, 0, 4),
+                Cursor = Cursors.Hand
+            };
+            item.MouseLeftButtonUp += (_, _) => SelectPage(index);
+            item.MouseEnter += (_, _) =>
+            {
+                if (index == _pageIndex) return;
+                item.Background = Theme.Card;
+                _navTexts[index].Foreground = Theme.Text;
+            };
+            item.MouseLeave += (_, _) =>
+            {
+                if (index == _pageIndex) return;
+                item.Background = Brushes.Transparent;
+                _navTexts[index].Foreground = Theme.Muted;
+            };
+            NavPanel.Children.Add(item);
+
+            _navItems.Add(item);
+            _navBars.Add(bar);
+            _navTexts.Add(text);
+        }
+    }
+
+    private void SelectPage(int index)
+    {
+        if (index < 0 || index >= _pages.Count) return;
+        _pageIndex = index;
+
+        for (int i = 0; i < _pages.Count; i++)
+        {
+            bool on = i == index;
+            _pages[i].Page.Visibility = on ? Visibility.Visible : Visibility.Collapsed;
+            _navItems[i].Background = on ? Theme.Selected : Brushes.Transparent;       // accent-lo
+            _navItems[i].BorderBrush = on ? Theme.AccentLine : Brushes.Transparent;    // accent-line
+            _navBars[i].Background = on ? Theme.Accent : Brushes.Transparent;          // the orange left bar
+            _navTexts[i].Foreground = on ? Brushes.White : Theme.Muted;
+        }
+        PageTitleText.Text = _pages[index].Title;
+        _pages[index].Page.ScrollToVerticalOffset(0);
+    }
+
+    private static void ScrollToCard(ScrollViewer page, FrameworkElement card)
+    {
+        try
+        {
+            page.UpdateLayout();
+            if (page.Content is not FrameworkElement content) return;
+            double y = card.TransformToAncestor(content).Transform(new Point(0, 0)).Y;
+            page.ScrollToVerticalOffset(Math.Max(0, y - 6));
+        }
+        catch { }
+    }
+
+    // ---------- status line ----------
+
+    private void SetStatus(string text, bool good)
+    {
+        StatusText.Text = text;
+        StatusText.Foreground = good ? Theme.Success : Theme.Accent;
+    }
+
+    // ---------- loading the shown profile into the controls ----------
+
+    private void LoadFrom()
+    {
+        var s = _work;
+
+        // fill the Thumbnails list from the characters already known the first time a profile is opened
+        if (!s.RosterInitialised)
+        {
+            foreach (string name in s.Characters.Keys.Where(AppSettings.IsCharacterKey)
+                         .Concat(s.SlotCharacters.Values.Where(v => !string.IsNullOrWhiteSpace(v)))
+                         .Concat(_running))
+            {
+                if (!s.Roster.Contains(name, StringComparer.OrdinalIgnoreCase)) s.Roster.Add(name);
+            }
+            s.RosterInitialised = true;
+        }
+
+        // General
+        (s.PositionMode == AppSettings.ModeClient ? ModeClientRadio : ModeCharacterRadio).IsChecked = true;
+        InheritBox.IsChecked = s.NewCharactersInheritPosition;
+        SameSizeBox.IsChecked = s.SameSizeForAll;
+        WidthBox.Text = s.PreviewWidth.ToString();
+        HeightBox.Text = s.PreviewHeight.ToString();
+        ClickableBox.IsChecked = s.ThumbnailsClickable;
+        LoginClickableBox.IsChecked = s.LoginScreensClickable;
+        LockBox.IsChecked = s.LockPositions;
+        SnapBox.IsChecked = s.SnapEnabled;
+        OnTopBox.IsChecked = s.AlwaysOnTop;
+        SnapDistBox.Text = s.SnapDistance.ToString();
+        RefreshBox.Text = s.RefreshMilliseconds.ToString();
+
+        // Appearance
+        OpacitySlider.Value = Math.Clamp(s.ThumbnailOpacityPercent, 10, 100);
+        LabelsBox.IsChecked = s.ShowLabels;
+        var fonts = (FontBox.ItemsSource as IEnumerable<string>) ?? Array.Empty<string>();
+        FontBox.SelectedItem =
+            fonts.FirstOrDefault(f => f.Equals(s.LabelFontName, StringComparison.OrdinalIgnoreCase)) ??
+            fonts.FirstOrDefault(f => f.Equals("Segoe UI", StringComparison.OrdinalIgnoreCase));
+        FontSizeBox.Text = s.LabelFontSize.ToString();
+        BoldBox.IsChecked = s.LabelBold;
+        LabelColourBox.Hex = s.DefaultLabelColourHex;
+        LabelBgBox.Hex = s.LabelBackgroundHex;
+        LabelBgOpacitySlider.Value = Math.Clamp(s.LabelBackgroundOpacityPercent, 0, 100);
+        LabelPositionBox.SelectedItem = Positions.Contains(s.LabelPosition) ? s.LabelPosition : "TopLeft";
+        OffsetXBox.Text = s.LabelOffsetX.ToString();
+        OffsetYBox.Text = s.LabelOffsetY.ToString();
+        HighlightBox.IsChecked = s.HighlightActive;
+        ColourBox.Hex = s.ActiveBorderHex;
+        ActiveWidthBox.Text = s.ActiveBorderWidth.ToString();
+        ActiveStyleBox.SelectedItem = BorderStyles.Contains(s.ActiveBorderStyle) ? s.ActiveBorderStyle : "Solid";
+        InactiveBox.IsChecked = s.ShowInactiveBorder;
+        InactiveColourBox.Hex = s.InactiveBorderHex;
+        InactiveWidthBox.Text = s.InactiveBorderWidth.ToString();
+        InactiveStyleBox.SelectedItem = BorderStyles.Contains(s.InactiveBorderStyle) ? s.InactiveBorderStyle : "Solid";
+        UpdateSliderLabels();
+
+        // Thumbnails
+        LoginScreensBox.IsChecked = s.ShowLoginScreens;
+        ShowUnlistedBox.IsChecked = s.ShowUnlistedCharacters;
+        HideActiveBox.IsChecked = s.HideActiveThumbnail;
+        HideUnfocusedBox.IsChecked = s.HideWhenEveNotFocused;
+        HideDelayBox.Text = s.HideDelayMs.ToString();
+
+        // Hotkeys
+        ForwardBox.Text = s.CycleForwardHotkey;
+        BackBox.Text = s.CycleBackHotkey;
+        CycleLoginBox.IsChecked = s.CycleIncludeLoginScreens;
+        ShowExcludedBox.IsChecked = s.ShowExcludedOverlay;
+        HotkeysOnlyEveBox.IsChecked = s.HotkeysOnlyInEve;
+        PassThroughBox.IsChecked = s.HotkeyPassThrough;
+        for (int i = 0; i < _slotFields.Count; i++)
+            _slotFields[i].Text = s.ClientSlotHotkeys.TryGetValue((i + 1).ToString(), out var slotKey) ? slotKey : "";
+        ProfileHotkeyBox.Text = _profileHotkeys.TryGetValue(_shownProfile, out var hotkey) ? hotkey : "";
+
+        // Clients
+        AutoMinBox.IsChecked = s.AutoMinimiseInactive;
+        KeepLastBox.IsChecked = s.AutoMinimiseKeepLastActive;
+        MinOnStartBox.IsChecked = s.AutoMinimiseOnStart;
+        AutoMinDelayBox.Text = s.AutoMinimiseDelaySeconds.ToString();
+
+        // Notifications
+        NotifyEnabledBox.IsChecked = s.NotificationsEnabled;
+        NotifySkipActiveBox.IsChecked = s.NotifySkipActiveClient;
+        NotifyCooldownBox.Text = s.NotifyCooldownSeconds.ToString();
+        NotifyFlashBox.IsChecked = s.NotifyFlashBorder;
+        NotifyColourBox.Hex = s.NotifyBorderHex;
+        NotifySecondsBox.Text = s.NotifyBorderSeconds.ToString();
+        NotifyToastBox.IsChecked = s.NotifyToast;
+        NotifySoundBox.IsChecked = s.NotifySound;
+        NotifySoundCombo.SelectedItem = NotificationService.SoundNames.Contains(s.NotifySoundName) ? s.NotifySoundName : "Exclamation";
+        NotifySoundFileBox.Text = s.NotifySoundFile;
+        NotifySpeakBox.IsChecked = s.NotifySpeak;
+
+        // Log monitoring
+        LogEnabledBox.IsChecked = s.LogMonitoringEnabled;
+        LogPollBox.Text = s.LogPollMilliseconds.ToString();
+        GameFolderBox.Text = s.GameLogFolder;
+        ChatFolderBox.Text = s.ChatLogFolder;
+        LogAttackBox.IsChecked = s.LogWatchAttack;
+        LogMiningBox.IsChecked = s.LogWatchMiningIdle;
+        LogMiningSecondsBox.Text = s.LogMiningIdleSeconds.ToString();
+        LogKeywordsBox.Text = (s.LogKeywords ?? "").Replace("\r", "").Replace("\n", Environment.NewLine);
+        LogSystemBox.IsChecked = s.ShowSystemName;
+        LogStatusText.Text = _manager.LogStatus;
+
+        CharColourBox.FallbackHex = ColourField.TryParse(LabelColourBox.Hex, out _) ? LabelColourBox.Hex : "#FFFFFF";
+        RebuildCharacterLists();
+        UpdatePreview();
+    }
+
+    private void UpdateSliderLabels()
+    {
+        if (OpacityLabel is null || OpacitySlider is null || BgOpacityLabel is null || LabelBgOpacitySlider is null) return;
+        OpacityLabel.Text = "Thumbnail Opacity: " + (int)Math.Round(OpacitySlider.Value) + "%";
+        BgOpacityLabel.Text = "Background Opacity: " + (int)Math.Round(LabelBgOpacitySlider.Value) + "%";
+    }
+
+    private void OpacitySlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e) => UpdateSliderLabels();
+    private void BgOpacitySlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e) => UpdateSliderLabels();
+
+    // ---------- client slot hotkeys ----------
+
+    private void BuildSlotRows()
+    {
+        for (int i = 1; i <= SlotCount; i++)
+        {
+            var row = new Grid();
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(96) });
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+
+            var label = new TextBlock
+            {
+                Text = "Client " + i,
+                FontWeight = FontWeights.SemiBold,
+                VerticalAlignment = VerticalAlignment.Top,
+                Margin = new Thickness(0, 8, 0, 0)
+            };
+            var field = new HotkeyField();
+            Grid.SetColumn(field, 1);
+            row.Children.Add(label);
+            row.Children.Add(field);
+            SlotHotkeyHost.Children.Add(row);
+            _slotFields.Add(field);
+        }
+    }
+
+    // ---------- the character lists ----------
+
+    /// <summary>Rebuilds every list that shows characters: the Thumbnails list, the skip and never-minimise ticks and the Characters picker.</summary>
+    private void RebuildCharacterLists()
+    {
+        _characters = _work.Roster
+            .Concat(_work.Characters.Keys.Where(AppSettings.IsCharacterKey))
+            .Concat(_running)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        ClientChecks.Children.Clear();
+        SkipChecks.Children.Clear();
+        MinChecks.Children.Clear();
+        _rosterBoxes.Clear();
+
+        foreach (string name in _work.Roster.ToList())
+        {
+            string chosen = name;
+            var existing = _work.TryGetCharacter(name);
+            var row = new Grid { Margin = new Thickness(0, 0, 0, 8) };
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+            var box = new CheckBox
+            {
+                Content = _running.Contains(name) ? name + "   (logged in)" : name,
+                IsChecked = !(existing?.Hidden ?? false),
+                Margin = new Thickness(0),
+                VerticalAlignment = VerticalAlignment.Center
+            };
+            box.Click += (_, _) => _work.GetOrAddCharacter(chosen).Hidden = box.IsChecked != true;
+
+            var remove = new Button
+            {
+                Content = "Remove",
+                FontSize = 11,
+                Padding = new Thickness(10, 3, 10, 3),
+                Margin = new Thickness(8, 0, 0, 0),
+                ToolTip = "Take this character off the list (its saved settings go too)"
+            };
+            remove.Click += (_, _) => RemoveCharacter(chosen);
+
+            Grid.SetColumn(remove, 1);
+            row.Children.Add(box);
+            row.Children.Add(remove);
+            ClientChecks.Children.Add(row);
+            _rosterBoxes.Add((name, box));
+        }
+
+        BuildTickList(SkipChecks, c => c.ExcludeFromCycling, (c, v) => c.ExcludeFromCycling = v);
+        BuildTickList(MinChecks, c => c.NeverMinimise, (c, v) => c.NeverMinimise = v);
+
+        bool any = _characters.Count > 0;
+        NoThumbText.Visibility = _work.Roster.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+        NoSkipText.Visibility = any ? Visibility.Collapsed : Visibility.Visible;
+        NoMinText.Visibility = any ? Visibility.Collapsed : Visibility.Visible;
+        NoCharText.Visibility = any ? Visibility.Collapsed : Visibility.Visible;
+
+        _loading = true;
+        _currentCharacter = null;
+        CharBox.Items.Clear();
+        foreach (string name in _characters) CharBox.Items.Add(name);
+        _loading = false;
+
+        CharBox.IsEnabled = any;
+        SetCharacterFieldsEnabled(any);
+        if (any)
+        {
+            CharBox.SelectedIndex = 0;
         }
         else
         {
-            foreach (string name in _characters) CharBox.Items.Add(name);
-            CharBox.SelectedIndex = 0;
+            LabelBox.Text = "";
+            CharColourBox.Hex = "";
+            CharWidthBox.Text = "";
+            CharHeightBox.Text = "";
+            CharHotkeyBox.Text = "";
+            CharActionBox.SelectedIndex = 0;
+            CharMinLeaveBox.IsChecked = false;
         }
-
-        // Profiles
-        NextProfileBox.Text = _state.NextProfileHotkey;
-        PrevProfileBox.Text = _state.PreviousProfileHotkey;
-        foreach (var pair in _state.ProfileHotkeys) _profileHotkeys[pair.Key] = pair.Value;
-        RefreshProfileList(_state.ActiveProfile);
-
-        UpdatePreview();
-        Nav.SelectedIndex = 0;
     }
 
-    // ---------- navigation ----------
-
-    private void Nav_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    private void BuildTickList(StackPanel host, Func<CharacterSettings, bool> get, Action<CharacterSettings, bool> set)
     {
-        if (PageProfiles is null) return;
-        var pages = new UIElement[]
-        {
-            PageGeneral, PageAppearance, PageThumbs, PageHotkeys, PageClients, PageCharacters, PageProfiles
-        };
-        for (int i = 0; i < pages.Length; i++)
-            pages[i].Visibility = i == Nav.SelectedIndex ? Visibility.Visible : Visibility.Collapsed;
-    }
-
-    // ---------- per-character tick lists (thumbnails to show / skip in cycling / never minimise) ----------
-
-    private List<CheckBox> BuildList(StackPanel host, bool defaultValue,
-        Func<CharacterSettings, bool> get, Action<CharacterSettings, bool> set)
-    {
-        var boxes = new List<CheckBox>();
         foreach (string name in _characters)
         {
             string chosen = name;
@@ -175,15 +461,20 @@ public partial class SettingsWindow : Window
             var box = new CheckBox
             {
                 Content = _running.Contains(name) ? name + "   (logged in)" : name,
-                IsChecked = existing is null ? defaultValue : get(existing),
-                Foreground = new SolidColorBrush(Color.FromRgb(0xE5, 0xE7, 0xEB)),
-                Margin = new Thickness(0, 0, 0, 10)
+                IsChecked = existing is not null && get(existing)
             };
             box.Click += (_, _) => set(_work.GetOrAddCharacter(chosen), box.IsChecked == true);
-            boxes.Add(box);
             host.Children.Add(box);
         }
-        return boxes;
+    }
+
+    /// <summary>Keeps what was typed for the current character before the lists are rebuilt (invalid input is ignored).</summary>
+    private void CommitCurrentQuietly()
+    {
+        bool before = _quiet;
+        _quiet = true;
+        try { CommitCharacter(); }
+        finally { _quiet = before; }
     }
 
     private void SelectAll_Click(object sender, RoutedEventArgs e) => SetAllShown(true);
@@ -192,11 +483,128 @@ public partial class SettingsWindow : Window
     private void SetAllShown(bool shown)
     {
         LoginScreensBox.IsChecked = shown;
-        for (int i = 0; i < _showBoxes.Count && i < _characters.Count; i++)
+        foreach (var (name, box) in _rosterBoxes)
         {
-            _showBoxes[i].IsChecked = shown;
-            _work.GetOrAddCharacter(_characters[i]).Hidden = !shown;
+            box.IsChecked = shown;
+            _work.GetOrAddCharacter(name).Hidden = !shown;
         }
+    }
+
+    // ---------- adding, removing and scanning characters ----------
+
+    private bool AddCharacterByName(string raw, bool announce)
+    {
+        string name = raw.Trim();
+        if (name.Length == 0)
+        {
+            if (announce) Warn("Type a character name first.");
+            return false;
+        }
+        if (name.Length > 60 || name.StartsWith('['))
+        {
+            if (announce) Warn("That isn't a valid character name.");
+            return false;
+        }
+        if (_work.Roster.Contains(name, StringComparer.OrdinalIgnoreCase))
+        {
+            if (announce) Warn(name + " is already in the list.");
+            return false;
+        }
+        _work.Roster.Add(name);
+        return true;
+    }
+
+    private void AddChar_Click(object sender, RoutedEventArgs e)
+    {
+        CommitCurrentQuietly();
+        if (!AddCharacterByName(RosterAddBox.Text, true)) return;
+        RosterAddBox.Text = "";
+        RebuildCharacterLists();
+        SetStatus("Added to the list. Press Apply or Save to use it.", false);
+    }
+
+    private void RosterAddBox_KeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key != Key.Enter) return;
+        e.Handled = true;
+        AddChar_Click(sender, e);
+    }
+
+    private void RemoveCharacter(string name)
+    {
+        if (Dialogs.Ask(this, "Remove character",
+                $"Take {name} off the list? Its saved label, colour, size, position and hotkeys are deleted too (when you save).",
+                "Remove", "Cancel") != 0) return;
+
+        CommitCurrentQuietly();
+        _work.Roster.RemoveAll(n => n.Equals(name, StringComparison.OrdinalIgnoreCase));
+        foreach (string key in _work.Characters.Keys.Where(k => k.Equals(name, StringComparison.OrdinalIgnoreCase)).ToList())
+            _work.Characters.Remove(key);
+        foreach (string slot in _work.SlotCharacters.Where(p => p.Value.Equals(name, StringComparison.OrdinalIgnoreCase)).Select(p => p.Key).ToList())
+            _work.SlotCharacters.Remove(slot);
+
+        RebuildCharacterLists();
+        if (ScanHost.Children.Count > 0) RunScan();
+        SetStatus($"{name} removed. Press Apply or Save to use it.", false);
+    }
+
+    private void Scan_Click(object sender, RoutedEventArgs e) => RunScan();
+
+    private void RunScan()
+    {
+        var found = _manager.ScanCharacters();
+        _running = new HashSet<string>(found, StringComparer.OrdinalIgnoreCase);
+
+        ScanHost.Children.Clear();
+        _scanBoxes.Clear();
+        foreach (string name in found)
+        {
+            bool already = _work.Roster.Contains(name, StringComparer.OrdinalIgnoreCase);
+            var box = new CheckBox
+            {
+                Content = already ? name + "   (already in the list)" : name,
+                IsChecked = !already,
+                IsEnabled = !already,
+                Margin = new Thickness(0, 0, 0, 8)
+            };
+            ScanHost.Children.Add(box);
+            _scanBoxes.Add((name, box));
+        }
+
+        ScanNote.Text = found.Count == 0
+            ? "No logged-in clients were found. Log a character in (a client still on the login screen has no name yet) and scan again."
+            : $"Found {found.Count} logged-in client(s). Tick the ones to add.";
+
+        // refresh the "(logged in)" markers on the lists
+        CommitCurrentQuietly();
+        RebuildCharacterLists();
+    }
+
+    private void ScanSelectAll_Click(object sender, RoutedEventArgs e)
+    {
+        foreach (var (_, box) in _scanBoxes)
+        {
+            if (box.IsEnabled) box.IsChecked = true;
+        }
+    }
+
+    private void AddScanned_Click(object sender, RoutedEventArgs e)
+    {
+        int added = 0;
+        foreach (var (name, box) in _scanBoxes)
+        {
+            if (box.IsEnabled && box.IsChecked == true && AddCharacterByName(name, false)) added++;
+        }
+        if (added == 0)
+        {
+            SetStatus(_scanBoxes.Count == 0 ? "Press Scan first." : "Nothing ticked to add.", false);
+            return;
+        }
+
+        CommitCurrentQuietly();
+        RebuildCharacterLists();
+        RunScan();
+        SetStatus($"Added {added} character(s) to the list. Press Apply or Save to use them.", false);
     }
 
     // ---------- characters page ----------
@@ -208,6 +616,8 @@ public partial class SettingsWindow : Window
         CharWidthBox.IsEnabled = enabled;
         CharHeightBox.IsEnabled = enabled;
         CharHotkeyBox.IsEnabled = enabled;
+        CharActionBox.IsEnabled = enabled;
+        CharMinLeaveBox.IsEnabled = enabled;
     }
 
     /// <summary>Shows the label the way it will look: its text in its colour.</summary>
@@ -244,11 +654,11 @@ public partial class SettingsWindow : Window
         CharWidthBox.Text = c.Width.ToString();
         CharHeightBox.Text = c.Height.ToString();
         CharHotkeyBox.Text = c.Hotkey;
+        int action = Array.IndexOf(ActionValues, c.ActivateAction);
+        CharActionBox.SelectedIndex = action < 0 ? 0 : action;
+        CharMinLeaveBox.IsChecked = c.MinimiseOnLeave;
         UpdatePreview();
     }
-
-    private static bool IsValidHotkey(string text) =>
-        string.IsNullOrWhiteSpace(text) || HotkeyParser.TryParse(text, out _, out _);
 
     /// <summary>Validates and stores the per-character fields into the working copy.</summary>
     private bool CommitCharacter()
@@ -259,23 +669,23 @@ public partial class SettingsWindow : Window
         if (!int.TryParse(string.IsNullOrWhiteSpace(CharWidthBox.Text) ? "0" : CharWidthBox.Text.Trim(), out int width) ||
             (width != 0 && (width < 80 || width > 1600)))
         {
-            MessageBox.Show(who + "width must be 0 (default) or 80 to 1600.");
+            Warn(who + "width must be 0 (default) or 80 to 1600.");
             return false;
         }
         if (!int.TryParse(string.IsNullOrWhiteSpace(CharHeightBox.Text) ? "0" : CharHeightBox.Text.Trim(), out int height) ||
             (height != 0 && (height < 45 || height > 1200)))
         {
-            MessageBox.Show(who + "height must be 0 (automatic) or 45 to 1200.");
+            Warn(who + "height must be 0 (automatic) or 45 to 1200.");
             return false;
         }
         if (!CharColourBox.IsValid)
         {
-            MessageBox.Show(who + "that isn't a valid colour. Use the Pick button, or type something like #F59E0B, or clear it.");
+            Warn(who + "that isn't a valid colour. Use the Pick button, or type something like #F97316, or clear it.");
             return false;
         }
-        if (!IsValidHotkey(CharHotkeyBox.Text))
+        if (!CharHotkeyBox.IsValid)
         {
-            MessageBox.Show(who + "that hotkey isn't supported. Click the box and press the keys again.");
+            Warn(who + "that hotkey isn't supported. Click the box and press the keys again.");
             return false;
         }
 
@@ -285,77 +695,69 @@ public partial class SettingsWindow : Window
         c.Label = LabelBox.Text.Trim();
         c.LabelColourHex = CharColourBox.Hex;
         c.Hotkey = CharHotkeyBox.Text.Trim();
+        c.ActivateAction = CharActionBox.SelectedIndex is >= 0 and < 3 ? ActionValues[CharActionBox.SelectedIndex] : "None";
+        c.MinimiseOnLeave = CharMinLeaveBox.IsChecked == true;
         return true;
     }
 
-    // ---------- hotkey boxes ----------
+    // ---------- messages ----------
 
-    /// <summary>Hotkey boxes record the key combination you press (including ` and other punctuation keys).</summary>
-    private void HotkeyBox_PreviewKeyDown(object sender, KeyEventArgs e)
+    private void Warn(string message)
     {
-        var box = (TextBox)sender;
-        Key key = e.Key switch
-        {
-            Key.System => e.SystemKey,
-            Key.ImeProcessed => e.ImeProcessedKey,
-            Key.DeadCharProcessed => e.DeadCharProcessedKey,
-            _ => e.Key
-        };
-        if (key == Key.Tab) return; // let Tab move to the next box
-        e.Handled = true;
-        if (key is Key.None or Key.LeftCtrl or Key.RightCtrl or Key.LeftAlt or Key.RightAlt
-                or Key.LeftShift or Key.RightShift or Key.LWin or Key.RWin)
-            return; // wait for the real key
-
-        ModifierKeys modifiers = Keyboard.Modifiers;
-        if (modifiers == ModifierKeys.None && (key == Key.Back || key == Key.Delete))
-        {
-            box.Text = "";
-            return;
-        }
-        box.Text = HotkeyParser.ToText(modifiers, key);
-        box.CaretIndex = box.Text.Length;
+        if (!_quiet) Dialogs.Info(this, message);
     }
 
-    // ---------- profiles page ----------
+    // ---------- profile bar ----------
 
-    private string? SelectedProfileName => (ProfileList.SelectedItem as ListBoxItem)?.Tag as string;
-
-    private void RefreshProfileList(string? select)
+    private void RefreshProfileBox()
     {
         _loading = true;
-        ProfileList.Items.Clear();
-        int selectIndex = -1;
-        int index = 0;
-        foreach (string name in ProfileStore.List())
-        {
-            bool active = name.Equals(_state.ActiveProfile, StringComparison.OrdinalIgnoreCase);
-            ProfileList.Items.Add(new ListBoxItem { Content = active ? name + "   (active)" : name, Tag = name });
-            if (select is not null && name.Equals(select, StringComparison.OrdinalIgnoreCase)) selectIndex = index;
-            index++;
-        }
-        if (selectIndex < 0 && ProfileList.Items.Count > 0) selectIndex = 0;
-        ProfileList.SelectedIndex = selectIndex;
+        ProfileBox.Items.Clear();
+        foreach (string name in ProfileStore.List()) ProfileBox.Items.Add(name);
+        ProfileBox.SelectedItem = ProfileBox.Items.Cast<string>()
+            .FirstOrDefault(n => n.Equals(_shownProfile, StringComparison.OrdinalIgnoreCase));
         _loading = false;
-
-        _selectedProfile = SelectedProfileName;
-        ProfileHotkeyBox.Text = _selectedProfile is not null && _profileHotkeys.TryGetValue(_selectedProfile, out var hotkey) ? hotkey : "";
+        ProfileNote.Visibility = _shownProfile.Equals(_activeProfile, StringComparison.OrdinalIgnoreCase)
+            ? Visibility.Collapsed : Visibility.Visible;
     }
 
     private void StoreProfileHotkeyEdit()
     {
-        if (_selectedProfile is null) return;
         string text = ProfileHotkeyBox.Text.Trim();
-        if (text.Length == 0) _profileHotkeys.Remove(_selectedProfile);
-        else _profileHotkeys[_selectedProfile] = text;
+        if (text.Length == 0) _profileHotkeys.Remove(_shownProfile);
+        else _profileHotkeys[_shownProfile] = text;
     }
 
-    private void ProfileList_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    /// <summary>Loads a profile into the controls without keeping anything from the one that was shown.</summary>
+    private void ShowProfile(string name)
     {
-        if (_loading) return;
-        StoreProfileHotkeyEdit();   // keep the hotkey typed for the previously selected profile
-        _selectedProfile = SelectedProfileName;
-        ProfileHotkeyBox.Text = _selectedProfile is not null && _profileHotkeys.TryGetValue(_selectedProfile, out var hotkey) ? hotkey : "";
+        _shownProfile = name;
+        if (!_edited.TryGetValue(name, out var settings))
+        {
+            settings = ProfileStore.Load(name);
+            _edited[name] = settings;
+        }
+        _work = settings;
+        LoadFrom();
+        if (!_baseline.ContainsKey(name)) CaptureBaseline(name);
+        RefreshProfileBox();
+    }
+
+    /// <summary>Checks and keeps the edits to the profile on screen, then shows another one.</summary>
+    private bool SwitchShown(string name)
+    {
+        if (!TryApply()) return false;
+        StoreProfileHotkeyEdit();
+        _edited[_shownProfile] = _work;
+        ShowProfile(name);
+        return true;
+    }
+
+    private void ProfileBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_loading || ProfileBox.SelectedItem is not string name) return;
+        if (name.Equals(_shownProfile, StringComparison.OrdinalIgnoreCase)) return;
+        if (!SwitchShown(name)) RefreshProfileBox();   // invalid edits: stay on the current profile
     }
 
     private string? AskProfileName(string title, string initial)
@@ -365,12 +767,12 @@ public partial class SettingsWindow : Window
         string name = ProfileStore.CleanName(raw);
         if (name.Length == 0)
         {
-            MessageBox.Show("Please type a name.");
+            Warn("Please type a name.");
             return null;
         }
         if (ProfileStore.Exists(name))
         {
-            MessageBox.Show("There's already a profile called \"" + name + "\".");
+            Warn("There's already a profile called \"" + name + "\".");
             return null;
         }
         return name;
@@ -381,108 +783,388 @@ public partial class SettingsWindow : Window
         string? name = AskProfileName("New profile", "");
         if (name is null) return;
         ProfileStore.Save(name, new AppSettings());
-        RefreshProfileList(name);
+        if (!SwitchShown(name)) RefreshProfileBox();
     }
 
-    private void DuplicateProfile_Click(object sender, RoutedEventArgs e)
+    private void CopyProfile_Click(object sender, RoutedEventArgs e)
     {
-        string? source = SelectedProfileName;
-        if (source is null) return;
-        string? name = AskProfileName("Duplicate profile", source + " copy");
+        string? name = AskProfileName("Copy profile", _shownProfile + " copy");
         if (name is null) return;
-
-        if (source.Equals(_state.ActiveProfile, StringComparison.OrdinalIgnoreCase))
-        {
-            if (!TryApply()) return;             // copy what's on screen now, not what was last saved
-            ProfileStore.Save(name, _work.Clone());
-        }
-        else
-        {
-            ProfileStore.Save(name, ProfileStore.Load(source));
-        }
-        RefreshProfileList(name);
+        if (!TryApply()) return;                        // copy what's on screen now, not what was last saved
+        ProfileStore.Save(name, _work.Clone());
+        if (!SwitchShown(name)) RefreshProfileBox();
     }
 
     private void RenameProfile_Click(object sender, RoutedEventArgs e)
     {
-        string? old = SelectedProfileName;
-        if (old is null) return;
+        string old = _shownProfile;
         string? name = AskProfileName("Rename profile", old);
         if (name is null) return;
 
         if (!ProfileStore.Rename(old, name))
         {
-            MessageBox.Show("Couldn't rename that profile.");
+            Warn("Couldn't rename that profile.");
             return;
         }
-        if (_profileHotkeys.TryGetValue(old, out var hotkey))
-        {
-            _profileHotkeys.Remove(old);
-            _profileHotkeys[name] = hotkey;
-        }
-        _state = ProfileStore.LoadState();
-        _selectedProfile = null;
-        RefreshProfileList(name);
+        if (_edited.Remove(old, out var settings)) _edited[name] = settings;
+        if (_baseline.Remove(old, out var baseline)) _baseline[name] = baseline;
+        if (_profileHotkeys.Remove(old, out var hotkey)) _profileHotkeys[name] = hotkey;
+        if (_activeProfile.Equals(old, StringComparison.OrdinalIgnoreCase)) _activeProfile = name;
+        _shownProfile = name;
+        _manager.NotifyProfileRenamed(old, name);
+        RefreshProfileBox();
     }
 
     private void DeleteProfile_Click(object sender, RoutedEventArgs e)
     {
-        string? name = SelectedProfileName;
-        if (name is null) return;
-        if (name.Equals(_state.ActiveProfile, StringComparison.OrdinalIgnoreCase))
+        string name = _shownProfile;
+        if (name.Equals(_activeProfile, StringComparison.OrdinalIgnoreCase))
         {
-            MessageBox.Show("You can't delete the active profile. Switch to another profile first.");
+            Warn("You can't delete the active profile. Switch to another profile and save first.");
             return;
         }
-        if (ProfileStore.List().Count < 2) return;
-        if (MessageBox.Show("Delete the profile \"" + name + "\"? This can't be undone.", "Delete profile",
-                MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes) return;
+        if (Dialogs.Ask(this, "Delete profile", "Delete the profile \"" + name + "\"? This can't be undone.", "Delete", "Cancel") != 0) return;
 
         ProfileStore.Delete(name);
+        _edited.Remove(name);
+        _baseline.Remove(name);
         _profileHotkeys.Remove(name);
-        _selectedProfile = null;
-        RefreshProfileList(_state.ActiveProfile);
+        ShowProfile(_activeProfile);
     }
 
-    private void SwitchProfile_Click(object sender, RoutedEventArgs e)
+    private void ImportProfile_Click(object sender, RoutedEventArgs e)
     {
-        string? name = SelectedProfileName;
-        if (name is null || name.Equals(_state.ActiveProfile, StringComparison.OrdinalIgnoreCase)) return;
+        var dialog = new Microsoft.Win32.OpenFileDialog
+        {
+            Title = "Import a profile",
+            Filter = "Profile files (*.json)|*.json"
+        };
+        if (dialog.ShowDialog(this) != true) return;
+
+        AppSettings? imported = null;
+        try
+        {
+            string text = File.ReadAllText(dialog.FileName);
+            if (text.Contains("PreviewWidth", StringComparison.Ordinal))
+                imported = JsonSerializer.Deserialize<AppSettings>(text);
+        }
+        catch { }
+        if (imported is null)
+        {
+            Warn("That file isn't an AUTZ IronWorks Preview profile.");
+            return;
+        }
+
+        string? name = AskProfileName("Import profile", ProfileStore.CleanName(Path.GetFileNameWithoutExtension(dialog.FileName)));
+        if (name is null) return;
+        ProfileStore.Save(name, imported);
+        if (!SwitchShown(name)) RefreshProfileBox();
+    }
+
+    // ---------- general page buttons ----------
+
+    private void Recover_Click(object sender, RoutedEventArgs e)
+    {
+        int moved = _manager.RecoverOffscreen(false);
+        SetStatus(moved == 0 ? "No thumbnails were off-screen." : $"Moved {moved} thumbnail(s) back on screen.", true);
+    }
+
+    private void ResetPositions_Click(object sender, RoutedEventArgs e)
+    {
+        if (Dialogs.Ask(this, "Reset positions", "Put every thumbnail back in a stack down the left edge of the screen? This is saved straight away.", "Reset", "Cancel") != 0) return;
+        _manager.ResetPositions();
+        foreach (var c in _work.Characters.Values)
+        {
+            c.Left = null;
+            c.Top = null;
+        }
+        SetStatus("Thumbnail positions were reset.", true);
+    }
+
+    // ---------- notifications and log monitoring ----------
+
+    private void TestNotify_Click(object sender, RoutedEventArgs e)
+    {
         if (!TryApply()) return;
-        CommitState();
-        SwitchToProfile = name;
-        DialogResult = true;
+        _manager.TestNotification(_work.Clone());
+        SetStatus("Test alert sent.", false);
     }
 
-    private void CommitState()
+    private void BrowseSound_Click(object sender, RoutedEventArgs e)
     {
-        StoreProfileHotkeyEdit();
-        var existing = new HashSet<string>(ProfileStore.List(), StringComparer.OrdinalIgnoreCase);
+        var dialog = new Microsoft.Win32.OpenFileDialog { Title = "Choose a sound", Filter = "Wave sounds (*.wav)|*.wav" };
+        if (dialog.ShowDialog(this) != true) return;
+        NotifySoundFileBox.Text = dialog.FileName;
+        NotifySoundCombo.SelectedItem = "Custom";
+    }
 
-        _state = ProfileStore.LoadState();   // pick up renames made on this page
+    private string? BrowseFolder(string current)
+    {
+        using var dialog = new System.Windows.Forms.FolderBrowserDialog { SelectedPath = current, ShowNewFolderButton = false };
+        nint handle = new System.Windows.Interop.WindowInteropHelper(this).Handle;
+        return dialog.ShowDialog(new Win32Owner(handle)) == System.Windows.Forms.DialogResult.OK ? dialog.SelectedPath : null;
+    }
+
+    private void BrowseGame_Click(object sender, RoutedEventArgs e)
+    {
+        string? folder = BrowseFolder(string.IsNullOrWhiteSpace(GameFolderBox.Text) ? LogMonitorService.DefaultGameFolder : GameFolderBox.Text);
+        if (folder is not null) GameFolderBox.Text = folder;
+    }
+
+    private void BrowseChat_Click(object sender, RoutedEventArgs e)
+    {
+        string? folder = BrowseFolder(string.IsNullOrWhiteSpace(ChatFolderBox.Text) ? LogMonitorService.DefaultChatFolder : ChatFolderBox.Text);
+        if (folder is not null) ChatFolderBox.Text = folder;
+    }
+
+    // ---------- about ----------
+
+    private void ViewChangelog_Click(object sender, RoutedEventArgs e) =>
+        new ChangelogWindow(AppInfo.Version) { Owner = this }.Show();
+
+    private static void OpenPath(Window owner, string path)
+    {
+        try
+        {
+            Process.Start(new ProcessStartInfo(path) { UseShellExecute = true });
+        }
+        catch (Exception ex)
+        {
+            Dialogs.Info(owner, "Couldn't open " + path + "\n\n" + ex.Message);
+        }
+    }
+
+    private void OpenFolder_Click(object sender, RoutedEventArgs e)
+    {
+        try { Directory.CreateDirectory(DataFolder); } catch { }
+        OpenPath(this, DataFolder);
+    }
+
+    private void OpenLog_Click(object sender, RoutedEventArgs e)
+    {
+        if (!File.Exists(LogPath))
+        {
+            Dialogs.Info(this, "There's no log yet. It's created the first time you use the next / previous hotkeys.");
+            return;
+        }
+        OpenPath(this, LogPath);
+    }
+
+    // ---------- search ----------
+
+    private static string TextOf(DependencyObject root)
+    {
+        var sb = new StringBuilder();
+
+        void Walk(object? node)
+        {
+            switch (node)
+            {
+                case null:
+                    return;
+                case string s:
+                    sb.Append(s).Append(' ');
+                    return;
+                case TextBlock tb:
+                    sb.Append(tb.Text).Append(' ');
+                    break;
+                case HeaderedContentControl h when h.Header is string header:
+                    sb.Append(header).Append(' ');
+                    break;
+            }
+            if (node is DependencyObject d)
+            {
+                foreach (object child in LogicalTreeHelper.GetChildren(d)) Walk(child);
+            }
+        }
+
+        Walk(root);
+        return sb.ToString();
+    }
+
+    /// <summary>Outlines every section that mentions the search text and jumps to the first one.</summary>
+    private void SearchBox_TextChanged(object sender, TextChangedEventArgs e)
+    {
+        string query = SearchBox.Text.Trim();
+        SearchHint.Visibility = SearchBox.Text.Length == 0 ? Visibility.Visible : Visibility.Collapsed;
+
+        Brush accent = Theme.Accent;
+        Brush normal = Theme.Line;
+        int firstPage = -1;
+        Control? firstCard = null;
+
+        for (int i = 0; i < _pages.Count; i++)
+        {
+            foreach (var card in _pages[i].Cards)
+            {
+                bool match = query.Length >= 2 && TextOf(card).Contains(query, StringComparison.OrdinalIgnoreCase);
+                card.BorderBrush = match ? accent : normal;
+                if (match && firstCard is null)
+                {
+                    firstPage = i;
+                    firstCard = card;
+                }
+            }
+        }
+
+        if (firstCard is not null)
+        {
+            SelectPage(firstPage);
+            ScrollToCard(_pages[firstPage].Page, firstCard);
+        }
+    }
+
+    // ---------- change tracking (for the unsaved-changes prompt) ----------
+
+    private static string ToJson(AppSettings s) => JsonSerializer.Serialize(s);
+
+    private void CaptureBaseline(string name)
+    {
+        bool before = _quiet;
+        _quiet = true;
+        try { TryApply(); }
+        finally { _quiet = before; }
+        _baseline[name] = ToJson(_work);
+    }
+
+    private string StateSnapshot() => string.Join("|",
+        _state.NextProfileHotkey, _state.PreviousProfileHotkey, _state.RunOnStartup, _state.WhatsNewMode,
+        string.Join(",", _profileHotkeys.OrderBy(p => p.Key, StringComparer.OrdinalIgnoreCase)
+            .Where(p => p.Value.Length > 0).Select(p => p.Key + "=" + p.Value)));
+
+    /// <summary>The app-wide values (profile hotkeys, startup, what's-new) as they are on screen.</summary>
+    private void ReadGlobalState()
+    {
+        var existing = new HashSet<string>(ProfileStore.List(), StringComparer.OrdinalIgnoreCase);
         _state.NextProfileHotkey = NextProfileBox.Text.Trim();
         _state.PreviousProfileHotkey = PrevProfileBox.Text.Trim();
         _state.ProfileHotkeys = _profileHotkeys
             .Where(p => p.Value.Length > 0 && existing.Contains(p.Key))
             .ToDictionary(p => p.Key, p => p.Value);
-        ProfileStore.SaveState(_state);
+        _state.RunOnStartup = RunOnStartupBox.IsChecked == true;
+        _state.WhatsNewMode = WhatsNewCombo.SelectedIndex switch { 1 => "Always", 2 => "Never", _ => "Update" };
     }
 
-    // ---------- validation + save ----------
-
-    private void Cancel_Click(object sender, RoutedEventArgs e) => Close();
-
-    private void Save_Click(object sender, RoutedEventArgs e)
+    private bool IsDirty()
     {
-        if (!TryApply()) return;
-        CommitState();
-        DialogResult = true; // closes the dialog
+        bool before = _quiet;
+        _quiet = true;
+        bool ok;
+        try { ok = TryApply(); }
+        finally { _quiet = before; }
+        if (!ok) return true;          // something on screen isn't valid, so it can't match what's saved
+
+        StoreProfileHotkeyEdit();
+        ReadGlobalState();
+        _edited[_shownProfile] = _work;
+        foreach (var pair in _edited)
+        {
+            if (_baseline.TryGetValue(pair.Key, out var saved) && ToJson(pair.Value) != saved) return true;
+        }
+        return StateSnapshot() != _stateBaseline;
     }
+
+    private void Rebaseline()
+    {
+        foreach (var pair in _edited) _baseline[pair.Key] = ToJson(pair.Value);
+        _stateBaseline = StateSnapshot();
+    }
+
+    // ---------- the buttons ----------
+
+    /// <summary>APPLY (save = false) or SAVE (save = true). Returns false if something on screen isn't valid.</summary>
+    private bool Push(bool save)
+    {
+        if (!TryApply()) return false;
+        StoreProfileHotkeyEdit();
+        ReadGlobalState();
+        _edited[_shownProfile] = _work;
+
+        if (save)
+        {
+            var all = _edited.ToDictionary(p => p.Key, p => p.Value.Clone(), StringComparer.OrdinalIgnoreCase);
+            _manager.SaveFromDialog(all, _shownProfile, _state.Clone());
+            _activeProfile = _shownProfile;
+            Rebaseline();
+            SetStatus($"✓ Saved to profile “{_shownProfile}” at {DateTime.Now:HH:mm:ss}.", true);
+        }
+        else
+        {
+            _manager.ApplyFromDialog(_shownProfile, _work.Clone(), _state.Clone());
+            _activeProfile = _shownProfile;
+            SetStatus($"Applied to this session at {DateTime.Now:HH:mm:ss}. Not saved yet: press Save to keep it.", false);
+        }
+
+        RefreshProfileBox();
+        LogStatusText.Text = _manager.LogStatus;
+        return true;
+    }
+
+    private void Apply_Click(object sender, RoutedEventArgs e) => Push(false);
+
+    private void Save_Click(object sender, RoutedEventArgs e) => Push(true);
+
+    private void Reset_Click(object sender, RoutedEventArgs e)
+    {
+        if (Dialogs.Ask(this, "Reset settings",
+                $"Put every setting in the profile “{_shownProfile}” back to its default? Your character list, positions and per-character settings are kept. Nothing changes until you press Apply or Save.",
+                "Reset", "Cancel") != 0) return;
+
+        var fresh = new AppSettings
+        {
+            Roster = _work.Roster,
+            RosterInitialised = true,
+            Characters = _work.Characters,
+            SlotCharacters = _work.SlotCharacters
+        };
+        _work = fresh;
+        _edited[_shownProfile] = _work;
+        LoadFrom();
+        SetStatus("Settings reset to their defaults. Press Apply or Save to use them.", false);
+    }
+
+    private void Close_Click(object sender, RoutedEventArgs e) => Close();
+
+    protected override void OnClosing(CancelEventArgs e)
+    {
+        base.OnClosing(e);
+        if (_closing) return;
+
+        if (!IsDirty())
+        {
+            _closing = true;
+            return;
+        }
+
+        int choice = Dialogs.Ask(this, "Unsaved changes",
+            "You have changes that aren't saved to the config file. Save them before closing?",
+            "Save", "Discard", "Cancel");
+
+        if (choice == 0)
+        {
+            if (Push(true)) _closing = true;
+            else e.Cancel = true;
+        }
+        else if (choice == 1)
+        {
+            _manager.RevertToSaved();
+            _closing = true;
+        }
+        else
+        {
+            e.Cancel = true;
+        }
+    }
+
+    // ---------- validation ----------
 
     private bool Fail(int page, string message)
     {
-        Nav.SelectedIndex = page;
-        MessageBox.Show(message);
+        if (!_quiet)
+        {
+            SelectPage(page);
+            Warn(message);
+        }
         return false;
     }
 
@@ -494,44 +1176,54 @@ public partial class SettingsWindow : Window
     {
         // General
         if (!InRange(WidthBox.Text, 120, 1200, out int width))
-            return Fail(PageGeneralIndex, "Thumbnail width must be 120 to 1200.");
+            return Fail(PageGeneral_, "Thumbnail width must be 120 to 1200.");
         if (!InRange(HeightBox.Text, 0, 1200, out int height) || (height != 0 && height < 45))
-            return Fail(PageGeneralIndex, "Thumbnail height must be 0 (automatic) or 45 to 1200.");
+            return Fail(PageGeneral_, "Thumbnail height must be 0 (automatic) or 45 to 1200.");
         if (!InRange(SnapDistBox.Text, 1, 100, out int snap))
-            return Fail(PageGeneralIndex, "Snap distance must be 1 to 100 pixels.");
+            return Fail(PageGeneral_, "Snap distance must be 1 to 100 pixels.");
         if (!InRange(RefreshBox.Text, 500, 10000, out int refresh))
-            return Fail(PageGeneralIndex, "Scan interval must be 500 to 10000 ms.");
+            return Fail(PageGeneral_, "Scan interval must be 500 to 10000 ms.");
 
         // Appearance
-        if (!InRange(OpacityBox.Text, 10, 100, out int opacity))
-            return Fail(PageAppearanceIndex, "Thumbnail opacity must be 10 to 100.");
         if (!InRange(FontSizeBox.Text, 6, 72, out int fontSize))
-            return Fail(PageAppearanceIndex, "Font size must be 6 to 72.");
-        if (!InRange(LabelBgOpacityBox.Text, 0, 100, out int bgOpacity))
-            return Fail(PageAppearanceIndex, "Text background opacity must be 0 to 100.");
+            return Fail(PageAppearance_, "Font size must be 6 to 72.");
         if (!InRange(OffsetXBox.Text, -300, 300, out int offsetX) || !InRange(OffsetYBox.Text, -300, 300, out int offsetY))
-            return Fail(PageAppearanceIndex, "Text offsets must be between -300 and 300 pixels.");
+            return Fail(PageAppearance_, "Text offsets must be between -300 and 300 pixels.");
         if (!InRange(ActiveWidthBox.Text, 1, 20, out int activeWidth) || !InRange(InactiveWidthBox.Text, 1, 20, out int inactiveWidth))
-            return Fail(PageAppearanceIndex, "Border widths must be 1 to 20 pixels.");
+            return Fail(PageAppearance_, "Border widths must be 1 to 20 pixels.");
         if (!LabelColourBox.IsValid || !LabelBgBox.IsValid || !ColourBox.IsValid || !InactiveColourBox.IsValid)
-            return Fail(PageAppearanceIndex, "One of the colours isn't valid. Use the Pick button, or type something like #F59E0B.");
+            return Fail(PageAppearance_, "One of the colours isn't valid. Use the Pick button, or type something like #F97316.");
 
         // Thumbnails / clients
         if (!InRange(HideDelayBox.Text, 0, 5000, out int hideDelay))
-            return Fail(PageThumbsIndex, "The hide delay must be 0 to 5000 ms.");
+            return Fail(PageThumbs_, "The hide delay must be 0 to 5000 ms.");
         if (!InRange(AutoMinDelayBox.Text, 0, 600, out int minDelay))
-            return Fail(PageClientsIndex, "The minimise delay must be 0 to 600 seconds.");
+            return Fail(PageClients_, "The minimise delay must be 0 to 600 seconds.");
 
         // Hotkeys
-        if (!IsValidHotkey(ForwardBox.Text) || !IsValidHotkey(BackBox.Text))
-            return Fail(PageHotkeysIndex, "That hotkey isn't supported. Click the box and press the keys again, or press Backspace to clear it.");
-        if (!IsValidHotkey(ProfileHotkeyBox.Text) || !IsValidHotkey(NextProfileBox.Text) || !IsValidHotkey(PrevProfileBox.Text))
-            return Fail(PageProfilesIndex, "That hotkey isn't supported. Click the box and press the keys again, or press Backspace to clear it.");
+        if (!ForwardBox.IsValid || !BackBox.IsValid || _slotFields.Any(f => !f.IsValid))
+            return Fail(PageHotkeys_, "One of the hotkeys isn't supported. Click the box and press the keys again, or use ✕ to clear it.");
+        if (!ProfileHotkeyBox.IsValid || !NextProfileBox.IsValid || !PrevProfileBox.IsValid)
+            return Fail(PageHotkeys_, "One of the profile hotkeys isn't supported. Click the box and press the keys again, or use ✕ to clear it.");
+
+        // Notifications
+        if (!InRange(NotifyCooldownBox.Text, 0, 3600, out int cooldown))
+            return Fail(PageNotifications_, "The cooldown must be 0 to 3600 seconds.");
+        if (!InRange(NotifySecondsBox.Text, 1, 120, out int flashSeconds))
+            return Fail(PageNotifications_, "The flash time must be 1 to 120 seconds.");
+        if (!NotifyColourBox.IsValid)
+            return Fail(PageNotifications_, "The flash colour isn't valid. Use the Pick button, or type something like #F87171.");
+
+        // Log monitoring
+        if (!InRange(LogPollBox.Text, 250, 10000, out int logPoll))
+            return Fail(PageLogs_, "The check interval must be 250 to 10000 ms.");
+        if (!InRange(LogMiningSecondsBox.Text, 10, 86400, out int miningSeconds))
+            return Fail(PageLogs_, "The mining quiet time must be 10 seconds or more.");
 
         // Characters
         if (!CommitCharacter())
         {
-            Nav.SelectedIndex = PageCharactersIndex;
+            if (!_quiet) SelectPage(PageCharacters_);
             return false;
         }
 
@@ -541,43 +1233,78 @@ public partial class SettingsWindow : Window
         _work.PreviewWidth = width;
         _work.PreviewHeight = height;
         _work.ThumbnailsClickable = ClickableBox.IsChecked == true;
+        _work.LoginScreensClickable = LoginClickableBox.IsChecked == true;
         _work.LockPositions = LockBox.IsChecked == true;
         _work.SnapEnabled = SnapBox.IsChecked == true;
+        _work.AlwaysOnTop = OnTopBox.IsChecked == true;
         _work.SnapDistance = snap;
         _work.RefreshMilliseconds = refresh;
 
-        _work.ThumbnailOpacityPercent = opacity;
+        _work.ThumbnailOpacityPercent = (int)Math.Round(OpacitySlider.Value);
         _work.ShowLabels = LabelsBox.IsChecked == true;
-        _work.LabelFontName = string.IsNullOrWhiteSpace(FontBox.Text) ? "Segoe UI" : FontBox.Text.Trim();
+        _work.LabelFontName = FontBox.SelectedItem as string ?? "Segoe UI";
         _work.LabelFontSize = fontSize;
         _work.LabelBold = BoldBox.IsChecked == true;
         _work.DefaultLabelColourHex = LabelColourBox.Hex.Length > 0 ? LabelColourBox.Hex : "#FFFFFF";
-        _work.LabelBackgroundHex = LabelBgBox.Hex.Length > 0 ? LabelBgBox.Hex : "#0A0F16";
-        _work.LabelBackgroundOpacityPercent = bgOpacity;
+        _work.LabelBackgroundHex = LabelBgBox.Hex.Length > 0 ? LabelBgBox.Hex : "#0C0C0E";
+        _work.LabelBackgroundOpacityPercent = (int)Math.Round(LabelBgOpacitySlider.Value);
         _work.LabelPosition = LabelPositionBox.SelectedItem as string ?? "TopLeft";
         _work.LabelOffsetX = offsetX;
         _work.LabelOffsetY = offsetY;
         _work.HighlightActive = HighlightBox.IsChecked == true;
-        _work.ActiveBorderHex = ColourBox.Hex.Length > 0 ? ColourBox.Hex : "#F59E0B";
+        _work.ActiveBorderHex = ColourBox.Hex.Length > 0 ? ColourBox.Hex : "#F97316";
         _work.ActiveBorderWidth = activeWidth;
         _work.ActiveBorderStyle = ActiveStyleBox.SelectedItem as string ?? "Solid";
         _work.ShowInactiveBorder = InactiveBox.IsChecked == true;
-        _work.InactiveBorderHex = InactiveColourBox.Hex.Length > 0 ? InactiveColourBox.Hex : "#606060";
+        _work.InactiveBorderHex = InactiveColourBox.Hex.Length > 0 ? InactiveColourBox.Hex : "#6F6F7D";
         _work.InactiveBorderWidth = inactiveWidth;
         _work.InactiveBorderStyle = InactiveStyleBox.SelectedItem as string ?? "Solid";
 
         _work.ShowLoginScreens = LoginScreensBox.IsChecked == true;
+        _work.ShowUnlistedCharacters = ShowUnlistedBox.IsChecked == true;
         _work.HideActiveThumbnail = HideActiveBox.IsChecked == true;
         _work.HideWhenEveNotFocused = HideUnfocusedBox.IsChecked == true;
         _work.HideDelayMs = hideDelay;
 
-        _work.CycleForwardHotkey = ForwardBox.Text.Trim();
-        _work.CycleBackHotkey = BackBox.Text.Trim();
+        _work.CycleForwardHotkey = ForwardBox.Text;
+        _work.CycleBackHotkey = BackBox.Text;
         _work.CycleIncludeLoginScreens = CycleLoginBox.IsChecked == true;
         _work.ShowExcludedOverlay = ShowExcludedBox.IsChecked == true;
+        _work.HotkeysOnlyInEve = HotkeysOnlyEveBox.IsChecked == true;
+        _work.HotkeyPassThrough = PassThroughBox.IsChecked == true;
+        _work.ClientSlotHotkeys = new Dictionary<string, string>();
+        for (int i = 0; i < _slotFields.Count; i++)
+        {
+            if (_slotFields[i].Text.Length > 0) _work.ClientSlotHotkeys[(i + 1).ToString()] = _slotFields[i].Text;
+        }
 
         _work.AutoMinimiseInactive = AutoMinBox.IsChecked == true;
+        _work.AutoMinimiseKeepLastActive = KeepLastBox.IsChecked == true;
+        _work.AutoMinimiseOnStart = MinOnStartBox.IsChecked == true;
         _work.AutoMinimiseDelaySeconds = minDelay;
+
+        _work.NotificationsEnabled = NotifyEnabledBox.IsChecked == true;
+        _work.NotifySkipActiveClient = NotifySkipActiveBox.IsChecked == true;
+        _work.NotifyCooldownSeconds = cooldown;
+        _work.NotifyFlashBorder = NotifyFlashBox.IsChecked == true;
+        _work.NotifyBorderHex = NotifyColourBox.Hex.Length > 0 ? NotifyColourBox.Hex : "#F87171";
+        _work.NotifyBorderSeconds = flashSeconds;
+        _work.NotifyToast = NotifyToastBox.IsChecked == true;
+        _work.NotifySound = NotifySoundBox.IsChecked == true;
+        _work.NotifySoundName = NotifySoundCombo.SelectedItem as string ?? "Exclamation";
+        _work.NotifySoundFile = NotifySoundFileBox.Text.Trim();
+        _work.NotifySpeak = NotifySpeakBox.IsChecked == true;
+
+        _work.LogMonitoringEnabled = LogEnabledBox.IsChecked == true;
+        _work.LogPollMilliseconds = logPoll;
+        _work.GameLogFolder = GameFolderBox.Text.Trim();
+        _work.ChatLogFolder = ChatFolderBox.Text.Trim();
+        _work.LogWatchAttack = LogAttackBox.IsChecked == true;
+        _work.LogWatchMiningIdle = LogMiningBox.IsChecked == true;
+        _work.LogMiningIdleSeconds = miningSeconds;
+        _work.LogKeywords = string.Join("\n", LogKeywordsBox.Text
+            .Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries));
+        _work.ShowSystemName = LogSystemBox.IsChecked == true;
 
         // drop per-character entries that hold nothing (saved positions of "[client N]" entries are kept)
         foreach (string key in _work.Characters.Keys.ToList())
@@ -585,7 +1312,8 @@ public partial class SettingsWindow : Window
             var c = _work.Characters[key];
             bool empty = c.Width == 0 && c.Height == 0 && c.Label.Length == 0 && c.LabelColourHex.Length == 0 &&
                          c.Hotkey.Length == 0 && c.Left is null && c.Top is null &&
-                         !c.Hidden && !c.ExcludeFromCycling && !c.NeverMinimise;
+                         !c.Hidden && !c.ExcludeFromCycling && !c.NeverMinimise && !c.MinimiseOnLeave &&
+                         c.ActivateAction == "None";
             if (empty) _work.Characters.Remove(key);
         }
         return true;

@@ -2,16 +2,54 @@ using System.Windows.Input;
 
 namespace AUTZ.IronWorks.Preview.Services;
 
+public enum HotkeyInputKind { Key, Mouse, Wheel }
+
+/// <summary>One non-modifier input: a key (Code = virtual key), a mouse button (1 left, 2 right, 3 middle, 4 and 5 side buttons) or a wheel notch (1 up, -1 down).</summary>
+public readonly record struct HotkeyToken(HotkeyInputKind Kind, int Code);
+
+/// <summary>A required modifier. Group: 0 Ctrl, 1 Alt, 2 Shift, 3 Win. Side: 0 either, 1 left only, 2 right only.</summary>
+public readonly record struct HotkeyModifier(int Group, int Side);
+
+public sealed class HotkeySpec
+{
+    public List<HotkeyModifier> Modifiers { get; } = new();
+    public List<HotkeyToken> Inputs { get; } = new();
+
+    /// <summary>Only modifiers, e.g. "RCtrl": it fires when they are released without anything else being pressed.</summary>
+    public bool ModifierOnly => Inputs.Count == 0;
+
+    public bool UsesMouse => Inputs.Any(i => i.Kind != HotkeyInputKind.Key);
+}
+
 /// <summary>
-/// Converts hotkey text such as "Ctrl+Alt+Right", "Ctrl+Shift+1", "F13" or "`" to Win32 modifiers + virtual key,
-/// and turns a pressed key combination back into text.
+/// Turns hotkey text such as "Ctrl+Alt+Right", "T", "Mouse4", "Shift+WheelUp", "A+S" or "RCtrl" into a spec the hook
+/// service can match, and turns captured input back into text. Any key, mouse button or combination is allowed.
 /// </summary>
 public static class HotkeyParser
 {
-    public const uint ModAlt = 0x1;
-    public const uint ModControl = 0x2;
-    public const uint ModShift = 0x4;
-    public const uint ModWin = 0x8;
+    // virtual keys of the left / right modifiers, indexed by group
+    public static readonly int[,] ModifierVk = { { 0xA2, 0xA3 }, { 0xA4, 0xA5 }, { 0xA0, 0xA1 }, { 0x5B, 0x5C } };
+
+    private static readonly Dictionary<string, HotkeyModifier> ModifierNames = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["ctrl"] = new(0, 0), ["control"] = new(0, 0), ["lctrl"] = new(0, 1), ["lcontrol"] = new(0, 1), ["rctrl"] = new(0, 2), ["rcontrol"] = new(0, 2),
+        ["alt"] = new(1, 0), ["lalt"] = new(1, 1), ["ralt"] = new(1, 2),
+        ["shift"] = new(2, 0), ["lshift"] = new(2, 1), ["rshift"] = new(2, 2),
+        ["win"] = new(3, 0), ["windows"] = new(3, 0), ["lwin"] = new(3, 1), ["rwin"] = new(3, 2)
+    };
+
+    private static readonly Dictionary<string, HotkeyToken> MouseNames = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["mouseleft"] = new(HotkeyInputKind.Mouse, 1),
+        ["mouseright"] = new(HotkeyInputKind.Mouse, 2),
+        ["mousemiddle"] = new(HotkeyInputKind.Mouse, 3),
+        ["mouse4"] = new(HotkeyInputKind.Mouse, 4),
+        ["xbutton1"] = new(HotkeyInputKind.Mouse, 4),
+        ["mouse5"] = new(HotkeyInputKind.Mouse, 5),
+        ["xbutton2"] = new(HotkeyInputKind.Mouse, 5),
+        ["wheelup"] = new(HotkeyInputKind.Wheel, 1),
+        ["wheeldown"] = new(HotkeyInputKind.Wheel, -1)
+    };
 
     // punctuation keys can be typed as the character itself
     private static readonly Dictionary<string, Key> Aliases = new(StringComparer.OrdinalIgnoreCase)
@@ -49,34 +87,44 @@ public static class HotkeyParser
         [Key.OemPipe] = "\\"
     };
 
-    public static bool TryParse(string? text, out uint modifiers, out uint virtualKey)
+    public static bool TryParse(string? text, out HotkeySpec spec)
     {
-        modifiers = 0;
-        virtualKey = 0;
+        spec = new HotkeySpec();
         if (string.IsNullOrWhiteSpace(text)) return false;
 
-        Key key = Key.None;
         foreach (string part in text.Split('+', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries))
         {
-            string lower = part.ToLowerInvariant();
-            if (lower == "ctrl" || lower == "control") { modifiers |= ModControl; continue; }
-            if (lower == "alt") { modifiers |= ModAlt; continue; }
-            if (lower == "shift") { modifiers |= ModShift; continue; }
-            if (lower == "win" || lower == "windows") { modifiers |= ModWin; continue; }
+            if (ModifierNames.TryGetValue(part, out var modifier))
+            {
+                if (!spec.Modifiers.Any(m => m.Group == modifier.Group)) spec.Modifiers.Add(modifier);
+                continue;
+            }
+            if (MouseNames.TryGetValue(part, out var mouse))
+            {
+                if (!spec.Inputs.Contains(mouse)) spec.Inputs.Add(mouse);
+                continue;
+            }
 
-            if (Aliases.TryGetValue(part, out var aliased)) { key = aliased; continue; }
+            Key key;
+            if (!Aliases.TryGetValue(part, out key))
+            {
+                string name = part.Length == 1 && char.IsDigit(part[0]) ? "D" + part : part;
+                if (char.IsDigit(name[0])) return false;
+                if (!Enum.TryParse(name, true, out key) || key == Key.None) return false;
+            }
 
-            string name = part.Length == 1 && char.IsDigit(part[0]) ? "D" + part : part;
-            if (char.IsDigit(name[0])) return false;
-            if (!Enum.TryParse<Key>(name, true, out key) || key == Key.None) return false;
+            int vk = KeyInterop.VirtualKeyFromKey(key);
+            if (vk == 0) return false;
+            var token = new HotkeyToken(HotkeyInputKind.Key, vk);
+            if (!spec.Inputs.Contains(token)) spec.Inputs.Add(token);
         }
 
-        if (key == Key.None) return false;
-        int vk = KeyInterop.VirtualKeyFromKey(key);
-        if (vk == 0) return false;
-        virtualKey = (uint)vk;
+        if (spec.Modifiers.Count == 0 && spec.Inputs.Count == 0) return false;
+        if (spec.Inputs.Count(i => i.Kind == HotkeyInputKind.Wheel) > 1) return false;
         return true;
     }
+
+    public static bool IsValid(string? text) => string.IsNullOrWhiteSpace(text) || TryParse(text, out _);
 
     public static string KeyToText(Key key)
     {
@@ -85,14 +133,41 @@ public static class HotkeyParser
         return key.ToString();
     }
 
-    public static string ToText(ModifierKeys modifiers, Key key)
+    public static bool IsModifierKey(Key key) =>
+        key is Key.LeftCtrl or Key.RightCtrl or Key.LeftAlt or Key.RightAlt
+            or Key.LeftShift or Key.RightShift or Key.LWin or Key.RWin;
+
+    /// <summary>The text for one pressed key: left-side modifiers are saved as plain Ctrl / Alt / Shift / Win, right-side ones as RCtrl etc.</summary>
+    public static string TokenForKey(Key key) => key switch
     {
-        var parts = new List<string>();
-        if (modifiers.HasFlag(ModifierKeys.Control)) parts.Add("Ctrl");
-        if (modifiers.HasFlag(ModifierKeys.Alt)) parts.Add("Alt");
-        if (modifiers.HasFlag(ModifierKeys.Shift)) parts.Add("Shift");
-        if (modifiers.HasFlag(ModifierKeys.Windows)) parts.Add("Win");
-        parts.Add(KeyToText(key));
-        return string.Join("+", parts);
+        Key.LeftCtrl => "Ctrl",
+        Key.RightCtrl => "RCtrl",
+        Key.LeftAlt => "Alt",
+        Key.RightAlt => "RAlt",
+        Key.LeftShift => "Shift",
+        Key.RightShift => "RShift",
+        Key.LWin => "Win",
+        Key.RWin => "RWin",
+        _ => KeyToText(key)
+    };
+
+    public static string TokenForMouse(MouseButton button) => button switch
+    {
+        MouseButton.Left => "MouseLeft",
+        MouseButton.Right => "MouseRight",
+        MouseButton.Middle => "MouseMiddle",
+        MouseButton.XButton1 => "Mouse4",
+        _ => "Mouse5"
+    };
+
+    public static bool IsModifierToken(string token) => ModifierNames.ContainsKey(token);
+
+    /// <summary>Puts modifiers first (Ctrl, Alt, Shift, Win) and the other inputs after them in the order they were pressed.</summary>
+    public static string Format(IEnumerable<string> tokens)
+    {
+        var list = tokens.ToList();
+        var modifiers = list.Where(IsModifierToken).OrderBy(t => ModifierNames[t].Group).ToList();
+        var others = list.Where(t => !IsModifierToken(t)).ToList();
+        return string.Join("+", modifiers.Concat(others));
     }
 }

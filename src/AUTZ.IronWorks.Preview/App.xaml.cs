@@ -1,5 +1,9 @@
 using System.Windows;
+using System.Windows.Threading;
+using AUTZ.IronWorks.Preview.Core;
+using AUTZ.IronWorks.Preview.Models;
 using AUTZ.IronWorks.Preview.Services;
+using AUTZ.IronWorks.Preview.Views;
 
 namespace AUTZ.IronWorks.Preview;
 
@@ -26,8 +30,7 @@ public partial class App : System.Windows.Application
         {
             _mutex.Dispose();
             _mutex = null;
-            MessageBox.Show("AUTZ IronWorks Preview is already running (look for its icon in the system tray).",
-                "AUTZ IronWorks Preview", MessageBoxButton.OK, MessageBoxImage.Information);
+            Dialogs.Info(null, "AUTZ IronWorks Preview is already running (look for its icon in the system tray).");
             Shutdown();
             return;
         }
@@ -39,6 +42,33 @@ public partial class App : System.Windows.Application
         // No main window and no taskbar button: the app lives in the system tray (right-click the icon).
         _tray = new NotifyIconService(_manager);
         _manager.Start();
+
+        ShowWhatsNew(state);
+    }
+
+    /// <summary>The start-up pop-up with the version and the latest changes (see Settings > About for the options).</summary>
+    private void ShowWhatsNew(AppState state)
+    {
+        string version = AppInfo.Version;
+        bool show = state.WhatsNewMode switch
+        {
+            "Always" => true,
+            "Never" => false,
+            _ => !state.LastSeenVersion.Equals(version, StringComparison.OrdinalIgnoreCase)
+        };
+
+        if (!state.LastSeenVersion.Equals(version, StringComparison.OrdinalIgnoreCase))
+        {
+            state.LastSeenVersion = version;
+            ProfileStore.SaveState(state);
+        }
+        if (!show) return;
+
+        Dispatcher.BeginInvoke(new Action(() =>
+        {
+            try { new ChangelogWindow(version).Show(); }
+            catch (Exception ex) { Log.Write("What's new window: " + ex.Message); }
+        }), DispatcherPriority.ApplicationIdle);
     }
 
     protected override void OnExit(ExitEventArgs e)

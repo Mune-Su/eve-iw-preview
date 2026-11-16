@@ -10,8 +10,8 @@
                 <ColumnDefinition Width="Auto"/>
             </Grid.ColumnDefinitions>
 
-            <Border x:Name="Swatch" Width="34" Height="34" CornerRadius="4"
-                    BorderBrush="#64748B" BorderThickness="1" Cursor="Hand"
+            <Border x:Name="Swatch" CornerRadius="3" Width="34" Height="34" 
+                    BorderBrush="#6F6F7D" BorderThickness="1" Cursor="Hand"
                     ToolTip="Click to pick a colour" MouseLeftButtonUp="Swatch_Click"/>
 
             <TextBox x:Name="HexBox" Grid.Column="1" Margin="8,0,8,0" VerticalContentAlignment="Center"

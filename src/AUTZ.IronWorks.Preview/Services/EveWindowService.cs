@@ -9,6 +9,7 @@ public sealed class EveWindowService
 {
     private readonly Dictionary<uint, DateTime> _startTimes = new();
     private readonly Dictionary<nint, DateTime> _firstSeen = new();
+    private readonly Dictionary<nint, string> _titles = new();
     private readonly HashSet<uint> _pidsThisScan = new();
 
     /// <summary>All EVE clients (logged in or not), in the order they were opened.</summary>
@@ -19,12 +20,25 @@ public sealed class EveWindowService
         NativeMethods.EnumWindows((h, _) =>
         {
             if (!NativeMethods.IsWindowVisible(h)) return true;
-            int len = NativeMethods.GetWindowTextLength(h);
-            if (len == 0) return true;
-            var sb = new StringBuilder(len + 1);
-            NativeMethods.GetWindowText(h, sb, sb.Capacity);
-            string title = sb.ToString().Trim();
+
+            string title;
+            if (NativeMethods.IsHungAppWindow(h))
+            {
+                // never ask a frozen client for its title (that call waits for it): use the last one we saw
+                if (!_titles.TryGetValue(h, out var cached)) return true;
+                title = cached;
+            }
+            else
+            {
+                int len = NativeMethods.GetWindowTextLength(h);
+                if (len == 0) return true;
+                var sb = new StringBuilder(len + 1);
+                NativeMethods.GetWindowText(h, sb, sb.Capacity);
+                title = sb.ToString().Trim();
+            }
+
             if (!IsEveTitle(title)) return true;
+            _titles[h] = title;
             found.Add(new EveClientWindow(h, title, ParseCharacter(title), OpenedAt(h)));
             return true;
         }, 0);
@@ -33,6 +47,7 @@ public sealed class EveWindowService
         foreach (uint pid in _startTimes.Keys.Where(p => !_pidsThisScan.Contains(p)).ToList()) _startTimes.Remove(pid);
         var handles = found.Select(f => f.Handle).ToHashSet();
         foreach (nint gone in _firstSeen.Keys.Where(k => !handles.Contains(k)).ToList()) _firstSeen.Remove(gone);
+        foreach (nint gone in _titles.Keys.Where(k => !handles.Contains(k)).ToList()) _titles.Remove(gone);
 
         return found.OrderBy(x => x.Started).ThenBy(x => (long)x.Handle).ToList();
     }
@@ -72,15 +87,23 @@ public sealed class EveWindowService
     public bool Activate(nint handle) => Activate(handle, out _);
 
     /// <summary>
-    /// Brings an EVE client to the front. The normal call is tried first (instant when Windows allows it);
-    /// only if Windows refuses do the slower fallbacks run. <paramref name="how"/> says which one worked.
+    /// Brings an EVE client to the front without ever waiting on it. A frozen ("not responding") client is refused so
+    /// cycling can carry on past it. The normal call is tried first (instant when Windows allows it); the slower
+    /// fallbacks only run if Windows refuses. <paramref name="how"/> says what happened.
     /// </summary>
     public bool Activate(nint handle, out string how)
     {
         how = "window gone";
         if (!NativeMethods.IsWindow(handle)) return false;
 
-        if (NativeMethods.IsIconic(handle)) NativeMethods.ShowWindow(handle, NativeMethods.SW_RESTORE);
+        if (NativeMethods.IsHungAppWindow(handle))
+        {
+            how = "not responding";
+            return false;
+        }
+
+        // asynchronous: a busy client can never block this app
+        if (NativeMethods.IsIconic(handle)) NativeMethods.ShowWindowAsync(handle, NativeMethods.SW_RESTORE);
 
         // fast path
         NativeMethods.SetForegroundWindow(handle);
@@ -91,26 +114,31 @@ public sealed class EveWindowService
         }
 
         nint foreground = NativeMethods.GetForegroundWindow();
+        bool foregroundHung = foreground != 0 && NativeMethods.IsHungAppWindow(foreground);
         uint foregroundThread = foreground == 0 ? 0 : NativeMethods.GetWindowThreadProcessId(foreground, out _);
         uint targetThread = NativeMethods.GetWindowThreadProcessId(handle, out _);
         uint thisThread = NativeMethods.GetCurrentThreadId();
 
-        // fallback 1: join the focused window's input queue to the target's (the way EVE-O Preview does it)
-        if (foregroundThread != 0 && targetThread != 0 && foregroundThread != targetThread &&
-            NativeMethods.AttachThreadInput(foregroundThread, targetThread, true))
+        // attaching input queues to a frozen window can hang input for everything, so never do it then
+        if (!foregroundHung)
         {
-            NativeMethods.SetForegroundWindow(handle);
-            NativeMethods.AttachThreadInput(foregroundThread, targetThread, false);
-            if (NativeMethods.GetForegroundWindow() == handle) { how = "attach foreground->target"; return true; }
-        }
+            // fallback 1: join the focused window's input queue to the target's (the way EVE-O Preview does it)
+            if (foregroundThread != 0 && targetThread != 0 && foregroundThread != targetThread &&
+                NativeMethods.AttachThreadInput(foregroundThread, targetThread, true))
+            {
+                NativeMethods.SetForegroundWindow(handle);
+                NativeMethods.AttachThreadInput(foregroundThread, targetThread, false);
+                if (NativeMethods.GetForegroundWindow() == handle) { how = "attach foreground->target"; return true; }
+            }
 
-        // fallback 2: join this app's input queue to the focused window's
-        if (foregroundThread != 0 && foregroundThread != thisThread &&
-            NativeMethods.AttachThreadInput(thisThread, foregroundThread, true))
-        {
-            NativeMethods.SetForegroundWindow(handle);
-            NativeMethods.AttachThreadInput(thisThread, foregroundThread, false);
-            if (NativeMethods.GetForegroundWindow() == handle) { how = "attach this->foreground"; return true; }
+            // fallback 2: join this app's input queue to the focused window's
+            if (foregroundThread != 0 && foregroundThread != thisThread &&
+                NativeMethods.AttachThreadInput(thisThread, foregroundThread, true))
+            {
+                NativeMethods.SetForegroundWindow(handle);
+                NativeMethods.AttachThreadInput(thisThread, foregroundThread, false);
+                if (NativeMethods.GetForegroundWindow() == handle) { how = "attach this->foreground"; return true; }
+            }
         }
 
         // fallback 3: a quick Alt tap makes Windows allow the focus change

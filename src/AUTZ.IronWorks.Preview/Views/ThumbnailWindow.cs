@@ -12,8 +12,9 @@ namespace AUTZ.IronWorks.Preview.Views;
 /// <summary>
 /// One borderless, always-on-top window per EVE client showing a live DWM thumbnail.
 /// Left-click switches to that client (unless "Thumbnails clickable" is off). Hold SHIFT and drag with the
-/// left button to move it (it snaps to neighbouring thumbnails). Right-click opens the menu.
+/// left button to move it (it snaps to neighbouring thumbnails). There is no right-click menu.
 /// Drag the bottom-right corner with the left button to resize (the shape is kept).
+/// The window is a non-activating overlay: clicking it never takes focus away from the game.
 /// </summary>
 public sealed class ThumbnailWindow : Window
 {
@@ -42,9 +43,6 @@ public sealed class ThumbnailWindow : Window
 
     public EveClientWindow Client { get; }
 
-    /// <summary>Menu shown on a right-click.</summary>
-    public ContextMenu? Menu { get; set; }
-
     /// <summary>Returns the screen rectangles of the other thumbnails, used for snapping.</summary>
     internal Func<ThumbnailWindow, IReadOnlyList<NativeMethods.RECT>>? SnapTargets { get; set; }
 
@@ -65,7 +63,7 @@ public sealed class ThumbnailWindow : Window
         ResizeMode = ResizeMode.NoResize;
         ShowInTaskbar = false;
         ShowActivated = false;
-        Topmost = true;
+        Topmost = settings.AlwaysOnTop;
         Background = Brushes.Black;
         Cursor = DefaultCursor;
         WindowStartupLocation = WindowStartupLocation.Manual;
@@ -82,7 +80,6 @@ public sealed class ThumbnailWindow : Window
         MouseLeftButtonDown += OnLeftDown;
         MouseLeftButtonUp += OnLeftUp;
         MouseMove += OnMouseMoved;
-        MouseRightButtonUp += OnRightUp;
         MouseEnter += (_, _) => UpdateGrip();
         MouseLeave += (_, _) => UpdateGrip();
         LostMouseCapture += (_, _) =>
@@ -98,7 +95,10 @@ public sealed class ThumbnailWindow : Window
         Closed += OnClosed;
     }
 
-    private Cursor DefaultCursor => _settings.ThumbnailsClickable ? Cursors.Hand : Cursors.Arrow;
+    /// <summary>Thumbnails of clients that aren't logged in yet are only clickable if you switch that on.</summary>
+    private bool CanClick => _settings.ThumbnailsClickable && (!Client.IsLoginScreen || _settings.LoginScreensClickable);
+
+    private Cursor DefaultCursor => CanClick ? Cursors.Hand : Cursors.Arrow;
 
     internal NativeMethods.RECT GetBounds()
     {
@@ -131,6 +131,22 @@ public sealed class ThumbnailWindow : Window
     private static bool ShiftHeld() =>
         (NativeMethods.GetAsyncKeyState(NativeMethods.VK_SHIFT) & 0x8000) != 0;
 
+    private static nint WndProc(nint hwnd, int msg, nint wParam, nint lParam, ref bool handled)
+    {
+        if (msg == NativeMethods.WM_MOUSEACTIVATE)
+        {
+            handled = true;
+            return NativeMethods.MA_NOACTIVATE;          // deliver the click, but don't activate this window
+        }
+        return 0;
+    }
+
+    public void SetAlwaysOnTop(bool onTop)
+    {
+        Topmost = onTop;
+        if (_label is not null) _label.Topmost = onTop;
+    }
+
     private void UpdateGrip() =>
         _label?.SetGripVisible((IsMouseOver || _resizing) && !_settings.LockPositions);
 
@@ -140,9 +156,12 @@ public sealed class ThumbnailWindow : Window
     {
         nint hwnd = new WindowInteropHelper(this).Handle;
 
-        // Keep thumbnails out of Alt+Tab and the taskbar.
+        // An overlay: out of Alt+Tab and the taskbar, and it never takes focus when clicked (so a click can't pull
+        // the taskbar up over a full-screen game).
         int style = NativeMethods.GetWindowLong(hwnd, NativeMethods.GWL_EXSTYLE);
-        NativeMethods.SetWindowLong(hwnd, NativeMethods.GWL_EXSTYLE, style | NativeMethods.WS_EX_TOOLWINDOW);
+        NativeMethods.SetWindowLong(hwnd, NativeMethods.GWL_EXSTYLE,
+            style | NativeMethods.WS_EX_TOOLWINDOW | NativeMethods.WS_EX_NOACTIVATE);
+        HwndSource.FromHwnd(hwnd)?.AddHook(WndProc);
 
         if (NativeMethods.DwmRegisterThumbnail(hwnd, Client.Handle, out _thumbnail) != 0) _thumbnail = 0;
         UpdateThumbnail();
@@ -151,7 +170,7 @@ public sealed class ThumbnailWindow : Window
     private void OnLoaded(object sender, RoutedEventArgs e)
     {
         if (_label is not null) return;
-        _label = new LabelWindow { Owner = this };
+        _label = new LabelWindow { Owner = this, Topmost = Topmost };
         if (_labelSpec is not null) _label.SetLabel(_labelSpec);
         _label.SetBorder(_borderSpec);
         _label.SetExcluded(_excluded);
@@ -206,7 +225,7 @@ public sealed class ThumbnailWindow : Window
             return; // a shift-click never switches clients
         }
 
-        if (_settings.ThumbnailsClickable) Clicked?.Invoke(this);
+        if (CanClick) Clicked?.Invoke(this);
     }
 
     private void OnLeftUp(object sender, MouseButtonEventArgs e)
@@ -312,15 +331,6 @@ public sealed class ThumbnailWindow : Window
         nint hwnd = new WindowInteropHelper(this).Handle;
         NativeMethods.SetWindowPos(hwnd, 0, x, y, 0, 0,
             NativeMethods.SWP_NOSIZE | NativeMethods.SWP_NOZORDER | NativeMethods.SWP_NOACTIVATE);
-    }
-
-    private void OnRightUp(object sender, MouseButtonEventArgs e)
-    {
-        e.Handled = true;
-        if (_dragging || _resizing || Menu is null) return;
-        Menu.PlacementTarget = this;
-        Menu.Placement = PlacementMode.MousePoint;
-        Menu.IsOpen = true;
     }
 
     private void FinishDrag()

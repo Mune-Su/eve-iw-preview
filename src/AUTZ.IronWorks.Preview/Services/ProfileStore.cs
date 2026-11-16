@@ -91,10 +91,22 @@ public static class ProfileStore
         try
         {
             if (File.Exists(PathFor(name)))
-                return JsonSerializer.Deserialize<AppSettings>(File.ReadAllText(PathFor(name))) ?? new AppSettings();
+                return Migrate(JsonSerializer.Deserialize<AppSettings>(File.ReadAllText(PathFor(name))) ?? new AppSettings());
         }
         catch { }
         return new AppSettings();
+    }
+
+    /// <summary>Moves colours that were still an older default (navy / amber, or the charcoal / burnt-orange of v0.8.0) over to the website's palette.</summary>
+    private static AppSettings Migrate(AppSettings s)
+    {
+        static bool Is(string value, params string[] olds) => olds.Any(o => value.Equals(o, StringComparison.OrdinalIgnoreCase));
+
+        if (Is(s.ActiveBorderHex, "#F59E0B", "#E4600C")) s.ActiveBorderHex = "#F97316";
+        if (Is(s.LabelBackgroundHex, "#0A0F16", "#141414")) s.LabelBackgroundHex = "#0C0C0E";
+        if (Is(s.InactiveBorderHex, "#606060")) s.InactiveBorderHex = "#6F6F7D";
+        if (Is(s.NotifyBorderHex, "#EF4444")) s.NotifyBorderHex = "#F87171";
+        return s;
     }
 
     public static void Save(string name, AppSettings settings)

@@ -70,8 +70,8 @@ public sealed class LabelWindow : Window
 
         // little triangle in the bottom-right corner, only shown while hovering
         _grip.Points = new PointCollection { new Point(0, 14), new Point(14, 0), new Point(14, 14) };
-        _grip.Fill = new SolidColorBrush(Color.FromArgb(200, 245, 158, 11));
-        _grip.Stroke = new SolidColorBrush(Color.FromArgb(160, 10, 15, 22));
+        _grip.Fill = new SolidColorBrush(Color.FromArgb(230, 249, 115, 22));
+        _grip.Stroke = new SolidColorBrush(Color.FromArgb(170, 12, 12, 14));
         _grip.StrokeThickness = 1;
         _grip.HorizontalAlignment = HorizontalAlignment.Right;
         _grip.VerticalAlignment = VerticalAlignment.Bottom;

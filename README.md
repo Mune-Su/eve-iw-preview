@@ -2,7 +2,39 @@
 
 A lightweight Windows utility for permanent live previews of your running EVE Online clients and instant client switching.
 
-**Run it:** double-click `AUTZ.IronWorks.Preview.exe` in this folder (needs the .NET 8 Desktop Runtime, already installed if you have the .NET SDK). It runs in the **system tray only** (no taskbar button): right-click the tray icon for the menu, double-click it for Settings.
+**Run it:** double-click `AUTZ.IronWorks.Preview.exe` in this folder (needs the .NET 8 Desktop Runtime, already installed if you have the .NET SDK). It runs in the **system tray only** (no taskbar button): right-click the tray icon for the menu, double-click it for Settings (the configuration window).
+
+## v0.8.3
+- Fixes the build error in 0.8.2 (a helper class was defined twice). Everything from 0.8.0 to 0.8.2 is included.
+
+## v0.8.2
+- Fixes the build errors that stopped 0.8.0 and 0.8.1 from building (missing `using` lines in the start-up code, the log monitor and the notification sounds, and the folder-picker helper). Everything from 0.8.0 and 0.8.1 is included.
+
+## v0.8.1
+- **Settings now match the AUTZ IronWorks website:** the exact palette from `css/style.css` (near-black `#0C0C0E` page, `#121215` sidebar, `#18181C` panels, `#2C2C33` lines, orange `#F97316`), the website's sidebar layout (logo and name on top, menu underneath, orange-tinted active item with an orange bar) and its button, input, tick-box and heading styles, with sharper corners.
+- Saved colours that were still the old defaults are moved to the new palette automatically.
+
+## v0.8.0
+- **New Settings window** with a left-hand menu (General, Appearance, Thumbnails, Characters, Hotkeys, Clients, Notifications, Log Monitoring, About).
+- **APPLY / SAVE / RESET / CLOSE:** Apply puts your changes into the running session without saving. Save writes them to the config file. Reset puts the profile's settings back to their defaults (your character list and positions are kept). Close asks before throwing away unsaved changes. A status line confirms what happened.
+- **Hotkeys with no restrictions:** any key, any mouse button (including the side buttons and the wheel), single keys with no modifier, combinations such as `A+S`, and modifier-only hotkeys. Right-side modifiers are saved as `RCtrl`, `RAlt`, `RShift`, `RWin`. Options: only while EVE is in front, and let the key through to the program.
+- **Client hotkeys:** a hotkey for the 1st client to open, the 2nd, and so on (Settings > Hotkeys), as well as per-character hotkeys.
+- **Cycling can't get stuck:** the next / previous hotkeys skip a client that is not responding, and nothing ever waits on a frozen client (switching no longer blocks on it).
+- **No right-click on thumbnails.** Thumbnails are non-activating overlays, so clicking one doesn't take focus from the game or pull the taskbar up.
+- **Thumbnails page:** add characters by hand, remove them, or scan every running client and pick which ones to add.
+- **Clients that aren't logged in can't be clicked** (switch it back on under General).
+- **Auto-minimize also covers clients that haven't been in front yet** (loading or on the login screen), so a fresh start-up no longer wastes resources; optionally keep the last-used client visible.
+- **Per client:** maximise or restore it when you switch to it, and minimise it when you switch away.
+- **Recover off-screen thumbnails** (General, or the tray menu), which also runs by itself when your monitors change. Thumbnails can be turned off "always on top".
+- **Run on Startup**, **Notifications** (flash the thumbnail border, a Windows notification, a sound, spoken alerts) and **Log Monitoring** (incoming damage, mining gone quiet, your own keywords, and the solar system on each thumbnail). The logs are read from `Documents\EVE\logs`; the app only reads them.
+- **What's-new pop-up** on start-up and a full changelog under Settings > About.
+- Tray menu: Settings, hide/show, refresh, recover off-screen thumbnails, suspend hotkeys, lock, reset positions, exit.
+
+## v0.7.0
+- **New Settings window in the EVE-Maj style, in AUTZ colours:** monospace text, a left menu with sub-sections you can click to jump to, boxed section cards (`# POSITIONS`, `# SIZE`, ...), square check boxes with an X, drop-downs, sliders for the opacity values, and colour swatches.
+- **Profile bar across the top:** pick a profile, or NEW, COPY, RENAME, DELETE, RESET and IMPORT one. Pick another profile and press SAVE to switch to it.
+- **Search box at the bottom:** type part of a setting's name or description and the matching sections are outlined and the first one is shown.
+- **Pages:** General, Appearance, Thumbnails, Characters, Hotkeys, Clients and About. Profiles now live in the top bar and profile hotkeys are under Hotkeys.
 
 ## v0.6.0
 - **Profiles:** save whole layouts (positions, sizes, look, hotkeys, per-character settings) and switch between them from Settings > Profiles or with hotkeys (per profile, next, previous). Your existing settings become the "Default" profile.
@@ -42,7 +74,7 @@ A lightweight Windows utility for permanent live previews of your running EVE On
 - **Switch:** left-click a thumbnail (if "Thumbnails clickable" is on), or use the hotkeys.
 - **Move:** hold **Shift** and drag a thumbnail with the left button.
 - **Resize:** drag the small triangle in the bottom-right corner of a thumbnail.
-- **Hotkeys:** defaults are `Ctrl+Alt+Right` (next) and `Ctrl+Alt+Left` (previous), in the order the clients were opened. Change them in Settings > Hotkeys by clicking the box and pressing the keys. A hotkey with no modifier (like `` ` ``) is grabbed system-wide, so you won't be able to type that key in other apps.
+- **Hotkeys:** defaults are `Ctrl+Alt+Right` (next) and `Ctrl+Alt+Left` (previous), in the order the clients were opened. Change them in Settings > Hotkeys: click a box, then press any key, mouse button or combination. A hotkey with no modifier (like `T`) is taken over everywhere, so you can't type that key in other apps unless you tick "only while EVE is in front".
 - Settings are stored in `%LOCALAPPDATA%\AUTZ IronWorks Preview\` (`profiles\NAME.json` per profile, `app.json` for the active profile).
 
 ## Building

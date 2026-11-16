@@ -11,8 +11,8 @@ public partial class ColourField : UserControl
 {
     private static readonly string[] PresetColours =
     {
-        "#FFFFFF", "#F59E0B", "#EF4444", "#22C55E", "#38BDF8",
-        "#A78BFA", "#F472B6", "#FACC15", "#94A3B8", "#000000"
+        "#FFFFFF", "#F97316", "#EF4444", "#22C55E", "#38BDF8",
+        "#A78BFA", "#F472B6", "#FACC15", "#9D9DAA", "#000000"
     };
 
     private string _fallbackHex = "#FFFFFF";
@@ -56,9 +56,9 @@ public partial class ColourField : UserControl
                 Width = 22,
                 Height = 22,
                 Margin = new Thickness(0, 0, 6, 6),
-                CornerRadius = new CornerRadius(3),
+                CornerRadius = new CornerRadius(0),
                 Background = new SolidColorBrush(colour),
-                BorderBrush = new SolidColorBrush(Color.FromRgb(100, 116, 139)),
+                BorderBrush = new SolidColorBrush(Color.FromRgb(111, 111, 125)),
                 BorderThickness = new Thickness(1),
                 Cursor = Cursors.Hand,
                 ToolTip = hex
@@ -91,7 +91,7 @@ public partial class ColourField : UserControl
         if (Swatch is null || HexBox is null) return;
 
         string text = Hex;
-        var grey = new SolidColorBrush(Color.FromRgb(100, 116, 139));
+        var grey = new SolidColorBrush(Color.FromRgb(111, 111, 125));
 
         if (text.Length == 0)
         {
@@ -112,7 +112,7 @@ public partial class ColourField : UserControl
             Swatch.Background = Brushes.Transparent;
             Swatch.Opacity = 1;
             Swatch.BorderBrush = Brushes.IndianRed;
-            Swatch.ToolTip = "Not a valid colour. Use something like #F59E0B.";
+            Swatch.ToolTip = "Not a valid colour. Use something like #F97316.";
         }
     }
 
