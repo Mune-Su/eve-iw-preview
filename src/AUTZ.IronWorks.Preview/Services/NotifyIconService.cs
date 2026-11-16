@@ -1,37 +1,29 @@
 using System.Drawing;
 using System.Windows;
+using AUTZ.IronWorks.Preview.Core;
 using AUTZ.IronWorks.Preview.Views;
 using Forms = System.Windows.Forms;
 
 namespace AUTZ.IronWorks.Preview.Services;
 
-/// <summary>The system tray icon. This is the app's only menu: right-click the icon.</summary>
+/// <summary>The system tray icon. This is the app's only menu: right-click the icon. Everything else is in Configuration.</summary>
 public sealed class NotifyIconService : IDisposable
 {
     private readonly Forms.NotifyIcon _icon;
 
     public NotifyIconService(PreviewManager manager)
     {
-        var settingsItem = new Forms.ToolStripMenuItem("Settings…");
+        var settingsItem = new Forms.ToolStripMenuItem("Configuration (Settings)");
         settingsItem.Font = new Font(settingsItem.Font, System.Drawing.FontStyle.Bold);
         settingsItem.Click += (_, _) => manager.OpenSettings();
 
-        var toggleItem = new Forms.ToolStripMenuItem("Hide all thumbnails");
+        var toggleItem = new Forms.ToolStripMenuItem("Hide All Thumbnails");
         toggleItem.Click += (_, _) => manager.ToggleVisibility();
 
-        var refreshItem = new Forms.ToolStripMenuItem("Refresh clients");
+        var refreshItem = new Forms.ToolStripMenuItem("Refresh Clients");
         refreshItem.Click += (_, _) => manager.Refresh();
 
-        var recoverItem = new Forms.ToolStripMenuItem("Recover off-screen thumbnails");
-        recoverItem.Click += (_, _) => manager.RecoverOffscreen();
-
-        var suspendItem = new Forms.ToolStripMenuItem("Suspend hotkeys") { CheckOnClick = true };
-        suspendItem.Click += (_, _) => manager.ToggleHotkeysSuspended();
-
-        var lockItem = new Forms.ToolStripMenuItem("Lock positions and sizes") { CheckOnClick = true };
-        lockItem.Click += (_, _) => manager.SetLocked(lockItem.Checked);
-
-        var resetItem = new Forms.ToolStripMenuItem("Reset all positions");
+        var resetItem = new Forms.ToolStripMenuItem("Reset All Positions");
         resetItem.Click += (_, _) =>
         {
             if (Dialogs.Ask(null, "Reset positions", "Put every thumbnail back in a stack down the left edge of the screen?", "Reset", "Cancel") == 0)
@@ -46,23 +38,16 @@ public sealed class NotifyIconService : IDisposable
         menu.Items.Add(new Forms.ToolStripSeparator());
         menu.Items.Add(toggleItem);
         menu.Items.Add(refreshItem);
-        menu.Items.Add(recoverItem);
-        menu.Items.Add(suspendItem);
-        menu.Items.Add(lockItem);
         menu.Items.Add(resetItem);
         menu.Items.Add(new Forms.ToolStripSeparator());
         menu.Items.Add(exitItem);
 
         menu.Opening += (_, _) =>
-        {
-            lockItem.Checked = manager.Settings.LockPositions;
-            suspendItem.Checked = manager.HotkeysSuspended;
-            toggleItem.Text = manager.ThumbnailsVisible ? "Hide all thumbnails" : "Show all thumbnails";
-        };
+            toggleItem.Text = manager.ThumbnailsVisible ? "Hide All Thumbnails" : "Show All Thumbnails";
 
         _icon = new Forms.NotifyIcon
         {
-            Text = "AUTZ IronWorks Preview",
+            Text = AppInfo.Name,
             Icon = LoadIcon(),
             Visible = true,
             ContextMenuStrip = menu
@@ -73,7 +58,7 @@ public sealed class NotifyIconService : IDisposable
         manager.Toast += (title, text) => _icon.ShowBalloonTip(4000, title, text, Forms.ToolTipIcon.Info);
     }
 
-    /// <summary>Uses the exe's own icon (the AUTZ IronWorks icon from Assets\app.ico).</summary>
+    /// <summary>Uses the exe's own icon (Assets\app.ico).</summary>
     private static Icon LoadIcon()
     {
         try

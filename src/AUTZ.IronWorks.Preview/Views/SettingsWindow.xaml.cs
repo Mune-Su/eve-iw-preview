@@ -115,8 +115,7 @@ public partial class SettingsWindow : Window
         SelectPage(0);
     }
 
-    private static string DataFolder => Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "AUTZ IronWorks Preview");
+    private static string DataFolder => AppInfo.DataFolder;
 
     private static string LogPath => Path.Combine(DataFolder, "preview.log");
 
@@ -851,7 +850,7 @@ public partial class SettingsWindow : Window
         catch { }
         if (imported is null)
         {
-            Warn("That file isn't an AUTZ IronWorks Preview profile.");
+            Warn("That file isn't an " + AppInfo.Name + " profile.");
             return;
         }
 

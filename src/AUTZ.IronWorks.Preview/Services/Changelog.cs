@@ -7,6 +7,14 @@ internal static class Changelog
 {
     public static readonly ChangelogEntry[] Entries =
     {
+        new("0.9.0", "Now EVE-IW-Preview (EVE-IronWorks-Preview)", new[]
+        {
+            "Renamed. EVE-IW-Preview is the short name for the exe file, the GitHub repository, Discord and Reddit. EVE-IronWorks-Preview is the name shown in the windows, the tray and About. Made by AUTZ IronWorks: from planets to profit.",
+            "The program file is now EVE-IW-Preview.exe.",
+            "Your settings move to %LOCALAPPDATA%\\EVE-IronWorks-Preview. Profiles, positions and hotkeys are copied across automatically the first time it starts, and the old folder is left untouched.",
+            "The Run on Startup entry is renamed too. If you had it on, it carries over.",
+            "The tray menu is down to five items: Configuration (Settings), Hide All Thumbnails, Refresh Clients, Reset All Positions and Exit. Lock positions and Recover off-screen thumbnails are in Settings > General."
+        }),
         new("0.8.3", "Build fix", new[]
         {
             "Fixes the build error in 0.8.2 (a helper class was defined twice).",

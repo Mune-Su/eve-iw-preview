@@ -58,7 +58,7 @@ public sealed class ThumbnailWindow : Window
         Client = client;
         _settings = settings;
 
-        Title = "AUTZ IronWorks Preview - " + client.CharacterName;
+        Title = AppInfo.Name + " - " + client.CharacterName;
         WindowStyle = WindowStyle.None;
         ResizeMode = ResizeMode.NoResize;
         ShowInTaskbar = false;

@@ -51,7 +51,7 @@ public sealed class ChangelogWindow : Window
         }
         catch { }
         var titles = new StackPanel { Margin = new Thickness(14, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center };
-        titles.Children.Add(new TextBlock { Text = "AUTZ IRONWORKS PREVIEW", FontSize = 18, FontWeight = FontWeights.Bold, Foreground = Brushes.White });
+        titles.Children.Add(new TextBlock { Text = "EVE-IRONWORKS-PREVIEW", FontSize = 18, FontWeight = FontWeights.Bold, Foreground = Brushes.White });
         titles.Children.Add(new TextBlock { Text = "VERSION " + version, FontSize = 11, Foreground = (Brush)FindResource("BrushAccent"), FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 2, 0, 0) });
         head.Children.Add(titles);
         header.Child = head;

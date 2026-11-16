@@ -30,7 +30,7 @@ public partial class App : System.Windows.Application
         {
             _mutex.Dispose();
             _mutex = null;
-            Dialogs.Info(null, "AUTZ IronWorks Preview is already running (look for its icon in the system tray).");
+            Dialogs.Info(null, AppInfo.Name + " is already running (look for its icon in the system tray).");
             Shutdown();
             return;
         }

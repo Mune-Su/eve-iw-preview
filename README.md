@@ -1,8 +1,16 @@
-# AUTZ IronWorks Preview
+# EVE-IW-Preview (EVE-IronWorks-Preview)
+
+*by AUTZ IronWorks · From planets to profit*
 
 A lightweight Windows utility for permanent live previews of your running EVE Online clients and instant client switching.
 
-**Run it:** double-click `AUTZ.IronWorks.Preview.exe` in this folder (needs the .NET 8 Desktop Runtime, already installed if you have the .NET SDK). It runs in the **system tray only** (no taskbar button): right-click the tray icon for the menu, double-click it for Settings (the configuration window).
+**Run it:** double-click `EVE-IW-Preview.exe` in this folder (needs the .NET 8 Desktop Runtime, already installed if you have the .NET SDK). It runs in the **system tray only** (no taskbar button): right-click the tray icon for the menu, double-click it for Settings (the configuration window).
+
+## v0.9.0
+- **Renamed: EVE-IW-Preview (EVE-IronWorks-Preview).** EVE-IW-Preview is the short name used for the exe (`EVE-IW-Preview.exe`), the GitHub repository (`eve-iw-preview`), Discord and Reddit. EVE-IronWorks-Preview is the name shown in the windows, the tray and the About page, with "by AUTZ IronWorks · From planets to profit" under it.
+- **Your settings carry over:** they now live in `%LOCALAPPDATA%\EVE-IronWorks-Preview`. Profiles, positions and hotkeys are copied across from the old `AUTZ IronWorks Preview` folder the first time it starts, and the old folder is left untouched. The Run on Startup entry moves to the new name too.
+- **Shorter tray menu:** Configuration (Settings), Hide All Thumbnails, Refresh Clients, Reset All Positions, Exit. Lock positions and Recover off-screen thumbnails are in Settings > General.
+- The project folder and C# namespace are still `AUTZ.IronWorks.Preview` (the author's name). The exe, titles, settings folder and startup entry use the new name.
 
 ## v0.8.3
 - Fixes the build error in 0.8.2 (a helper class was defined twice). Everything from 0.8.0 to 0.8.2 is included.
@@ -47,7 +55,7 @@ A lightweight Windows utility for permanent live previews of your running EVE On
 - **Auto-minimise** the other clients when you switch to one, with a delay and a never-minimise list (Settings > Clients).
 - **New characters take the position and size of the login screen they replace.**
 - **Faster switching:** focus changes (highlight, hide, login-to-character swap) are picked up the instant they happen instead of by polling, and the focus call itself is no longer slowed down by fallback tricks unless Windows refuses.
-- **Next / previous hotkey fix:** it now carries on to the next client if Windows refuses to focus one, instead of bouncing between two. Every press is written to `%LOCALAPPDATA%\AUTZ IronWorks Preview\preview.log`.
+- **Next / previous hotkey fix:** it now carries on to the next client if Windows refuses to focus one, instead of bouncing between two. Every press is written to `%LOCALAPPDATA%\EVE-IronWorks-Preview\preview.log`.
 - The tray menu and the thumbnail right-click menu stay short: everything else is in Settings.
 
 ## v0.5.0
@@ -75,7 +83,7 @@ A lightweight Windows utility for permanent live previews of your running EVE On
 - **Move:** hold **Shift** and drag a thumbnail with the left button.
 - **Resize:** drag the small triangle in the bottom-right corner of a thumbnail.
 - **Hotkeys:** defaults are `Ctrl+Alt+Right` (next) and `Ctrl+Alt+Left` (previous), in the order the clients were opened. Change them in Settings > Hotkeys: click a box, then press any key, mouse button or combination. A hotkey with no modifier (like `T`) is taken over everywhere, so you can't type that key in other apps unless you tick "only while EVE is in front".
-- Settings are stored in `%LOCALAPPDATA%\AUTZ IronWorks Preview\` (`profiles\NAME.json` per profile, `app.json` for the active profile).
+- Settings are stored in `%LOCALAPPDATA%\EVE-IronWorks-Preview\` (`profiles\NAME.json` per profile, `app.json` for the active profile).
 
 ## Building
 ```powershell
@@ -87,4 +95,4 @@ dotnet build -c Release
 The AUTZ IronWorks emblem is built in: `src\AUTZ.IronWorks.Preview\Assets\app.ico` (exe, tray and title bars) and `logo.png` (shown inside the app windows). To change it, replace those two files and rebuild.
 
 ## Update workflow
-`update-preview.ps1` replaces the repo with the newest `AUTZ-IronWorks-Preview-v*.zip`, keeps Git history, LICENSE and the Assets folder (icon + logo), builds, publishes the exe to the repo root, and stages the changes. It does not commit or push. If the app is open it is left running; Windows lets the running exe be renamed, so the new exe takes its place and is used the next time you open the app. Always launch the exe in the repo root (not one from a `bin` folder).
+`update-preview.ps1` replaces the repo with the newest `EVE-IW-Preview-v*.zip` (or `AUTZ-IronWorks-Preview-v*.zip`, the name used before the rename), keeps Git history, LICENSE and the Assets folder (icon + logo), builds, publishes the exe to the repo root, and stages the changes. It does not commit or push. If the app is open it is left running; Windows lets the running exe be renamed, so the new exe takes its place and is used the next time you open the app. Always launch the exe in the repo root (not one from a `bin` folder).

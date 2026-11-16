@@ -18,7 +18,7 @@ public static class Dialogs
         return window.Choice;
     }
 
-    public static void Info(Window? owner, string message, string title = "AUTZ IronWorks Preview") =>
+    public static void Info(Window? owner, string message, string title = "EVE-IronWorks-Preview") =>
         Ask(owner, title, message, "OK");
 }
 

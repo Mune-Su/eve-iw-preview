@@ -1,19 +1,19 @@
 using System.IO;
 using System.Text.Json;
+using AUTZ.IronWorks.Preview.Core;
 using AUTZ.IronWorks.Preview.Models;
 
 namespace AUTZ.IronWorks.Preview.Services;
 
 /// <summary>
-/// Profiles are separate files in %LOCALAPPDATA%\AUTZ IronWorks Preview\profiles\NAME.json, and app.json
+/// Profiles are separate files in %LOCALAPPDATA%\EVE-IronWorks-Preview\profiles\NAME.json, and app.json
 /// remembers which one is active. The old single settings.json becomes the "Default" profile the first time.
 /// </summary>
 public static class ProfileStore
 {
     public const string DefaultName = "Default";
 
-    private static readonly string Folder = Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "AUTZ IronWorks Preview");
+    private static readonly string Folder = AppInfo.DataFolder;
     private static readonly string ProfilesFolder = Path.Combine(Folder, "profiles");
     private static readonly string StatePath = Path.Combine(Folder, "app.json");
     private static readonly string LegacyPath = Path.Combine(Folder, "settings.json");
@@ -21,6 +21,7 @@ public static class ProfileStore
 
     public static (AppSettings Settings, AppState State) LoadActive()
     {
+        MigrateOldFolder();
         Directory.CreateDirectory(ProfilesFolder);
         var state = LoadState();
 
@@ -44,6 +45,36 @@ public static class ProfileStore
             SaveState(state);
         }
         return (Load(state.ActiveProfile), state);
+    }
+
+    /// <summary>The data folder used to be "AUTZ IronWorks Preview". It is copied across once, so profiles, positions and hotkeys carry over.</summary>
+    private static void MigrateOldFolder()
+    {
+        try
+        {
+            string old = AppInfo.OldDataFolder;
+            if (!Directory.Exists(old)) return;
+            if (Directory.Exists(ProfilesFolder) && Directory.EnumerateFiles(ProfilesFolder, "*.json").Any()) return;   // it already has its own profiles
+
+            CopyFolder(old, Folder);
+            Log.Write("Copied your settings from " + old);
+        }
+        catch (Exception ex)
+        {
+            Log.Write("Couldn't copy the old settings folder: " + ex.Message);
+        }
+    }
+
+    private static void CopyFolder(string from, string to)
+    {
+        Directory.CreateDirectory(to);
+        foreach (string file in Directory.GetFiles(from))
+        {
+            string target = Path.Combine(to, Path.GetFileName(file));
+            if (!File.Exists(target)) File.Copy(file, target);
+        }
+        foreach (string dir in Directory.GetDirectories(from))
+            CopyFolder(dir, Path.Combine(to, Path.GetFileName(dir)));
     }
 
     public static AppState LoadState()

@@ -1,16 +1,18 @@
-# update-preview.ps1 - replace the AUTZ IronWorks Preview repo with the newest AUTZ-IronWorks-Preview-vX.Y.Z version.
-#  1. Looks for the newest AUTZ-IronWorks-Preview-v*.zip in Downloads and moves it into "AUTZ IronWorks Preview versions".
+# update-preview.ps1 - replace the EVE-IW-Preview repo with the newest EVE-IW-Preview-vX.Y.Z version.
+#  1. Looks for the newest EVE-IW-Preview-v*.zip (or AUTZ-IronWorks-Preview-v*.zip, the name used before the rename)
+#     in Downloads and moves it into "AUTZ IronWorks Preview versions".
 #  2. Picks the newest version (by version number) in that folder, zip or folder, and extracts it if needed.
 #  3. Replaces everything in the repo EXCEPT Git history, LICENSE,
 #     build output (bin/obj/.vs/publish), this script and the Assets folder (icon + logo).
-#  4. Builds and publishes AUTZ.IronWorks.Preview.exe into the repo root, then git add and git status.
+#  4. Builds and publishes EVE-IW-Preview.exe into the repo root, then git add and git status.
 #     A running app is NOT closed: the update applies the next time you open it.
 #     It does NOT commit or push - you check the list first.
 
 $versions  = "C:\Users\sierr\OneDrive\Documents\AUTZ IronWorks Preview versions"
 $downloads = "$HOME\Downloads"
 $repo      = "C:\Users\sierr\Projects\AUTZ-IronWorks-Preview"
-$keep      = '.git', 'LICENSE', 'bin', 'obj', '.vs', 'publish', 'update-preview.ps1', 'AUTZ.IronWorks.Preview.exe'
+$keep      = '.git', 'LICENSE', 'bin', 'obj', '.vs', 'publish', 'update-preview.ps1', 'EVE-IW-Preview.exe', 'AUTZ.IronWorks.Preview.exe'
+$zipName   = '^(EVE-IW-Preview|AUTZ-IronWorks-Preview)-v\d+\.\d+\.\d+'   # new and earlier release names (a browser's " (1)" suffix is fine)
 $assetsRel = 'src\AUTZ.IronWorks.Preview\Assets'   # app.ico + logo.png live here and are kept across updates
 
 function VersionOf($item) {
@@ -21,32 +23,32 @@ function Stop-Update($msg) { Write-Host $msg -ForegroundColor Red; exit 1 }
 if (-not (Test-Path $versions)) { New-Item -ItemType Directory -Path $versions | Out-Null }
 
 # 1. a new zip in Downloads goes into the versions folder
-$dl = Get-ChildItem $downloads -Filter 'AUTZ-IronWorks-Preview-v*.zip' -ErrorAction SilentlyContinue |
-  Sort-Object { VersionOf $_ } -Descending | Select-Object -First 1
+$dl = Get-ChildItem $downloads -File -Filter '*.zip' -ErrorAction SilentlyContinue |
+  Where-Object { $_.Name -match $zipName } | Sort-Object { VersionOf $_ } -Descending | Select-Object -First 1
 if ($dl) {
-  $dest = Join-Path $versions ("AUTZ-IronWorks-Preview-v{0}.zip" -f (VersionOf $dl))
+  $dest = Join-Path $versions ("EVE-IW-Preview-v{0}.zip" -f (VersionOf $dl))
   Move-Item $dl.FullName $dest -Force
   Write-Host "Moved $($dl.Name) from Downloads into AUTZ IronWorks Preview versions"
 }
 
 # 2. newest version in the versions folder
-$latest = Get-ChildItem $versions -Filter 'AUTZ-IronWorks-Preview-v*' |
-  Where-Object { $_.PSIsContainer -or $_.Extension -eq '.zip' } |
+$latest = Get-ChildItem $versions |
+  Where-Object { $_.Name -match $zipName -and ($_.PSIsContainer -or $_.Extension -eq '.zip') } |
   Sort-Object { VersionOf $_ }, { $_.PSIsContainer } -Descending | Select-Object -First 1
-if (-not $latest) { Stop-Update "No AUTZ-IronWorks-Preview-v* zip or folder found in $versions" }
+if (-not $latest) { Stop-Update "No EVE-IW-Preview-v* (or AUTZ-IronWorks-Preview-v*) zip or folder found in $versions" }
 $ver = VersionOf $latest
 
 $src = $latest.FullName
 if (-not $latest.PSIsContainer) {
-  $src = Join-Path $versions ("AUTZ-IronWorks-Preview-v{0}" -f $ver)
+  $src = Join-Path $versions ("EVE-IW-Preview-v{0}" -f $ver)
   Expand-Archive $latest.FullName -DestinationPath $src -Force
 }
 # the folder with the .sln in it (handles a folder inside a folder of the same name)
-$sln = Get-ChildItem $src -Recurse -Filter 'AUTZ.IronWorks.Preview.sln' | Sort-Object { $_.FullName.Length } | Select-Object -First 1
-if (-not $sln) { Stop-Update "No AUTZ.IronWorks.Preview.sln inside $src - is it the right folder? Nothing was changed." }
+$sln = Get-ChildItem $src -Recurse -Filter '*.sln' | Sort-Object { $_.FullName.Length } | Select-Object -First 1
+if (-not $sln) { Stop-Update "No .sln file inside $src - is it the right folder? Nothing was changed." }
 $src = $sln.DirectoryName
 if (-not (Test-Path "$src\src\AUTZ.IronWorks.Preview\AUTZ.IronWorks.Preview.csproj")) {
-  Stop-Update "$src doesn't look like AUTZ IronWorks Preview (no src\AUTZ.IronWorks.Preview\*.csproj). Nothing was changed."
+  Stop-Update "$src doesn't look like EVE-IW-Preview (no src\AUTZ.IronWorks.Preview\*.csproj). Nothing was changed."
 }
 
 Write-Host ""
@@ -66,14 +68,14 @@ if ($dirty) {
 }
 
 # remember the Assets folder (icon + logo) so the wipe doesn't lose it
-$assetsBackup = Join-Path $env:TEMP 'autz-preview-assets'
+$assetsBackup = Join-Path $env:TEMP 'eve-iw-preview-assets'
 if (Test-Path $assetsBackup) { Remove-Item $assetsBackup -Recurse -Force }
 if (Test-Path "$repo\$assetsRel") {
   New-Item -ItemType Directory -Force $assetsBackup | Out-Null
   Copy-Item "$repo\$assetsRel\*" $assetsBackup -Recurse -Force
 }
 
-Get-ChildItem -Force | Where-Object { $keep -notcontains $_.Name -and $_.Name -notlike 'AUTZ.IronWorks.Preview.exe.*' } | Remove-Item -Recurse -Force
+Get-ChildItem -Force | Where-Object { $keep -notcontains $_.Name -and $_.Name -notlike '*.exe.old*' } | Remove-Item -Recurse -Force
 Copy-Item "$src\*" . -Recurse -Force
 
 # put back any asset the new version didn't ship (the update itself never replaces your icon or logo)

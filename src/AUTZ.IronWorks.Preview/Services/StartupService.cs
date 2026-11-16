@@ -6,14 +6,15 @@ namespace AUTZ.IronWorks.Preview.Services;
 internal static class StartupService
 {
     private const string RunKey = @"Software\Microsoft\Windows\CurrentVersion\Run";
-    private const string ValueName = "AUTZ IronWorks Preview";
+    private const string ValueName = "EVE-IronWorks-Preview";
+    private const string OldValueName = "AUTZ IronWorks Preview";      // earlier versions
 
     public static bool IsEnabled()
     {
         try
         {
             using var key = Registry.CurrentUser.OpenSubKey(RunKey);
-            return key?.GetValue(ValueName) is not null;
+            return key?.GetValue(ValueName) is not null || key?.GetValue(OldValueName) is not null;
         }
         catch
         {
@@ -26,6 +27,7 @@ internal static class StartupService
         try
         {
             using var key = Registry.CurrentUser.CreateSubKey(RunKey);
+            key.DeleteValue(OldValueName, false);
             if (enabled)
             {
                 string? path = Environment.ProcessPath;
@@ -42,9 +44,9 @@ internal static class StartupService
         }
     }
 
-    /// <summary>Keeps the registered path pointing at the exe that is running now (it moves if you run a different copy).</summary>
+    /// <summary>Keeps the registered path pointing at the exe that is running now, and moves an entry from the old name to the new one.</summary>
     public static void Refresh(bool enabled)
     {
-        if (enabled) Set(true);
+        if (enabled || IsEnabled()) Set(true);
     }
 }

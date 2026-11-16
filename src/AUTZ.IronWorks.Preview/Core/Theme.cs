@@ -1,3 +1,4 @@
+using System.IO;
 using System.Reflection;
 using System.Windows;
 using System.Windows.Media;
@@ -35,7 +36,21 @@ internal static class Theme
 
 internal static class AppInfo
 {
-    public const string Name = "AUTZ IronWorks Preview";
+    /// <summary>The name shown inside the app: window titles, the tray, messages and the About page.</summary>
+    public const string Name = "EVE-IronWorks-Preview";
+
+    /// <summary>The short public / technical name: the exe file name, the GitHub repository, Discord and Reddit.</summary>
+    public const string ShortName = "EVE-IW-Preview";
+
+    public const string Credit = "by AUTZ IronWorks \u00B7 From planets to profit";
+
+    private static string LocalAppData => Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+
+    /// <summary>Profiles, app.json and the log live here.</summary>
+    public static readonly string DataFolder = System.IO.Path.Combine(LocalAppData, Name);
+
+    /// <summary>The folder earlier versions used. Its contents are copied across once on the first start.</summary>
+    public static readonly string OldDataFolder = System.IO.Path.Combine(LocalAppData, "AUTZ IronWorks Preview");
 
     public static string Version
     {

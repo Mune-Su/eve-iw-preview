@@ -6,16 +6,21 @@
     <UseWindowsForms>true</UseWindowsForms>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
-    <AssemblyName>AUTZ.IronWorks.Preview</AssemblyName>
+    <AssemblyName>EVE-IW-Preview</AssemblyName>
     <RootNamespace>AUTZ.IronWorks.Preview</RootNamespace>
-    <Version>0.8.3</Version>
+    <Version>0.9.0</Version>
+    <Product>EVE-IronWorks-Preview</Product>
+    <Company>AUTZ IronWorks</Company>
+    <Authors>AUTZ IronWorks</Authors>
+    <Description>EVE-IW-Preview (EVE-IronWorks-Preview): live previews and instant switching for your EVE Online clients, by AUTZ IronWorks</Description>
+    <Copyright>AUTZ IronWorks</Copyright>
     <ApplicationIcon>Assets\app.ico</ApplicationIcon>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <NoWarn>$(NoWarn);WFAC010</NoWarn>
   </PropertyGroup>
 
 
-  <!-- The AUTZ IronWorks emblem: used for the exe/tray icon and shown inside the app windows. -->
+  <!-- The AUTZ IronWorks emblem (lava icon): used for the exe/tray icon and shown inside the app windows. -->
   <ItemGroup>
     <Resource Include="Assets\app.ico" />
     <Resource Include="Assets\logo.png" />
