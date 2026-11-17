@@ -25,6 +25,8 @@ public partial class App : System.Windows.Application
             args.Handled = true;
         };
 
+        WaitForPreviousInstance(e.Args);               // "Restart as administrator": let the old copy finish closing first
+
         _mutex = new Mutex(true, "AUTZ.IronWorks.Preview.SingleInstance", out bool created);
         if (!created)
         {
@@ -55,6 +57,23 @@ public partial class App : System.Windows.Application
         _manager.Start();
 
         ShowWhatsNew(state);
+    }
+
+    private static void WaitForPreviousInstance(string[] args)
+    {
+        for (int i = 0; i < args.Length - 1; i++)
+        {
+            if (!args[i].Equals("--after-pid", StringComparison.OrdinalIgnoreCase) || !int.TryParse(args[i + 1], out int pid)) continue;
+            try
+            {
+                using var previous = System.Diagnostics.Process.GetProcessById(pid);
+                previous.WaitForExit(15000);
+            }
+            catch
+            {
+                // it has already gone
+            }
+        }
     }
 
     /// <summary>The start-up pop-up with the version and the latest changes (see Settings > About for the options).</summary>

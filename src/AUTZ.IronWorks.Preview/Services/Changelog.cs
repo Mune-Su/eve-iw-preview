@@ -7,6 +7,14 @@ internal static class Changelog
 {
     public static readonly ChangelogEntry[] Entries =
     {
+        new("0.13.0", "Memory cleaner", new[]
+        {
+            "New: a Memory page in Configuration. It shows how much memory your PC is using (a bar, the committed memory, and the average, highest and lowest readings) and has the buttons Trim programs' working set, Clear system cache and Clear clipboard.",
+            "New: automatic cleaning, all off until you switch it on: trim every N minutes, clear the system cache every N minutes, and either one when memory use goes over a limit you choose. When a limit is on, memory use is checked every 30 seconds and it cleans at most once every 3 minutes. Nothing runs in the background while all of it is off. Saved with the app, not with a profile.",
+            "It never trims the program you are using at that moment, Windows' own core processes, or this app. EVE clients are left alone by default (a trimmed background client stutters for a moment when you switch to it); untick that to include them. A list lets you add programs that must never be trimmed.",
+            "Trimming asks Windows to take back memory a program isn't actively using (the program gets it back on demand), and works for your own programs without administrator rights. Clearing the system cache flushes Windows' file cache and needs administrator rights: without them those controls are greyed out, and a Restart as administrator button restarts the app with them (Windows asks first).",
+            "The log only records counts and sizes, never program names."
+        }),
         new("0.12.0", "Lighter on resources", new[]
         {
             "The keyboard hook is now only installed when a hotkey really needs it. Plain-key hotkeys (like ` for Next client) are delivered by Windows itself, so with those the app no longer sees every key you press in every program, and typing anywhere is no longer routed through it. The mouse hook is likewise only installed for mouse hotkeys, and neither is installed while hotkeys are suspended.",

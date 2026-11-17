@@ -281,6 +281,29 @@ public sealed class AppSettings
     }
 }
 
+/// <summary>The memory cleaner (Settings > Memory). App-wide, not per profile. Everything is off until the user switches it on.</summary>
+public sealed class MemoryCleanerSettings
+{
+    public bool TrimEveryMinutes { get; set; } = false;
+    public int TrimMinutes { get; set; } = 5;
+    public bool ClearCacheEvery { get; set; } = false;
+    public int CacheMinutes { get; set; } = 5;
+    public bool TrimAboveUsage { get; set; } = false;
+    public int TrimUsagePercent { get; set; } = 80;
+    public bool ClearCacheAboveUsage { get; set; } = false;
+    public int CacheUsagePercent { get; set; } = 80;
+    /// <summary>True = EVE clients are never trimmed (a trimmed background client stutters for a moment when you switch to it).</summary>
+    public bool SkipEveClients { get; set; } = true;
+    /// <summary>Program names (without .exe) that are never trimmed, separated by commas.</summary>
+    public string ExcludedPrograms { get; set; } = "";
+    public bool ShowNotification { get; set; } = false;
+
+    public bool AnyAutomatic => TrimEveryMinutes || ClearCacheEvery || TrimAboveUsage || ClearCacheAboveUsage;
+
+    public MemoryCleanerSettings Clone() =>
+        JsonSerializer.Deserialize<MemoryCleanerSettings>(JsonSerializer.Serialize(this)) ?? new MemoryCleanerSettings();
+}
+
 /// <summary>App-wide state that isn't part of a profile: active profile, profile hotkeys, startup and what's-new options.</summary>
 public sealed class AppState
 {
@@ -302,6 +325,8 @@ public sealed class AppState
     public string LogSalt { get; set; } = "";
     /// <summary>True once the logs written before names were removed from them have been deleted (done once).</summary>
     public bool LogsScrubbed { get; set; } = false;
+    /// <summary>The memory cleaner (Settings > Memory).</summary>
+    public MemoryCleanerSettings Memory { get; set; } = new();
 
     public AppState Clone() =>
         JsonSerializer.Deserialize<AppState>(JsonSerializer.Serialize(this)) ?? new AppState();

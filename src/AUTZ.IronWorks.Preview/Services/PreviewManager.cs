@@ -48,6 +48,13 @@ public sealed class PreviewManager : IDisposable
     private readonly DispatcherTimer _displayTimer = new() { Interval = TimeSpan.FromMilliseconds(1500) };
     private readonly DispatcherTimer _refreshSoonTimer = new() { Interval = TimeSpan.FromMilliseconds(60) };
     private readonly DispatcherTimer _trimTimer = new();
+    private readonly DispatcherTimer _memoryTimer = new();
+    private readonly MemoryUsageStats _memoryStats = new();
+    private DateTime _lastTrimAt = DateTime.UtcNow;       // memory cleaner: when programs were last trimmed (periodic runs and the cool-down count from here)
+    private DateTime _lastCacheAt = DateTime.UtcNow;
+    private bool _memoryBusy;
+    private bool _cacheNoAdminLogged;
+    private static readonly TimeSpan ThresholdCooldown = TimeSpan.FromMinutes(3);   // at most one "memory use is high" clean per 3 minutes
     private IReadOnlyList<EveClientWindow> _lastScan = Array.Empty<EveClientWindow>();   // what the latest scan found, before ordering
     private bool _scanDirty = true;                    // true = the next scan must redo the whole layout even if no client changed
     private static readonly TimeSpan IdleScan = TimeSpan.FromSeconds(3);                // scan interval while no EVE client is open
@@ -117,6 +124,7 @@ public sealed class PreviewManager : IDisposable
             _trimTimer.Stop();
             MemoryTrim.Trim();
         };
+        _memoryTimer.Tick += (_, _) => MemoryTick();
 
         _watcher.ForegroundChanged += hwnd =>
         {
@@ -167,6 +175,7 @@ public sealed class PreviewManager : IDisposable
         ApplySettings();
         Refresh();
         _scanTimer.Start();
+        ConfigureMemoryTimer();
         ScheduleTrim(10000);                           // once start-up has settled, hand back the memory start-up needed
     }
 
@@ -894,6 +903,150 @@ public sealed class PreviewManager : IDisposable
         return running.Concat(others).ToList();
     }
 
+    // ---------- memory cleaner ----------
+
+    /// <summary>The text of the last cleaning run ("14:32:10  Trimmed 87 programs; ..."), for the Memory page.</summary>
+    public string LastMemoryResult { get; private set; } = "";
+
+    public MemoryUsageStats MemoryStats => _memoryStats;
+
+    public static bool IsAdministrator => MemoryCleaner.IsAdministrator;
+
+    /// <summary>A fresh reading of memory use (also counted in the average / lowest / highest).</summary>
+    public MemoryStatus SampleMemory()
+    {
+        var status = MemoryCleaner.Read();
+        _memoryStats.Add(status);
+        return status;
+    }
+
+    /// <summary>
+    /// The automatic cleaning timer only exists while an automatic option is on: with nothing switched on the app does no
+    /// memory work at all. It checks every 30 s when a "memory use is over ..." limit is on, otherwise every 60 s.
+    /// </summary>
+    private void ConfigureMemoryTimer()
+    {
+        _memoryTimer.Stop();
+        var m = _state.Memory;
+        if (!m.AnyAutomatic) return;
+
+        _lastTrimAt = DateTime.UtcNow;                // times count from now
+        _lastCacheAt = DateTime.UtcNow;
+        _cacheNoAdminLogged = false;
+        _memoryTimer.Interval = TimeSpan.FromSeconds(m.TrimAboveUsage || m.ClearCacheAboveUsage ? 30 : 60);
+        _memoryTimer.Start();
+        Log.Debug("MEMORY", $"automatic cleaning on (checks every {(int)_memoryTimer.Interval.TotalSeconds} s)");
+    }
+
+    private async void MemoryTick()
+    {
+        if (_memoryBusy) return;
+        try
+        {
+            var m = _state.Memory;
+            if (!m.AnyAutomatic)
+            {
+                _memoryTimer.Stop();
+                return;
+            }
+
+            var now = DateTime.UtcNow;
+            var status = SampleMemory();
+
+            bool trim = m.TrimEveryMinutes && now - _lastTrimAt >= TimeSpan.FromMinutes(Math.Max(1, m.TrimMinutes));
+            bool cache = m.ClearCacheEvery && now - _lastCacheAt >= TimeSpan.FromMinutes(Math.Max(1, m.CacheMinutes));
+            if (!trim && m.TrimAboveUsage && status.LoadPercent >= m.TrimUsagePercent && now - _lastTrimAt >= ThresholdCooldown) trim = true;
+            if (!cache && m.ClearCacheAboveUsage && status.LoadPercent >= m.CacheUsagePercent && now - _lastCacheAt >= ThresholdCooldown) cache = true;
+            if (!trim && !cache) return;
+
+            _memoryBusy = true;
+            var messages = new List<string>();
+            if (trim) messages.Add((await TrimNowAsync(m)).Message);
+            if (cache)
+            {
+                if (MemoryCleaner.IsAdministrator) messages.Add((await ClearCacheNowAsync()).Message);
+                else
+                {
+                    _lastCacheAt = DateTime.UtcNow;                  // not an error: it just needs administrator, and only says so once
+                    if (!_cacheNoAdminLogged)
+                    {
+                        _cacheNoAdminLogged = true;
+                        Log.Write("Memory cleaner: clearing the system cache needs the app to run as administrator, so it is skipped.");
+                    }
+                }
+            }
+
+            if (m.ShowNotification && messages.Count > 0) Toast?.Invoke("Memory cleaned", string.Join("  ", messages));
+        }
+        catch (Exception ex)
+        {
+            Log.Write("Memory cleaner: " + ex.Message);
+        }
+        finally
+        {
+            _memoryBusy = false;
+        }
+    }
+
+    /// <summary>Trims the working set of the running programs (see MemoryCleaner). Used by the button and by the automatic options.</summary>
+    public async Task<CleanResult> TrimNowAsync(MemoryCleanerSettings settings)
+    {
+        var evePids = new HashSet<uint>(_eve.ClientProcessIds);       // copied here, on the UI thread, before the work moves to a background thread
+        NativeMethods.GetWindowThreadProcessId(NativeMethods.GetForegroundWindow(), out uint foreground);
+        var result = await Task.Run(() => MemoryCleaner.TrimWorkingSets(settings, evePids, foreground));
+        _lastTrimAt = DateTime.UtcNow;
+        RememberMemoryResult(result);
+        return result;
+    }
+
+    /// <summary>Flushes Windows' file cache (needs administrator rights).</summary>
+    public async Task<CleanResult> ClearCacheNowAsync()
+    {
+        var result = await Task.Run(MemoryCleaner.ClearSystemCache);
+        _lastCacheAt = DateTime.UtcNow;
+        RememberMemoryResult(result);
+        return result;
+    }
+
+    private void RememberMemoryResult(CleanResult result)
+    {
+        LastMemoryResult = $"{DateTime.Now:HH:mm:ss}  {result.Message}";
+        Log.Debug("MEMORY", $"{(result.Ok ? "ok" : "failed")}: {result.Message}");     // counts and sizes only: no program names are ever logged
+    }
+
+    /// <summary>Starts a second copy of the app with administrator rights (Windows asks first). The caller then closes this one.</summary>
+    public bool RestartAsAdministrator(out string error)
+    {
+        error = "";
+        try
+        {
+            string? exe = Environment.ProcessPath;
+            if (string.IsNullOrEmpty(exe))
+            {
+                error = "Couldn't find the program file.";
+                return false;
+            }
+            var start = new System.Diagnostics.ProcessStartInfo(exe, $"--after-pid {Environment.ProcessId}")
+            {
+                UseShellExecute = true,
+                Verb = "runas",
+                WorkingDirectory = System.IO.Path.GetDirectoryName(exe) ?? ""
+            };
+            System.Diagnostics.Process.Start(start)?.Dispose();
+            return true;
+        }
+        catch (System.ComponentModel.Win32Exception ex) when (ex.NativeErrorCode == 1223)
+        {
+            error = "The administrator prompt was cancelled.";
+            return false;
+        }
+        catch (Exception ex)
+        {
+            error = ex.Message;
+            return false;
+        }
+    }
+
     // ---------- settings ----------
 
     public void ApplySettings()
@@ -1097,6 +1250,8 @@ public sealed class PreviewManager : IDisposable
         _state.DebugLogging = disk.DebugLogging;
         _state.DebugLogMode = disk.DebugLogMode;
         _state.PinTrayIcon = disk.PinTrayIcon;
+        _state.Memory = disk.Memory.Clone();
+        ConfigureMemoryTimer();
         Log.PerSessionFiles = disk.DebugLogMode == "PerSession";
         Log.Verbose = disk.DebugLogging;
 
@@ -1134,6 +1289,8 @@ public sealed class PreviewManager : IDisposable
         _state.DebugLogging = global.DebugLogging;
         _state.DebugLogMode = global.DebugLogMode;
         _state.PinTrayIcon = global.PinTrayIcon;
+        _state.Memory = global.Memory.Clone();
+        ConfigureMemoryTimer();
         Log.PerSessionFiles = global.DebugLogMode == "PerSession";
         Log.Verbose = global.DebugLogging;
         if (_state.PinTrayIcon) TrayPinService.Promote();
@@ -1505,6 +1662,7 @@ public sealed class PreviewManager : IDisposable
         _displayTimer.Stop();
         _refreshSoonTimer.Stop();
         _trimTimer.Stop();
+        _memoryTimer.Stop();
         _watcher.Dispose();
         _logs.Dispose();
         _hotkeys.Dispose();

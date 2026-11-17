@@ -6,6 +6,9 @@ A lightweight Windows utility for permanent live previews of your running EVE On
 
 **Run it:** double-click `EVE-IW-Preview.exe` in this folder (needs the .NET 8 Desktop Runtime, already installed if you have the .NET SDK). It runs in the **system tray only** (no taskbar button): right-click the tray icon for the menu, double-click it for Configuration.
 
+## v0.13.0
+- **Memory cleaner** (Settings > Memory): memory use with a bar and average / highest / lowest, buttons to trim programs' working sets, clear the system cache and clear the clipboard, and automatic cleaning (every N minutes, or when memory use goes over a limit). All off by default, app-wide, and nothing runs while it is off. Never trims the program in front, Windows' core processes or EVE clients (unless you untick that); you can list programs to never trim. Clearing the system cache needs administrator rights (Restart as administrator button).
+
 ## v0.12.0
 - **Lighter on resources.** The keyboard hook is only installed when a hotkey needs it (plain-key hotkeys are delivered by Windows itself, so typing elsewhere is no longer routed through the app); title changes are watched only inside the EVE processes instead of system-wide; detailed logging costs nothing while off; preview.log no longer writes a line per successful press (failures only); the scan does less and slows to 3 s with no client open; log monitoring reads folders cheaply; memory is trimmed after start-up and after Configuration closes; the font list is built on demand; saves are atomic.
 

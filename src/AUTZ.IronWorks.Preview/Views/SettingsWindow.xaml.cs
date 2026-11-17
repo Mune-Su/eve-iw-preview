@@ -24,6 +24,7 @@ public partial class SettingsWindow : Window
     private const int PageClients_ = 5;
     private const int PageNotifications_ = 6;
     private const int PageLogs_ = 7;
+    private const int PageMemory_ = 8;
 
     private const int MaxSlotRows = 20;
     private const int MaxThumbRows = 60;
@@ -65,6 +66,7 @@ public partial class SettingsWindow : Window
     private readonly List<HotkeyField> _slotFields = new();
     private HashSet<string> _running;
     private bool _fontsLoaded;
+    private readonly System.Windows.Threading.DispatcherTimer _memTimer = new() { Interval = TimeSpan.FromSeconds(2) };   // runs only while the Memory page is showing
     private readonly List<string> _runningList;    // the logged-in characters, in client order
     private bool _orderLoading;
     private List<string> _characters = new();
@@ -113,6 +115,10 @@ public partial class SettingsWindow : Window
 
         PreviewMouseWheel += OnPreviewMouseWheel;
 
+        _memTimer.Tick += (_, _) => RefreshMemory();
+        MemTrack.SizeChanged += (_, _) => UpdateMemoryBar();
+        LoadMemoryControls();
+
         foreach (var pair in _state.ProfileHotkeys) _profileHotkeys[pair.Key] = pair.Value;
         NextProfileBox.Text = _state.NextProfileHotkey;
         PrevProfileBox.Text = _state.PreviousProfileHotkey;
@@ -150,6 +156,7 @@ public partial class SettingsWindow : Window
         _pages.Add(new PageDef("Clients", PageClients, new Control[] { CardAutoMin, CardNeverMin }));
         _pages.Add(new PageDef("Notifications", PageNotifications, new Control[] { CardNotifyMain, CardNotifyHow }));
         _pages.Add(new PageDef("Log Monitoring", PageLogs, new Control[] { CardLogMain, CardLogFolders, CardLogEvents, CardLogSystem }));
+        _pages.Add(new PageDef("Memory", PageMemory, new Control[] { CardMemoryNow, CardMemoryAuto, CardMemoryKeep }));
         _pages.Add(new PageDef("About", PageAbout, new Control[] { CardAbout, CardWhatsNew, CardFiles, CardDiagnostics }));
 
         for (int i = 0; i < _pages.Count; i++)
@@ -220,6 +227,17 @@ public partial class SettingsWindow : Window
         PageTitleText.Text = _pages[index].Title;
         _pages[index].Page.ScrollToVerticalOffset(0);
         if (leavingThumbs) RefreshAfterThumbEdit();
+
+        // the memory readings are only taken while the Memory page is showing
+        if (index == PageMemory_)
+        {
+            RefreshMemory();
+            _memTimer.Start();
+        }
+        else
+        {
+            _memTimer.Stop();
+        }
     }
 
     /// <summary>Opens a collapsed card (a card the user has collapsed would otherwise hide what the search or an error points at).</summary>
@@ -1601,6 +1619,7 @@ public partial class SettingsWindow : Window
 
     private string StateSnapshot() => string.Join("|",
         _state.NextProfileHotkey, _state.PreviousProfileHotkey, _state.RunOnStartup, _state.WhatsNewMode, _state.DebugLogging, _state.DebugLogMode, _state.PinTrayIcon,
+        JsonSerializer.Serialize(_state.Memory),
         string.Join(",", _profileHotkeys.OrderBy(p => p.Key, StringComparer.OrdinalIgnoreCase)
             .Where(p => p.Value.Length > 0).Select(p => p.Key + "=" + p.Value)));
 
@@ -1617,6 +1636,7 @@ public partial class SettingsWindow : Window
         _state.DebugLogging = DebugLogBox.IsChecked == true;
         _state.DebugLogMode = DebugSessionRadio.IsChecked == true ? "PerSession" : "Continuous";
         _state.PinTrayIcon = PinTrayBox.IsChecked == true;
+        _state.Memory = ReadMemorySettings();
         _state.WhatsNewMode = WhatsNewCombo.SelectedIndex switch { 1 => "Always", 2 => "Never", _ => "Update" };
     }
 
@@ -1733,6 +1753,168 @@ public partial class SettingsWindow : Window
         }
     }
 
+    // ---------- memory page ----------
+
+    private static int ParseOr(string text, int min, int max, int fallback) =>
+        int.TryParse(text.Trim(), out int value) && value >= min && value <= max ? value : fallback;
+
+    /// <summary>Puts the saved memory-cleaner settings on screen.</summary>
+    private void LoadMemoryControls()
+    {
+        var m = _state.Memory;
+        MemTrimEveryBox.IsChecked = m.TrimEveryMinutes;
+        MemTrimMinutesBox.Text = m.TrimMinutes.ToString();
+        MemCacheEveryBox.IsChecked = m.ClearCacheEvery;
+        MemCacheMinutesBox.Text = m.CacheMinutes.ToString();
+        MemTrimAboveBox.IsChecked = m.TrimAboveUsage;
+        MemTrimPercentBox.Text = m.TrimUsagePercent.ToString();
+        MemCacheAboveBox.IsChecked = m.ClearCacheAboveUsage;
+        MemCachePercentBox.Text = m.CacheUsagePercent.ToString();
+        MemSkipEveBox.IsChecked = m.SkipEveClients;
+        MemExcludeBox.Text = m.ExcludedPrograms;
+        MemNotifyBox.IsChecked = m.ShowNotification;
+
+        // clearing the system cache needs administrator rights: without them those controls are greyed out (their values are kept)
+        bool admin = PreviewManager.IsAdministrator;
+        MemCacheBtn.IsEnabled = admin;
+        MemCacheEveryBox.IsEnabled = admin;
+        MemCacheMinutesBox.IsEnabled = admin;
+        MemCacheAboveBox.IsEnabled = admin;
+        MemCachePercentBox.IsEnabled = admin;
+        MemAdminNote.Visibility = admin ? Visibility.Collapsed : Visibility.Visible;
+        MemAdminPanel.Visibility = admin ? Visibility.Collapsed : Visibility.Visible;
+    }
+
+    /// <summary>The memory-cleaner settings as they are on screen (a value that isn't a valid number keeps its saved value here; TryApply reports it).</summary>
+    private MemoryCleanerSettings ReadMemorySettings()
+    {
+        var old = _state.Memory;
+        return new MemoryCleanerSettings
+        {
+            TrimEveryMinutes = MemTrimEveryBox.IsChecked == true,
+            TrimMinutes = ParseOr(MemTrimMinutesBox.Text, 1, 1440, old.TrimMinutes),
+            ClearCacheEvery = MemCacheEveryBox.IsChecked == true,
+            CacheMinutes = ParseOr(MemCacheMinutesBox.Text, 1, 1440, old.CacheMinutes),
+            TrimAboveUsage = MemTrimAboveBox.IsChecked == true,
+            TrimUsagePercent = ParseOr(MemTrimPercentBox.Text, 50, 99, old.TrimUsagePercent),
+            ClearCacheAboveUsage = MemCacheAboveBox.IsChecked == true,
+            CacheUsagePercent = ParseOr(MemCachePercentBox.Text, 50, 99, old.CacheUsagePercent),
+            SkipEveClients = MemSkipEveBox.IsChecked == true,
+            ExcludedPrograms = MemExcludeBox.Text.Trim(),
+            ShowNotification = MemNotifyBox.IsChecked == true
+        };
+    }
+
+    private static string Mb(ulong bytes) => (bytes / 1048576UL).ToString("N0") + " MB";
+
+    private void RefreshMemory()
+    {
+        var s = _manager.SampleMemory();
+        if (!s.IsValid)
+        {
+            MemUsageText.Text = "Couldn't read the memory use.";
+            return;
+        }
+
+        MemUsageText.Text = $"Memory in use:  {Mb(s.UsedPhys)} of {Mb(s.TotalPhys)}   ({s.LoadPercent}%)";
+        MemCommitText.Text = $"Committed:  {Mb(s.UsedCommit)} of {Mb(s.TotalCommit)}   ({s.CommitPercent}%)";
+
+        var st = _manager.MemoryStats;
+        MemStatsText.Text = st.Samples == 0 ? "" :
+            $"Average:  {Mb(st.AvgUsed)} ({st.AvgPercent}%)     Highest:  {Mb(st.MaxUsed)} ({st.MaxPercent}%)     Lowest:  {Mb(st.MinUsed)} ({st.MinPercent}%)";
+        if (_manager.LastMemoryResult.Length > 0) MemResultText.Text = _manager.LastMemoryResult;
+
+        _memPercent = s.LoadPercent;
+        UpdateMemoryBar();
+    }
+
+    private int _memPercent;
+
+    private void UpdateMemoryBar()
+    {
+        double room = Math.Max(0, MemTrack.ActualWidth - 2);
+        MemFill.Width = room * Math.Clamp(_memPercent, 0, 100) / 100.0;
+    }
+
+    private async void MemTrim_Click(object sender, RoutedEventArgs e)
+    {
+        MemTrimBtn.IsEnabled = false;
+        MemResultText.Text = "Trimming...";
+        try
+        {
+            var result = await _manager.TrimNowAsync(ReadMemorySettings());
+            MemResultText.Text = _manager.LastMemoryResult.Length > 0 ? _manager.LastMemoryResult : result.Message;
+        }
+        catch (Exception ex)
+        {
+            MemResultText.Text = "Couldn't trim: " + ex.Message;
+        }
+        finally
+        {
+            MemTrimBtn.IsEnabled = true;
+            RefreshMemory();
+        }
+    }
+
+    private async void MemCache_Click(object sender, RoutedEventArgs e)
+    {
+        MemCacheBtn.IsEnabled = false;
+        MemResultText.Text = "Clearing the system cache...";
+        try
+        {
+            var result = await _manager.ClearCacheNowAsync();
+            MemResultText.Text = _manager.LastMemoryResult.Length > 0 ? _manager.LastMemoryResult : result.Message;
+        }
+        catch (Exception ex)
+        {
+            MemResultText.Text = "Couldn't clear the system cache: " + ex.Message;
+        }
+        finally
+        {
+            MemCacheBtn.IsEnabled = PreviewManager.IsAdministrator;
+            RefreshMemory();
+        }
+    }
+
+    private void MemClipboard_Click(object sender, RoutedEventArgs e)
+    {
+        for (int attempt = 0; attempt < 4; attempt++)
+        {
+            try
+            {
+                System.Windows.Clipboard.Clear();
+                MemResultText.Text = $"{DateTime.Now:HH:mm:ss}  Clipboard cleared.";
+                return;
+            }
+            catch
+            {
+                System.Threading.Thread.Sleep(60);          // another program has the clipboard open for a moment
+            }
+        }
+        MemResultText.Text = "Couldn't clear the clipboard (another program is using it). Try again.";
+    }
+
+    private void RestartAdmin_Click(object sender, RoutedEventArgs e)
+    {
+        if (Dialogs.Ask(this, "Restart as administrator",
+                "Restart EVE-IronWorks-Preview with administrator rights?\n\nWindows will ask you to allow it. Changes in this window that you haven't saved are lost, so press Save first if you need them. Your EVE clients are not affected.",
+                "Restart", "Cancel") != 0) return;
+
+        if (!_manager.RestartAsAdministrator(out string error))
+        {
+            MemResultText.Text = error;
+            return;
+        }
+        _closing = true;                                    // the new copy is starting: close this one without the unsaved-changes question
+        Application.Current.Shutdown();
+    }
+
+    protected override void OnClosed(EventArgs e)
+    {
+        _memTimer.Stop();
+        base.OnClosed(e);
+    }
+
     // ---------- validation ----------
 
     private bool Fail(int page, string message)
@@ -1786,6 +1968,12 @@ public partial class SettingsWindow : Window
 
         // Thumbnail group: the characters typed in its lines
         if (!CommitThumbRows(true)) return false;
+
+        // Memory cleaner
+        if (!InRange(MemTrimMinutesBox.Text, 1, 1440, out _) || !InRange(MemCacheMinutesBox.Text, 1, 1440, out _))
+            return Fail(PageMemory_, "The minutes for automatic memory cleaning must be 1 to 1440.");
+        if (!InRange(MemTrimPercentBox.Text, 50, 99, out _) || !InRange(MemCachePercentBox.Text, 50, 99, out _))
+            return Fail(PageMemory_, "The memory-use limits must be 50 to 99 percent.");
 
         // Notifications
         if (!InRange(NotifyCooldownBox.Text, 0, 3600, out int cooldown))
