@@ -72,7 +72,7 @@ public sealed class PromptWindow : Window
     /// <summary>Returns the typed text, or null if cancelled.</summary>
     public static string? Ask(Window owner, string title, string label, string initial = "")
     {
-        var window = new PromptWindow(title, label, initial) { Owner = owner };
+        var window = new PromptWindow(title, label, initial) { Owner = owner, Topmost = false };
         return window.ShowDialog() == true ? window.Value : null;
     }
 }

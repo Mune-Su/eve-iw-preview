@@ -63,11 +63,19 @@ internal static class ClientOrdering
 
     /// <param name="openOrder">Every client, oldest first.</param>
     /// <param name="loginAssign">For each client still on the login screen: the saved character whose place it takes.</param>
-    public static List<EveClientWindow> Apply(IReadOnlyList<EveClientWindow> openOrder, AppSettings s, out Dictionary<nint, string> loginAssign)
+    /// <param name="slots">
+    /// The numbered place of each client (1 = first). In Saved / Manual order a place belongs to its character, so a client
+    /// that is closed leaves its place empty instead of the clients after it moving up. Empty for Automatic: the place is
+    /// then just the client's position in the list.
+    /// </param>
+    public static List<EveClientWindow> Apply(IReadOnlyList<EveClientWindow> openOrder, AppSettings s,
+        out Dictionary<nint, string> loginAssign, out Dictionary<nint, int> slots)
     {
-        // built in a normal local: an out parameter can't be used inside the local function below
+        // built in normal locals: an out parameter can't be used inside the local function below
         var assign = new Dictionary<nint, string>();
         loginAssign = assign;
+        var slotMap = new Dictionary<nint, int>();
+        slots = slotMap;
         var plain = openOrder.ToList();
         if (s.ClientOrderMode == AppSettings.OrderAutomatic || s.ClientOrder.Count == 0) return plain;
 
@@ -94,7 +102,7 @@ internal static class ClientOrdering
             assign[client.Handle] = vacant.Dequeue();
         }
 
-        long Key(EveClientWindow client, int openIndex)
+        int Key(EveClientWindow client, int openIndex)
         {
             int slot = -1;
             if (!client.IsLoginScreen) slot = IndexOfName(client.CharacterName);
@@ -103,6 +111,15 @@ internal static class ClientOrdering
         }
 
         var keyed = openOrder.Select((c, i) => (Client: c, Key: Key(c, i), Open: i));
-        return keyed.OrderBy(k => k.Key).ThenBy(k => k.Open).Select(k => k.Client).ToList();
+        var sorted = keyed.OrderBy(k => k.Key).ThenBy(k => k.Open).ToList();
+
+        // a client in the list keeps its place number whether or not the clients before it are open;
+        // clients that aren't in the list come after the list's places, in opening order
+        int extra = 0;
+        foreach (var k in sorted)
+        {
+            slotMap[k.Client.Handle] = k.Key < order.Count ? k.Key + 1 : order.Count + (++extra);
+        }
+        return sorted.Select(k => k.Client).ToList();
     }
 }

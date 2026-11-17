@@ -49,6 +49,7 @@ public sealed class PreviewManager : IDisposable
     private readonly DispatcherTimer _refreshSoonTimer = new() { Interval = TimeSpan.FromMilliseconds(60) };
     private IReadOnlyList<EveClientWindow> _clients = Array.Empty<EveClientWindow>();
     private Dictionary<nint, string> _loginAssign = new();   // v0.10.0: login screen -> the saved character whose place it holds
+    private Dictionary<nint, int> _slots = new();            // v0.11.1: client -> its numbered place (Saved / Manual order keep a closed client's place free)
     private SettingsWindow? _settingsWindow;
 
     private bool _visible = true;          // the tray "hide / show all thumbnails" switch
@@ -201,7 +202,7 @@ public sealed class PreviewManager : IDisposable
         for (int i = 0; i < _clients.Count; i++)
         {
             var client = _clients[i];
-            int slot = i + 1;
+            int slot = SlotOf(client, i);
 
             if (_windows.TryGetValue(client.Handle, out var existing))
             {
@@ -265,10 +266,15 @@ public sealed class PreviewManager : IDisposable
             }
         }
 
-        var ordered = ClientOrdering.Apply(openOrder, _settings, out var assign);
+        var ordered = ClientOrdering.Apply(openOrder, _settings, out var assign, out var slots);
         _loginAssign = assign;
+        _slots = slots;
         return ordered;
     }
+
+    /// <summary>The numbered place of a client: the same number the thumbnail position and the client hotkey use.</summary>
+    private int SlotOf(EveClientWindow client, int indexInList) =>
+        _slots.TryGetValue(client.Handle, out int slot) ? slot : indexInList + 1;
 
     public bool OrderResetPending => _settings.ClientOrderResetPending;
 
@@ -919,6 +925,8 @@ public sealed class PreviewManager : IDisposable
     {
         if (_settingsWindow is not null)
         {
+            // the window is no longer always on top: bring it back to the front (and out of the taskbar if minimised)
+            if (_settingsWindow.WindowState == WindowState.Minimized) _settingsWindow.WindowState = WindowState.Normal;
             _settingsWindow.Activate();
             return;
         }
@@ -1308,16 +1316,22 @@ public sealed class PreviewManager : IDisposable
         if (!SwitchTo(client, out string how)) Log.Write($"Hotkey switch to '{name}' failed ({how})");
     }
 
-    /// <summary>Hotkey for "client N": the Nth client to open (login screens count too).</summary>
+    /// <summary>Hotkey for "client N": the client in place N of the client order (login screens count too).</summary>
     private void ActivateSlot(int slot)
     {
         var list = CurrentClients();
-        if (slot < 1 || slot > list.Count)
+        EveClientWindow? client = null;
+        for (int i = 0; i < list.Count; i++)
         {
-            Log.Write($"Client {slot} hotkey: only {list.Count} client(s) open");
+            if (SlotOf(list[i], i) == slot) { client = list[i]; break; }
+        }
+        if (client is null)
+        {
+            Log.Write(slot >= 1 && slot <= list.Count
+                ? $"Client {slot} hotkey: place {slot} is empty (that client is closed)"
+                : $"Client {slot} hotkey: only {list.Count} client(s) open");
             return;
         }
-        var client = list[slot - 1];
         Log.Debug("SWITCH", $"client {slot} hotkey -> '{client.CharacterName}'");
         if (!SwitchTo(client, out string how)) Log.Write($"Client {slot} hotkey: '{client.CharacterName}' failed ({how})");
     }

@@ -7,6 +7,17 @@ internal static class Changelog
 {
     public static readonly ChangelogEntry[] Entries =
     {
+        new("0.11.2", "Build fix for 0.11.1", new[]
+        {
+            "Fixed: 0.11.1 didn't build (a number type mismatch in the client-order code). Nothing else changed: everything in 0.11.1 is in this version."
+        }),
+        new("0.11.1", "Positions follow the client order; Configuration no longer always on top", new[]
+        {
+            "Positions saved by client now follow the client order. With Saved or Manual order, a client's numbered place belongs to its character: if you close the 3rd client, the ones after it stay where they are and place 3 stays empty, and when it reopens it takes place 3 again with its thumbnail position. The client hotkeys count the same places, so \"Client 3\" is the client in place 3.",
+            "With positions saved by client and Automatic order, a client you close and reopen goes to the end and the ones after it move up a place. Settings > Hotkeys > Client order now says so, and points to Saved or Manual.",
+            "The Configuration window is no longer always on top: other windows can come in front of it. It now has a taskbar button, and clicking Configuration in the tray menu brings it back to the front. The dialogs it opens follow the same rule.",
+            "Thumbnails that are set to \"always on top\" now sit over the Configuration window where they overlap, like over any other window."
+        }),
         new("0.11.0", "Groups for client hotkeys and thumbnails, selectable text", new[]
         {
             "Client hotkeys (Settings > Hotkeys) now show just the first line, \"Client 1\". Press + to add a line for another client (and - to take the last one off).",

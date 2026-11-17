@@ -317,6 +317,7 @@ public partial class SettingsWindow : Window
              s.ClientOrderMode == AppSettings.OrderSaved ? OrderSavedRadio : OrderAutoRadio).IsChecked = true;
         }
         finally { _orderLoading = false; }
+        UpdateOrderNote();
         HotkeysOnlyEveBox.IsChecked = s.HotkeysOnlyInEve;
         PassThroughBox.IsChecked = s.HotkeyPassThrough;
         LoadSlotGroups();
@@ -594,9 +595,20 @@ public partial class SettingsWindow : Window
 
     private void OrderMode_Changed(object sender, RoutedEventArgs e)
     {
+        UpdateOrderNote();
         if (_orderLoading || _work is null) return;
         _work.ClientOrderMode = ModeOfRadios(OrderManualRadio.IsChecked == true, OrderSavedRadio.IsChecked == true);
         RebuildOrderList();
+    }
+
+    private void PositionMode_Changed(object sender, RoutedEventArgs e) => UpdateOrderNote();
+
+    /// <summary>Positions by client + Automatic order is the one pairing where thumbnails change place when a client closes and reopens: say so.</summary>
+    private void UpdateOrderNote()
+    {
+        if (OrderPositionNote is null || ModeClientRadio is null || OrderAutoRadio is null) return;
+        OrderPositionNote.Visibility = ModeClientRadio.IsChecked == true && OrderAutoRadio.IsChecked == true
+            ? Visibility.Visible : Visibility.Collapsed;
     }
 
     /// <summary>Known characters that aren't in the order yet: the logged-in ones first (in client order), then the rest A-Z.</summary>
@@ -1383,7 +1395,7 @@ public partial class SettingsWindow : Window
     // ---------- about ----------
 
     private void ViewChangelog_Click(object sender, RoutedEventArgs e) =>
-        new ChangelogWindow(AppInfo.Version) { Owner = this }.Show();
+        new ChangelogWindow(AppInfo.Version) { Owner = this, Topmost = false }.Show();
 
     private static void OpenPath(Window owner, string path)
     {

@@ -12,7 +12,11 @@ public static class Dialogs
     public static int Ask(Window? owner, string title, string message, params string[] buttons)
     {
         var window = new DialogWindow(title, message, buttons.Length == 0 ? new[] { "OK" } : buttons);
-        if (owner is not null && owner.IsLoaded) window.Owner = owner;
+        if (owner is not null && owner.IsLoaded)
+        {
+            window.Owner = owner;
+            window.Topmost = false;               // above its owner, but other windows can still come in front
+        }
         else window.WindowStartupLocation = WindowStartupLocation.CenterScreen;
         window.ShowDialog();
         return window.Choice;
