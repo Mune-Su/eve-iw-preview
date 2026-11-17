@@ -93,7 +93,7 @@ public static class ProfileStore
         try
         {
             Directory.CreateDirectory(Folder);
-            File.WriteAllText(StatePath, JsonSerializer.Serialize(state, Options));
+            WriteFile(StatePath, JsonSerializer.Serialize(state, Options));
         }
         catch { }
     }
@@ -146,9 +146,17 @@ public static class ProfileStore
         try
         {
             Directory.CreateDirectory(ProfilesFolder);
-            File.WriteAllText(PathFor(name), JsonSerializer.Serialize(settings, Options));
+            WriteFile(PathFor(name), JsonSerializer.Serialize(settings, Options));
         }
         catch { }
+    }
+
+    /// <summary>Writes to a temporary file and swaps it in, so a crash or power cut in the middle of a save can never leave a half-written profile.</summary>
+    private static void WriteFile(string path, string text)
+    {
+        string temp = path + ".tmp";
+        File.WriteAllText(temp, text);
+        File.Move(temp, path, overwrite: true);
     }
 
     public static void Delete(string name)
@@ -192,6 +200,7 @@ public static class ProfileStore
 
     private static string PathFor(string name) => Path.Combine(ProfilesFolder, name + ".json");
 }
+
 
 
 

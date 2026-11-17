@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.IO;
+using System.Runtime.CompilerServices;
 using System.Text;
 using System.Text.RegularExpressions;
 using AUTZ.IronWorks.Preview.Core;
@@ -50,8 +51,8 @@ internal static class Log
     private static Regex? _nameRegex;
     private static bool _nameRegexValid;
     private static string _salt = Guid.NewGuid().ToString("N");     // a saved per-install value replaces this at start-up
-    private static readonly Regex EmailRx = new(@"[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}", RegexOptions.Compiled);
-    private static readonly Regex GameLogFileRx = new(@"\b\d{8}_\d{6}(?:_\d+)?\.txt\b", RegexOptions.Compiled | RegexOptions.IgnoreCase);
+    private static readonly Regex EmailRx = new(@"[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}");
+    private static readonly Regex GameLogFileRx = new(@"\b\d{8}_\d{6}(?:_\d+)?\.txt\b", RegexOptions.IgnoreCase);
     private static readonly (Regex Rx, string To)[] Environmental = BuildEnvironmental();
 
     /// <summary>True while detailed (admin) logging is on.</summary>
@@ -157,6 +158,17 @@ internal static class Log
     {
         if (!_verbose) return;
         Queue.Enqueue((_activePath, Stamp(area, text)));
+        Signal.Set();
+    }
+
+    /// <summary>
+    /// Same, for Log.Debug($"..."): while detailed logging is off the text is never built and nothing inside the braces
+    /// is evaluated (Log.Win and the other window lookups would otherwise run on every focus change and every switch).
+    /// </summary>
+    public static void Debug(string area, DebugLine line)
+    {
+        if (!_verbose) return;
+        Queue.Enqueue((_activePath, Stamp(area, line.Text)));
         Signal.Set();
     }
 
@@ -287,7 +299,7 @@ internal static class Log
             .GroupBy(x => x.Text, StringComparer.OrdinalIgnoreCase).Select(g => g.First())
             .Select(x => (
                 new Regex(x.Word ? @"(?<![\p{L}\p{N}_])" + Regex.Escape(x.Text) + @"(?![\p{L}\p{N}_])" : Regex.Escape(x.Text),
-                          RegexOptions.IgnoreCase | RegexOptions.Compiled),
+                          RegexOptions.IgnoreCase),
                 x.To))
             .ToArray();
     }
@@ -409,3 +421,42 @@ internal static class Log
     }
 }
 
+/// <summary>The part of Log.Debug($"...") that skips all the work while detailed logging is off.</summary>
+[InterpolatedStringHandler]
+internal ref struct DebugLine
+{
+    private readonly StringBuilder? _text;
+
+    public DebugLine(int literalLength, int formattedCount, out bool isEnabled)
+    {
+        isEnabled = Log.Verbose;
+        _text = isEnabled ? new StringBuilder(literalLength + formattedCount * 12) : null;
+    }
+
+    public void AppendLiteral(string value) => _text?.Append(value);
+
+    public void AppendFormatted<T>(T value) => _text?.Append(value);
+
+    public void AppendFormatted<T>(T value, string? format)
+    {
+        if (_text is null) return;
+        if (value is IFormattable formattable) _text.Append(formattable.ToString(format, null));
+        else _text.Append(value);
+    }
+
+    public void AppendFormatted<T>(T value, int alignment)
+    {
+        if (_text is null) return;
+        string s = value?.ToString() ?? "";
+        _text.Append(alignment < 0 ? s.PadRight(-alignment) : s.PadLeft(alignment));
+    }
+
+    public void AppendFormatted<T>(T value, int alignment, string? format)
+    {
+        if (_text is null) return;
+        string s = value is IFormattable formattable ? formattable.ToString(format, null) : value?.ToString() ?? "";
+        _text.Append(alignment < 0 ? s.PadRight(-alignment) : s.PadLeft(alignment));
+    }
+
+    internal string Text => _text?.ToString() ?? "";
+}

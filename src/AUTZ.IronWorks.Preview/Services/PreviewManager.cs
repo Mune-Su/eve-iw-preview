@@ -47,6 +47,10 @@ public sealed class PreviewManager : IDisposable
     private readonly DispatcherTimer _alertTimer = new() { Interval = TimeSpan.FromMilliseconds(450) };
     private readonly DispatcherTimer _displayTimer = new() { Interval = TimeSpan.FromMilliseconds(1500) };
     private readonly DispatcherTimer _refreshSoonTimer = new() { Interval = TimeSpan.FromMilliseconds(60) };
+    private readonly DispatcherTimer _trimTimer = new();
+    private IReadOnlyList<EveClientWindow> _lastScan = Array.Empty<EveClientWindow>();   // what the latest scan found, before ordering
+    private bool _scanDirty = true;                    // true = the next scan must redo the whole layout even if no client changed
+    private static readonly TimeSpan IdleScan = TimeSpan.FromSeconds(3);                // scan interval while no EVE client is open
     private IReadOnlyList<EveClientWindow> _clients = Array.Empty<EveClientWindow>();
     private Dictionary<nint, string> _loginAssign = new();   // v0.10.0: login screen -> the saved character whose place it holds
     private Dictionary<nint, int> _slots = new();            // v0.11.1: client -> its numbered place (Saved / Manual order keep a closed client's place free)
@@ -84,7 +88,7 @@ public sealed class PreviewManager : IDisposable
 
     public void Start()
     {
-        _scanTimer.Tick += (_, _) => Refresh();
+        _scanTimer.Tick += (_, _) => Scan();
         _hideTimer.Tick += (_, _) =>
         {
             _hideTimer.Stop();
@@ -106,7 +110,12 @@ public sealed class PreviewManager : IDisposable
         _refreshSoonTimer.Tick += (_, _) =>
         {
             _refreshSoonTimer.Stop();
-            Refresh();
+            Scan();
+        };
+        _trimTimer.Tick += (_, _) =>
+        {
+            _trimTimer.Stop();
+            MemoryTrim.Trim();
         };
 
         _watcher.ForegroundChanged += hwnd =>
@@ -158,13 +167,45 @@ public sealed class PreviewManager : IDisposable
         ApplySettings();
         Refresh();
         _scanTimer.Start();
+        ScheduleTrim(10000);                           // once start-up has settled, hand back the memory start-up needed
+    }
+
+    /// <summary>Compacts the heap and empties the working set after the given delay (see MemoryTrim).</summary>
+    private void ScheduleTrim(int milliseconds)
+    {
+        _trimTimer.Stop();
+        _trimTimer.Interval = TimeSpan.FromMilliseconds(milliseconds);
+        _trimTimer.Start();
     }
 
     // ---------- client scanning ----------
 
+    /// <summary>Looks at the clients and redoes the whole layout (tray "Refresh Clients", and after every settings change).</summary>
     public void Refresh()
     {
-        _clients = OrderClients(_eve.FindClients());   // the client order: opening order, or the saved / manual order
+        _scanDirty = true;
+        Scan();
+    }
+
+    /// <summary>
+    /// The periodic scan. If no client has opened, closed or changed its title since the last scan (nearly every time) the layout
+    /// is already right, so all that is left is to keep the focus state up to date.
+    /// </summary>
+    private void Scan()
+    {
+        var raw = _eve.FindClients();
+        _watcher.WatchProcesses(_eve.ClientProcessIds);       // title changes are only watched inside the EVE processes
+
+        if (!_scanDirty && SameClients(raw, _lastScan))
+        {
+            FollowForeground();
+            UpdateScanInterval();
+            return;
+        }
+        _scanDirty = false;
+        _lastScan = raw;
+
+        _clients = OrderClients(raw);                   // the client order: opening order, or the saved / manual order
         if (Log.Verbose)
         {
             string list = $"(order: {_settings.ClientOrderMode}) " +
@@ -220,10 +261,36 @@ public sealed class PreviewManager : IDisposable
             }
         }
 
-        // v0.9.6: while a switch is still finishing, the foreground Windows reports is stale. Don't let the scan
-        // (every 1.5 s) overwrite the active client with it.
+        FollowForeground();
+        UpdateScanInterval();
+    }
+
+    private static bool SameClients(IReadOnlyList<EveClientWindow> a, IReadOnlyList<EveClientWindow> b)
+    {
+        if (a.Count != b.Count) return false;
+        for (int i = 0; i < a.Count; i++)
+        {
+            if (!a[i].Equals(b[i])) return false;
+        }
+        return true;
+    }
+
+    /// <summary>
+    /// v0.9.6: while a switch is still finishing, the foreground Windows reports is stale. Don't let the scan
+    /// overwrite the active client with it.
+    /// </summary>
+    private void FollowForeground()
+    {
         if (IsPending()) SyncForeground(_pendingTarget, true);
         else SyncForeground(NativeMethods.GetForegroundWindow(), true);
+    }
+
+    /// <summary>With no EVE client open there is nothing to keep up with, so look less often (a client that starts is found within a few seconds).</summary>
+    private void UpdateScanInterval()
+    {
+        var wanted = TimeSpan.FromMilliseconds(Math.Clamp(_settings.RefreshMilliseconds, 500, 10000));
+        if (_lastScan.Count == 0 && wanted < IdleScan) wanted = IdleScan;
+        if (_scanTimer.Interval != wanted) _scanTimer.Interval = wanted;
     }
 
     // ---------- client order ----------
@@ -831,6 +898,7 @@ public sealed class PreviewManager : IDisposable
 
     public void ApplySettings()
     {
+        _scanDirty = true;
         RegisterLogNames();
         _scanTimer.Interval = TimeSpan.FromMilliseconds(Math.Clamp(_settings.RefreshMilliseconds, 500, 10000));
         LogSettings("settings applied");
@@ -943,6 +1011,7 @@ public sealed class PreviewManager : IDisposable
             _settingsWindow = null;
             _hotkeys.Suspended = HotkeysSuspended;
             RegisterHotkeys();
+            ScheduleTrim(3000);                        // the Configuration window is the biggest thing the app ever builds: give it back
         }
     }
 
@@ -1227,14 +1296,12 @@ public sealed class PreviewManager : IDisposable
         // v0.9.6: work out where you are from the switch in progress (if any), not from a foreground window that
         // Windows hasn't updated yet. Reading the stale window made a press pick the same client again.
         nint current = CurrentClientHandle(out string from);
-        nint foreground = NativeMethods.GetForegroundWindow();
         int start = IndexOf(all, current);
 
         int step = direction > 0 ? 1 : -1;
         int position = start >= 0 ? start : (direction > 0 ? -1 : 0);
-        var log = new System.Text.StringBuilder();
-        string names = string.Join(", ", all.Select((c, i) => $"#{i + 1} {c.CharacterName}"));
-        log.Append($"Cycle {(direction > 0 ? "next" : "previous")}: [{names}] focus=0x{foreground:X}, from {(start >= 0 ? $"#{start + 1} ({from})" : "nothing")}");
+        string way = direction > 0 ? "next" : "previous";
+        bool failed = false;
 
         for (int tried = 0; tried < count; tried++)
         {
@@ -1249,19 +1316,23 @@ public sealed class PreviewManager : IDisposable
             Log.Debug("SWITCH", $"  try #{position + 1} '{client.CharacterName}'");
 
             bool ok = SwitchTo(client, out string how);
-            log.Append($" -> #{position + 1} '{client.CharacterName}' {(ok ? "ok" : "FAILED")} ({how})");
             if (ok)
             {
-                Log.Write(log.ToString());
+                // a successful press is only recorded in the detailed log: writing a file on every press (and holding the key
+                // makes 30 a second) is exactly the kind of work a tray app shouldn't do
+                Log.Debug("INFO", $"Cycle {way}: from {(start >= 0 ? $"#{start + 1} ({from})" : "nothing")} -> #{position + 1} '{client.CharacterName}' ok ({how})");
                 return;
             }
+
+            failed = true;
+            Log.Write($"Cycle {way}: switch to #{position + 1} '{client.CharacterName}' FAILED ({how})");   // failures always reach preview.log
 
             // one press = one switch. Only a client that has closed or frozen is stepped over; if Windows refused,
             // stop here instead of trying every other client in the same press.
             if (how != "window gone" && how != "not responding") break;
         }
 
-        Log.Write(log.ToString() + " -> no switch");
+        if (failed) Log.Debug("INFO", $"Cycle {way}: no switch");
     }
 
     /// <summary>Brings a client to the front and applies its "when I switch to it" action.</summary>
@@ -1433,6 +1504,7 @@ public sealed class PreviewManager : IDisposable
         _alertTimer.Stop();
         _displayTimer.Stop();
         _refreshSoonTimer.Stop();
+        _trimTimer.Stop();
         _watcher.Dispose();
         _logs.Dispose();
         _hotkeys.Dispose();
@@ -1441,6 +1513,7 @@ public sealed class PreviewManager : IDisposable
         _meta.Clear();
     }
 }
+
 
 
 

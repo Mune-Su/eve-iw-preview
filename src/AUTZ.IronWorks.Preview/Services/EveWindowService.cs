@@ -11,48 +11,96 @@ public sealed class EveWindowService
     private readonly Dictionary<nint, DateTime> _firstSeen = new();
     private readonly Dictionary<nint, string> _titles = new();
     private readonly HashSet<uint> _pidsThisScan = new();
+    private readonly List<EveClientWindow> _scan = new();
+    private readonly List<uint> _gonePids = new();
+    private readonly List<nint> _goneHandles = new();
+    private readonly StringBuilder _titleBuffer = new(128);
+    private readonly NativeMethods.EnumWindowsProc _enumProc;
+    private const int LongestClientTitle = 80;     // "EVE - " + a character name is far shorter: a longer title can't be a client
+
+    public EveWindowService()
+    {
+        _enumProc = OnWindow;                      // one delegate for the life of the app instead of one per scan
+    }
+
+    /// <summary>The process ids of the EVE clients the latest scan found.</summary>
+    public IReadOnlySet<uint> ClientProcessIds => _pidsThisScan;
 
     /// <summary>All EVE clients (logged in or not), in the order they were opened.</summary>
     public IReadOnlyList<EveClientWindow> FindClients()
     {
-        var found = new List<EveClientWindow>();
+        _scan.Clear();
         _pidsThisScan.Clear();
-        NativeMethods.EnumWindows((h, _) =>
+        NativeMethods.EnumWindows(_enumProc, 0);
+
+        // forget clients that have closed (no allocations unless something actually closed)
+        _gonePids.Clear();
+        foreach (uint pid in _startTimes.Keys)
         {
-            if (!NativeMethods.IsWindowVisible(h)) return true;
+            if (!_pidsThisScan.Contains(pid)) _gonePids.Add(pid);
+        }
+        foreach (uint pid in _gonePids) _startTimes.Remove(pid);
 
-            string title;
-            if (NativeMethods.IsHungAppWindow(h))
-            {
-                // never ask a frozen client for its title (that call waits for it): use the last one we saw
-                if (!_titles.TryGetValue(h, out var cached)) return true;
-                title = cached;
-            }
-            else
-            {
-                int len = NativeMethods.GetWindowTextLength(h);
-                if (len == 0) return true;
-                var sb = new StringBuilder(len + 1);
-                NativeMethods.GetWindowText(h, sb, sb.Capacity);
-                title = sb.ToString().Trim();
-            }
+        _goneHandles.Clear();
+        foreach (nint h in _firstSeen.Keys)
+        {
+            if (!IsFound(h)) _goneHandles.Add(h);
+        }
+        foreach (nint h in _goneHandles) _firstSeen.Remove(h);
 
-            if (!IsEveTitle(title)) return true;
-            _titles[h] = title;
-            string character = ParseCharacter(title);
-            if (!title.Equals("EVE", StringComparison.OrdinalIgnoreCase)) Log.RegisterPilot(character);   // so the logs show a code, not the name
-            found.Add(new EveClientWindow(h, title, character, OpenedAt(h)));
-            return true;
-        }, 0);
+        _goneHandles.Clear();
+        foreach (nint h in _titles.Keys)
+        {
+            if (!IsFound(h)) _goneHandles.Add(h);
+        }
+        foreach (nint h in _goneHandles) _titles.Remove(h);
 
-        // forget clients that have closed
-        foreach (uint pid in _startTimes.Keys.Where(p => !_pidsThisScan.Contains(p)).ToList()) _startTimes.Remove(pid);
-        var handles = found.Select(f => f.Handle).ToHashSet();
-        foreach (nint gone in _firstSeen.Keys.Where(k => !handles.Contains(k)).ToList()) _firstSeen.Remove(gone);
-        foreach (nint gone in _titles.Keys.Where(k => !handles.Contains(k)).ToList()) _titles.Remove(gone);
-
-        return found.OrderBy(x => x.Started).ThenBy(x => (long)x.Handle).ToList();
+        return _scan.OrderBy(x => x.Started).ThenBy(x => (long)x.Handle).ToList();
     }
+
+    private bool IsFound(nint handle)
+    {
+        for (int i = 0; i < _scan.Count; i++)
+        {
+            if (_scan[i].Handle == handle) return true;
+        }
+        return false;
+    }
+
+    private bool OnWindow(nint h, nint lParam)
+    {
+        if (!NativeMethods.IsWindowVisible(h)) return true;
+
+        string title;
+        if (NativeMethods.IsHungAppWindow(h))
+        {
+            // never ask a frozen client for its title (that call waits for it): use the last one we saw
+            if (!_titles.TryGetValue(h, out var cached)) return true;
+            title = cached;
+        }
+        else
+        {
+            int len = NativeMethods.GetWindowTextLength(h);
+            if (len < 3 || len > LongestClientTitle) return true;
+            _titleBuffer.Clear();
+            NativeMethods.GetWindowText(h, _titleBuffer, _titleBuffer.Capacity);
+            if (!LooksLikeEve(_titleBuffer)) return true;          // almost every window stops here, without a string being made
+            title = _titleBuffer.ToString().Trim();
+        }
+
+        if (!IsEveTitle(title)) return true;
+        _titles[h] = title;
+        string character = ParseCharacter(title);
+        if (!title.Equals("EVE", StringComparison.OrdinalIgnoreCase)) Log.RegisterPilot(character);   // so the logs show a code, not the name
+        _scan.Add(new EveClientWindow(h, title, character, OpenedAt(h)));
+        return true;
+    }
+
+    private static bool LooksLikeEve(StringBuilder text) =>
+        text.Length >= 3 &&
+        (text[0] == 'E' || text[0] == 'e') &&
+        (text[1] == 'V' || text[1] == 'v') &&
+        (text[2] == 'E' || text[2] == 'e');
 
     /// <summary>Process start time of the client; if Windows won't tell us, the time we first saw the window.</summary>
     private DateTime OpenedAt(nint hwnd)
@@ -200,6 +248,7 @@ public sealed class EveWindowService
         return fg == handle;
     }
 }
+
 
 
 

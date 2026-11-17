@@ -60,8 +60,7 @@ public sealed class HotkeyService : IDisposable
     {
         if (!HotkeyParser.TryParse(text, out var spec)) return false;
         _bindings.Add(new Binding { Spec = spec, Text = text ?? "", Action = action });
-        UpdateHooks();
-        ApplySystemHotkeys();
+        ApplySystemHotkeys();                 // also decides which hooks are needed
         return true;
     }
 
@@ -77,10 +76,16 @@ public sealed class HotkeyService : IDisposable
         UpdateHooks();
     }
 
+    /// <summary>
+    /// A low-level hook is called for EVERY key press (or mouse move) on the whole PC, so it is only installed while a hotkey
+    /// really needs it: the keyboard hook for hotkeys Windows can't deliver itself (chords, mouse buttons, modifier-only,
+    /// pass-through, "only in EVE"), the mouse hook for mouse hotkeys. Hotkeys registered with Windows need neither,
+    /// and while hotkeys are suspended nothing is hooked at all.
+    /// </summary>
     private void UpdateHooks()
     {
-        bool needKeys = _bindings.Count > 0;
-        bool needMouse = _bindings.Any(b => b.Spec.UsesMouse);
+        bool needKeys = !_suspended && _bindings.Any(b => b.SystemId == 0);
+        bool needMouse = !_suspended && _bindings.Any(b => b.Spec.UsesMouse);
 
         if (needKeys && _keyHook == 0)
         {
@@ -92,6 +97,10 @@ public sealed class HotkeyService : IDisposable
         {
             NativeMethods.UnhookWindowsHookEx(_keyHook);
             _keyHook = 0;
+            _downKeys.Clear();                 // nothing is watching the keys any more, so what was remembered is stale
+            _swallowedKeys.Clear();
+            _armed = null;
+            Log.Debug("HOTKEY", "keyboard hook removed (not needed)");
         }
 
         if (needMouse && _mouseHook == 0)
@@ -104,6 +113,8 @@ public sealed class HotkeyService : IDisposable
         {
             NativeMethods.UnhookWindowsHookEx(_mouseHook);
             _mouseHook = 0;
+            _downMouse.Clear();
+            _swallowedMouse.Clear();
         }
     }
 
@@ -159,6 +170,8 @@ public sealed class HotkeyService : IDisposable
                 Log.Debug("HOTKEY", $"'{b.Text}' couldn't be registered with Windows (error {Marshal.GetLastWin32Error()}, another program may own it): using the hook");
             }
         }
+
+        UpdateHooks();
     }
 
     private void ReleaseSystem(Binding b)
@@ -216,10 +229,10 @@ public sealed class HotkeyService : IDisposable
 
     private bool HandleKey(int msg, nint lParam)
     {
-        var info = Marshal.PtrToStructure<NativeMethods.KBDLLHOOKSTRUCT>(lParam);
-        if ((info.flags & 0x10) != 0) return false;          // injected by another program (including our own Alt tap)
+        // KBDLLHOOKSTRUCT: vkCode at offset 0, flags at offset 8 (read directly: this runs for every key press on the PC)
+        if ((Marshal.ReadInt32(lParam, 8) & 0x10) != 0) return false;          // injected by another program (including our own Alt tap)
 
-        int vk = (int)info.vkCode;
+        int vk = Marshal.ReadInt32(lParam, 0);
         bool down = msg == 0x100 || msg == 0x104;
         bool up = msg == 0x101 || msg == 0x105;
         if (!down && !up) return false;
@@ -280,13 +293,14 @@ public sealed class HotkeyService : IDisposable
 
     private bool HandleMouse(int msg, nint lParam)
     {
-        var info = Marshal.PtrToStructure<NativeMethods.MSLLHOOKSTRUCT>(lParam);
-        if ((info.flags & 1) != 0) return false;             // injected
+        // MSLLHOOKSTRUCT: mouseData at offset 8, flags at offset 12
+        int mouseData = Marshal.ReadInt32(lParam, 8);
+        if ((Marshal.ReadInt32(lParam, 12) & 1) != 0) return false;             // injected
 
         int code = 0;
         bool down = false, up = false, wheel = false;
         int delta = 0;
-        int high = (int)((info.mouseData >> 16) & 0xFFFF);
+        int high = (int)(((uint)mouseData >> 16) & 0xFFFF);
 
         switch (msg)
         {
@@ -423,6 +437,7 @@ public sealed class HotkeyService : IDisposable
         _mouseHook = 0;
     }
 }
+
 
 
 

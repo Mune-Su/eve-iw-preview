@@ -9,3 +9,4 @@ public sealed record EveClientWindow(nint Handle, string Title, string Character
 
 
 
+

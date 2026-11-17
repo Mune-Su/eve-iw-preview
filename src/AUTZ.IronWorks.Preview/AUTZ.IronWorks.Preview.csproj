@@ -8,7 +8,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <AssemblyName>EVE-IW-Preview</AssemblyName>
     <RootNamespace>AUTZ.IronWorks.Preview</RootNamespace>
-    <Version>0.11.3</Version>
+    <Version>0.12.0</Version>
     <Product>EVE-IronWorks-Preview</Product>
     <Company>AUTZ IronWorks</Company>
     <Authors>AUTZ IronWorks</Authors>
@@ -17,6 +17,9 @@
     <ApplicationIcon>Assets\app.ico</ApplicationIcon>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <NoWarn>$(NoWarn);WFAC010</NoWarn>
+    <!-- lighter on resources: no extra background GC thread, and no profiling code in the JIT'd methods (a tray app is idle almost all the time) -->
+    <ConcurrentGarbageCollection>false</ConcurrentGarbageCollection>
+    <TieredPGO>false</TieredPGO>
   </PropertyGroup>
 
 
@@ -33,6 +36,7 @@
     <Using Remove="System.Drawing" />
   </ItemGroup>
 </Project>
+
 
 
 

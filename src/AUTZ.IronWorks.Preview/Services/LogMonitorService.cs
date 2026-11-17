@@ -1,4 +1,5 @@
 using System.IO;
+using System.IO.Enumeration;
 using System.Net;
 using System.Text;
 using System.Text.RegularExpressions;
@@ -36,11 +37,11 @@ public sealed class LogMonitorService : IDisposable
         public bool IsChat;
     }
 
-    private static readonly Regex LineRx = new(@"^\[\s*[\d\.\s:]+\]\s*\((\w+)\)\s*(.*)$", RegexOptions.Compiled);
-    private static readonly Regex TagRx = new("<[^>]*>", RegexOptions.Compiled);
-    private static readonly Regex ListenerRx = new(@"Listener:\s*(.+)", RegexOptions.Compiled);
-    private static readonly Regex SystemRx = new(@"Channel changed to Local\s*:\s*(.+?)\s*$", RegexOptions.Compiled);
-    private static readonly Regex IncomingRx = new(@"^\d+\s+from\s", RegexOptions.Compiled);
+    private static readonly Regex LineRx = new(@"^\[\s*[\d\.\s:]+\]\s*\((\w+)\)\s*(.*)$");
+    private static readonly Regex TagRx = new("<[^>]*>");
+    private static readonly Regex ListenerRx = new(@"Listener:\s*(.+)");
+    private static readonly Regex SystemRx = new(@"Channel changed to Local\s*:\s*(.+?)\s*$");
+    private static readonly Regex IncomingRx = new(@"^\d+\s+from\s");
 
     private readonly object _gate = new();
     private readonly Dispatcher _dispatcher = Dispatcher.CurrentDispatcher;
@@ -138,19 +139,36 @@ public sealed class LogMonitorService : IDisposable
         if (!Directory.Exists(folder)) return;
 
         var since = DateTime.Now.AddHours(-12);
-        foreach (var file in new DirectoryInfo(folder).EnumerateFiles(chat ? "Local_*.txt" : "*.txt"))
+        foreach (string path in RecentFiles(folder, since, chat))
         {
-            if (file.LastWriteTime < since || _tails.ContainsKey(file.FullName)) continue;
+            if (_tails.ContainsKey(path)) continue;
             if (_tails.Count > 80) return;
-
-            var tail = OpenTail(file, chat);
-            if (tail is not null) _tails[file.FullName] = tail;
+            var tail = OpenTail(new FileInfo(path), chat);
+            if (tail is not null) _tails[path] = tail;
         }
 
         // drop files that haven't been written to for a long while
         foreach (var stale in _tails.Values.Where(t => t.IsChat == chat && File.Exists(t.Path) &&
                      File.GetLastWriteTime(t.Path) < since.AddHours(-12)).ToList())
             _tails.Remove(stale.Path);
+    }
+
+    /// <summary>
+    /// The log files written to since the given time. The game-log folder grows by a file per session for years, so the
+    /// listing is filtered while the folder is read: only the few recent files are ever turned into objects.
+    /// </summary>
+    private static List<string> RecentFiles(string folder, DateTime sinceLocal, bool chat)
+    {
+        DateTime sinceUtc = sinceLocal.ToUniversalTime();
+        var query = new FileSystemEnumerable<string>(folder, (ref FileSystemEntry entry) => entry.ToFullPath())
+        {
+            ShouldIncludePredicate = (ref FileSystemEntry entry) =>
+                !entry.IsDirectory &&
+                entry.FileName.EndsWith(".txt", StringComparison.OrdinalIgnoreCase) &&
+                (!chat || entry.FileName.StartsWith("Local_", StringComparison.OrdinalIgnoreCase)) &&
+                entry.LastWriteTimeUtc.UtcDateTime >= sinceUtc
+        };
+        return query.ToList();
     }
 
     private Tail? OpenTail(FileInfo file, bool chat)
@@ -318,6 +336,7 @@ public sealed class LogMonitorService : IDisposable
         }
     }
 }
+
 
 
 

@@ -7,6 +7,17 @@ internal static class Changelog
 {
     public static readonly ChangelogEntry[] Entries =
     {
+        new("0.12.0", "Lighter on resources", new[]
+        {
+            "The keyboard hook is now only installed when a hotkey really needs it. Plain-key hotkeys (like ` for Next client) are delivered by Windows itself, so with those the app no longer sees every key you press in every program, and typing anywhere is no longer routed through it. The mouse hook is likewise only installed for mouse hotkeys, and neither is installed while hotkeys are suspended.",
+            "Title changes are now watched only inside the EVE client processes. Before, the app was told about every name change of every window and control on the PC (browser tabs, the clock, chat apps), which kept it waking up all the time.",
+            "Detailed logging costs nothing while it is off: the text of each log line is no longer built, and the window lookups inside it no longer run, on every focus change and every switch.",
+            "preview.log no longer gets a line on every successful hotkey press (holding the key wrote about 30 lines a second): it now records failures and problems. Successful switches are in the detailed log.",
+            "The client scan skips almost every window without making a string for it, does nothing more when no client has opened, closed or changed, and slows to every 3 seconds while no EVE client is open.",
+            "Log monitoring reads the EVE log folders much more cheaply (only recent files are turned into objects, so years of old game logs no longer cost anything), and the log regexes are no longer compiled at start-up.",
+            "Memory is handed back to Windows ten seconds after start-up and after the Configuration window is closed. The list of installed fonts is only built when the font box is first opened, and the runtime no longer starts a background garbage-collection thread.",
+            "Profile and settings files are written to a temporary file and swapped in, so an interrupted save can't leave a half-written file."
+        }),
         new("0.11.3", "Collapsible sections", new[]
         {
             "Every section in the Configuration window (the cards with an orange heading) can now be collapsed: click its heading, or press Space on it, to fold it up or open it again. A small arrow on the right shows which way it is.",
@@ -175,6 +186,7 @@ internal static class Changelog
         })
     };
 }
+
 
 
 

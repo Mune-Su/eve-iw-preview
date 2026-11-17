@@ -64,6 +64,7 @@ public partial class SettingsWindow : Window
     private readonly List<(string Name, CheckBox Box)> _scanBoxes = new();
     private readonly List<HotkeyField> _slotFields = new();
     private HashSet<string> _running;
+    private bool _fontsLoaded;
     private readonly List<string> _runningList;    // the logged-in characters, in client order
     private bool _orderLoading;
     private List<string> _characters = new();
@@ -92,7 +93,9 @@ public partial class SettingsWindow : Window
         _running = new HashSet<string>(_runningList, StringComparer.OrdinalIgnoreCase);
 
         // drop-down contents
-        FontBox.ItemsSource = Fonts.SystemFontFamilies.Select(f => f.Source).OrderBy(n => n, StringComparer.OrdinalIgnoreCase).ToList();
+        // the list of every installed font is only built when the font box is first used (it takes time and memory)
+        FontBox.PreviewMouseDown += (_, _) => EnsureFonts();
+        FontBox.GotKeyboardFocus += (_, _) => EnsureFonts();
         LabelPositionBox.ItemsSource = Positions;
         ActiveStyleBox.ItemsSource = BorderStyles;
         InactiveStyleBox.ItemsSource = BorderStyles;
@@ -289,10 +292,18 @@ public partial class SettingsWindow : Window
         // Appearance
         OpacitySlider.Value = Math.Clamp(s.ThumbnailOpacityPercent, 10, 100);
         LabelsBox.IsChecked = s.ShowLabels;
-        var fonts = (FontBox.ItemsSource as IEnumerable<string>) ?? Array.Empty<string>();
-        FontBox.SelectedItem =
-            fonts.FirstOrDefault(f => f.Equals(s.LabelFontName, StringComparison.OrdinalIgnoreCase)) ??
-            fonts.FirstOrDefault(f => f.Equals("Segoe UI", StringComparison.OrdinalIgnoreCase));
+        if (_fontsLoaded)
+        {
+            var fonts = (FontBox.ItemsSource as IEnumerable<string>) ?? Array.Empty<string>();
+            FontBox.SelectedItem =
+                fonts.FirstOrDefault(f => f.Equals(s.LabelFontName, StringComparison.OrdinalIgnoreCase)) ??
+                fonts.FirstOrDefault(f => f.Equals("Segoe UI", StringComparison.OrdinalIgnoreCase));
+        }
+        else
+        {
+            FontBox.ItemsSource = new List<string> { string.IsNullOrWhiteSpace(s.LabelFontName) ? "Segoe UI" : s.LabelFontName };
+            FontBox.SelectedIndex = 0;
+        }
         FontSizeBox.Text = s.LabelFontSize.ToString();
         BoldBox.IsChecked = s.LabelBold;
         LabelColourBox.Hex = s.DefaultLabelColourHex;
@@ -369,6 +380,19 @@ public partial class SettingsWindow : Window
         CharColourBox.FallbackHex = ColourField.TryParse(LabelColourBox.Hex, out _) ? LabelColourBox.Hex : "#FFFFFF";
         RebuildCharacterLists();
         UpdatePreview();
+    }
+
+    /// <summary>Builds the list of installed fonts the first time the font box is used.</summary>
+    private void EnsureFonts()
+    {
+        if (_fontsLoaded) return;
+        _fontsLoaded = true;
+        string? current = FontBox.SelectedItem as string;
+        var fonts = Fonts.SystemFontFamilies.Select(f => f.Source).OrderBy(n => n, StringComparer.OrdinalIgnoreCase).ToList();
+        FontBox.ItemsSource = fonts;
+        FontBox.SelectedItem =
+            fonts.FirstOrDefault(f => f.Equals(current, StringComparison.OrdinalIgnoreCase)) ??
+            fonts.FirstOrDefault(f => f.Equals("Segoe UI", StringComparison.OrdinalIgnoreCase));
     }
 
     private void UpdateSliderLabels()
@@ -1457,7 +1481,7 @@ public partial class SettingsWindow : Window
     {
         if (!File.Exists(LogPath))
         {
-            Dialogs.Info(this, "There's no log yet. It's created the first time you use the next / previous hotkeys.");
+            Dialogs.Info(this, "There's no log yet. It is only written when something goes wrong (for example a switch fails). Turn on Detailed logging under Diagnostics for a full trace.");
             return;
         }
         OpenPath(this, LogPath);
@@ -1871,6 +1895,7 @@ public partial class SettingsWindow : Window
         return true;
     }
 }
+
 
 
 
