@@ -55,6 +55,9 @@ public sealed class PreviewManager : IDisposable
     private nint _activeClient;            // the EVE client that has focus right now (0 = none)
     private nint _lastActive;              // the EVE client that had focus most recently
     private nint _lastActivated;           // last client we switched to (used by the next / previous hotkeys)
+    private nint _pendingTarget;           // v0.9.6: a switch Windows has accepted but not finished yet (0 = none)
+    private long _pendingUntil;            // Log.Ms after which the pending switch is forgotten
+    private const int PendingMs = 400;     // how long a switch is allowed to take before Windows' word is trusted again
     private string _alertHex = "#EF4444";
     private string _lastClientList = "";    // detailed log: only log the client list when it changes
     private bool _blink;
@@ -104,6 +107,25 @@ public sealed class PreviewManager : IDisposable
         _watcher.ForegroundChanged += hwnd =>
         {
             Log.Debug("WINEVENT", $"foreground -> {Log.Win(hwnd)}");
+            if (hwnd == 0) return;                                  // mid-switch gap: nothing to learn from it
+            if (IsPending())
+            {
+                if (hwnd == _pendingTarget)
+                {
+                    Log.Debug("SWITCH", $"  switch confirmed by Windows: {Log.Win(hwnd)}");
+                    ClearPending();
+                }
+                else if (_clientHandles.Contains(hwnd) || IsOwnWindow(hwnd))
+                {
+                    // the client we are leaving reported in late: it must not undo the switch
+                    Log.Debug("SWITCH", $"  ignored stale foreground {Log.Win(hwnd)} (switching to {Log.Win(_pendingTarget)})");
+                    return;
+                }
+                else
+                {
+                    ClearPending();                                 // something else really came to the front
+                }
+            }
             SyncForeground(hwnd);
         };
         _watcher.TitleChanged += hwnd =>
@@ -185,7 +207,46 @@ public sealed class PreviewManager : IDisposable
             }
         }
 
-        SyncForeground(NativeMethods.GetForegroundWindow(), true);
+        // v0.9.6: while a switch is still finishing, the foreground Windows reports is stale. Don't let the scan
+        // (every 1.5 s) overwrite the active client with it.
+        if (IsPending()) SyncForeground(_pendingTarget, true);
+        else SyncForeground(NativeMethods.GetForegroundWindow(), true);
+    }
+
+    // ---------- switch in progress ----------
+    private bool IsPending()
+    {
+        if (_pendingTarget == 0) return false;
+        if (Log.Ms <= _pendingUntil && NativeMethods.IsWindow(_pendingTarget)) return true;
+        Log.Debug("SWITCH", $"  pending switch to {Log.Win(_pendingTarget)} expired; foreground is {Log.Win(NativeMethods.GetForegroundWindow())}");
+        ClearPending();
+        return false;
+    }
+
+    private void SetPending(nint target)
+    {
+        _pendingTarget = target;
+        _pendingUntil = Log.Ms + PendingMs;
+    }
+
+    private void ClearPending()
+    {
+        _pendingTarget = 0;
+        _pendingUntil = 0;
+    }
+
+    /// <summary>
+    /// The EVE client you are really on: the one a switch is heading to if it hasn't finished yet, otherwise the
+    /// window in front (if it's a client), otherwise the last client that had focus.
+    /// </summary>
+    private nint CurrentClientHandle(out string from)
+    {
+        if (IsPending()) { from = "switch in progress"; return _pendingTarget; }
+        nint fg = NativeMethods.GetForegroundWindow();
+        if (fg != 0 && _clientHandles.Contains(fg)) { from = "focus"; return fg; }
+        if (_activeClient != 0) { from = "active"; return _activeClient; }
+        from = "last switched";
+        return _lastActivated;
     }
 
     private void CloseWindow(nint handle, bool rememberGeometry)
@@ -641,7 +702,7 @@ public sealed class PreviewManager : IDisposable
     {
         if (!_settings.AutoMinimiseInactive || _clients.Count == 0) return;
 
-        nint keep = _activeClient;
+        nint keep = IsPending() ? _pendingTarget : _activeClient;   // never minimise the client a switch is heading to
         if (keep == 0 && _settings.AutoMinimiseKeepLastActive)
         {
             keep = _clientHandles.Contains(_lastActive) ? _lastActive : _clients[_clients.Count - 1].Handle;
@@ -964,7 +1025,7 @@ public sealed class PreviewManager : IDisposable
         _hotkeys.UnregisterAll();
         _hotkeys.PassThrough = _settings.HotkeyPassThrough;
         _hotkeys.Gate = _settings.HotkeysOnlyInEve
-            ? () => _clientHandles.Contains(NativeMethods.GetForegroundWindow())
+            ? () => (_pendingTarget != 0 && Log.Ms <= _pendingUntil) || _clientHandles.Contains(NativeMethods.GetForegroundWindow())   // read-only: runs on the hook thread
             : null;
         _hotkeys.Suspended = HotkeysSuspended || _settingsWindow is not null;
 
@@ -1048,14 +1109,11 @@ public sealed class PreviewManager : IDisposable
         int count = all.Count;
         if (count == 0) return;
 
+        // v0.9.6: work out where you are from the switch in progress (if any), not from a foreground window that
+        // Windows hasn't updated yet. Reading the stale window made a press pick the same client again.
+        nint current = CurrentClientHandle(out string from);
         nint foreground = NativeMethods.GetForegroundWindow();
-        int start = IndexOf(all, foreground);
-        string from = "focus";
-        if (start < 0)
-        {
-            start = IndexOf(all, _lastActivated);
-            from = "last switched";
-        }
+        int start = IndexOf(all, current);
 
         int step = direction > 0 ? 1 : -1;
         int position = start >= 0 ? start : (direction > 0 ? -1 : 0);
@@ -1072,7 +1130,7 @@ public sealed class PreviewManager : IDisposable
                 Log.Debug("SWITCH", $"  skip #{position + 1} '{client.CharacterName}' (excluded from cycling)");
                 continue;
             }
-            if (client.Handle == foreground) continue;
+            if (client.Handle == current) continue;
             Log.Debug("SWITCH", $"  try #{position + 1} '{client.CharacterName}'");
 
             bool ok = SwitchTo(client, out string how);
@@ -1082,9 +1140,13 @@ public sealed class PreviewManager : IDisposable
                 Log.Write(log.ToString());
                 return;
             }
+
+            // one press = one switch. Only a client that has closed or frozen is stepped over; if Windows refused,
+            // stop here instead of trying every other client in the same press.
+            if (how != "window gone" && how != "not responding") break;
         }
 
-        Log.Write(log.ToString() + " -> nothing to switch to");
+        Log.Write(log.ToString() + " -> no switch");
     }
 
     /// <summary>Brings a client to the front and applies its "when I switch to it" action.</summary>
@@ -1093,6 +1155,10 @@ public sealed class PreviewManager : IDisposable
         bool ok = _eve.Activate(client.Handle, out how);
         _lastActivated = client.Handle;
         if (!ok) return false;
+
+        // Windows has accepted the switch. Until it confirms (or 400 ms pass) this client counts as the active one.
+        if (NativeMethods.GetForegroundWindow() == client.Handle) ClearPending();
+        else SetPending(client.Handle);
 
         var c = client.IsLoginScreen ? null : _settings.TryGetCharacter(client.CharacterName);
         if (c is not null)
@@ -1253,5 +1319,6 @@ public sealed class PreviewManager : IDisposable
         _meta.Clear();
     }
 }
+
 
 

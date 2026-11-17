@@ -7,6 +7,14 @@ internal static class Changelog
 {
     public static readonly ChangelogEntry[] Entries =
     {
+        new("0.9.6", "Hotkey switching lands on the right client", new[]
+        {
+            "Fixed: the Next / Previous client hotkey could get stuck on one client, or jump back to the client you had just left.",
+            "Cause (found with the debug log): a switch takes a few milliseconds to land, and the app was reading the window in front before Windows had updated it. That stale answer was then used as \"where you are\", so the next press picked the same client again, and the client scan put the old client back as active every 1.5 seconds.",
+            "Now the client a switch is heading to counts as the active one until Windows confirms it (or 400 ms pass). Late focus reports from the client you left are ignored, and the client scan no longer overwrites a switch in progress.",
+            "One press = one switch: if Windows refuses a switch, the hotkey stops there instead of trying every other client.",
+            "Auto-minimise never minimises the client a switch is heading to, and \"Hotkeys only work while EVE is in front\" keeps working during a switch."
+        }),
         new("0.9.5", "Smooth hotkey switching", new[]
         {
             "Fixed: the Next / Previous client hotkey flashed through every other client and landed on the wrong one.",
@@ -104,5 +112,6 @@ internal static class Changelog
         })
     };
 }
+
 
 

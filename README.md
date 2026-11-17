@@ -6,6 +6,11 @@ A lightweight Windows utility for permanent live previews of your running EVE On
 
 **Run it:** double-click `EVE-IW-Preview.exe` in this folder (needs the .NET 8 Desktop Runtime, already installed if you have the .NET SDK). It runs in the **system tray only** (no taskbar button): right-click the tray icon for the menu, double-click it for Configuration.
 
+## v0.9.6
+- Fixed the Next / Previous client hotkey getting stuck on one client or jumping back to the one you just left. A switch takes a few milliseconds to land, and the app was reading the window in front before Windows had updated it. The client a switch is heading to now counts as active until Windows confirms it (or 400 ms pass); late focus reports from the client you left and the 1.5 s client scan can no longer undo it.
+- One press = one switch: a refused switch stops there instead of trying every other client.
+- Auto-minimise never minimises the client a switch is heading to.
+
 ## v0.9.5
 - Fixed the Next / Previous client hotkey flashing through every client and landing on the wrong one. Windows briefly has nothing in front while it switches; that gap was being read as a refusal, so every other client was tried in turn. An accepted switch now counts as done, so one press = one switch, and no Alt keypress is sent to EVE.
 
@@ -113,5 +118,3 @@ The AUTZ IronWorks emblem is built in: `src\AUTZ.IronWorks.Preview\Assets\app.ic
 
 ## Update workflow
 `update-preview.ps1` replaces the repo with the newest `EVE-IW-Preview-v*.zip` (or `AUTZ-IronWorks-Preview-v*.zip`, the name used before the rename), finds the repo and the versions folder by itself, keeps Git history, LICENSE and the Assets folder (icon + logo), builds, publishes the exe to the repo root, and stages the changes. It does not commit or push. If the app is open it is left running; Windows lets the running exe be renamed, so the new exe takes its place and is used the next time you open the app. Always launch the exe in the repo root (not one from a `bin` folder).
-
-
