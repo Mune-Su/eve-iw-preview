@@ -6,6 +6,9 @@ A lightweight Windows utility for permanent live previews of your running EVE On
 
 **Run it:** double-click `EVE-IW-Preview.exe` in this folder (needs the .NET 8 Desktop Runtime, already installed if you have the .NET SDK). It runs in the **system tray only** (no taskbar button): right-click the tray icon for the menu, double-click it for Configuration.
 
+## v0.9.9
+- Holding Next / Previous no longer makes the active-client highlight jump back to a client you already passed. Late focus reports from earlier clients are ignored for 250 ms after each switch.
+
 ## v0.9.8
 - Holding Next or Previous now cycles continuously at the Windows keyboard repeat rate; releasing the key stops it. Taps still switch once.
 - Accepted direct switches no longer wait up to 60 ms before returning, so held-key cycling can move through clients quickly while the existing pending-switch tracking preserves the correct order.

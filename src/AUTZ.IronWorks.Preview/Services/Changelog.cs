@@ -7,6 +7,11 @@ internal static class Changelog
 {
     public static readonly ChangelogEntry[] Entries =
     {
+        new("0.9.9", "Steady highlight while holding the hotkey", new[]
+        {
+            "Fixed: while holding Next / Previous, the active-client highlight could briefly jump back to a client you had already passed. Windows reports focus changes a little late when they come this fast, and those late reports were being treated as current.",
+            "For 250 ms after each switch, late focus reports from earlier clients are now ignored. The client scan still re-checks the real front window every 1.5 seconds, so a genuine click on another client is picked up straight after."
+        }),
         new("0.9.8", "Fast held-key cycling", new[]
         {
             "Holding the Next or Previous hotkey now repeats continuously at the Windows keyboard repeat rate, like EVE-APM, EVE-Maj and EVE-O Preview. Releasing the key stops it.",

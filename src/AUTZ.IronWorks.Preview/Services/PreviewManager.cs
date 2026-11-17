@@ -57,6 +57,8 @@ public sealed class PreviewManager : IDisposable
     private nint _lastActivated;           // last client we switched to (used by the next / previous hotkeys)
     private nint _pendingTarget;           // v0.9.6: a switch Windows has accepted but not finished yet (0 = none)
     private long _pendingUntil;            // Log.Ms after which the pending switch is forgotten
+    private long _staleUntil;              // v0.9.9: after a switch, late focus reports from earlier clients are ignored until then
+    private const int StaleMs = 250;
     private const int PendingMs = 400;     // how long a switch is allowed to take before Windows' word is trusted again
     private string _alertHex = "#EF4444";
     private string _lastClientList = "";    // detailed log: only log the client list when it changes
@@ -125,6 +127,13 @@ public sealed class PreviewManager : IDisposable
                 {
                     ClearPending();                                 // something else really came to the front
                 }
+            }
+            else if (Log.Ms <= _staleUntil && hwnd != _lastActivated && (_clientHandles.Contains(hwnd) || IsOwnWindow(hwnd)))
+            {
+                // held-key cycling: Windows reports earlier switches after the latest one has been confirmed. Without
+                // this the highlight jumped back to a client you had already passed.
+                Log.Debug("SWITCH", $"  ignored late foreground {Log.Win(hwnd)} (last switch was to {Log.Win(_lastActivated)})");
+                return;
             }
             SyncForeground(hwnd);
         };
@@ -1155,6 +1164,7 @@ public sealed class PreviewManager : IDisposable
         bool ok = _eve.Activate(client.Handle, out how);
         _lastActivated = client.Handle;
         if (!ok) return false;
+        _staleUntil = Log.Ms + StaleMs;
 
         // Windows has accepted the switch. Until it confirms (or 400 ms pass) this client counts as the active one.
         if (NativeMethods.GetForegroundWindow() == client.Handle) ClearPending();
