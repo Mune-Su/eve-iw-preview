@@ -118,7 +118,7 @@ public sealed class HotkeyService : IDisposable
     // "pass the key through" and "only while EVE is in front" are off; everything else stays on the hook.
 
     private const int WM_HOTKEY = 0x0312;
-    private const uint MOD_ALT = 0x1, MOD_CONTROL = 0x2, MOD_SHIFT = 0x4, MOD_WIN = 0x8, MOD_NOREPEAT = 0x4000;
+    private const uint MOD_ALT = 0x1, MOD_CONTROL = 0x2, MOD_SHIFT = 0x4, MOD_WIN = 0x8;
 
     [DllImport("user32.dll", SetLastError = true)] private static extern bool RegisterHotKey(nint hWnd, int id, uint modifiers, uint vk);
     [DllImport("user32.dll")] private static extern bool UnregisterHotKey(nint hWnd, int id);
@@ -142,7 +142,8 @@ public sealed class HotkeyService : IDisposable
                 _msgWindow.AddHook(WndProc);
             }
 
-            uint mods = MOD_NOREPEAT;
+            // Allow Windows to deliver WM_HOTKEY for the keyboard auto-repeat while the key is held.
+            uint mods = 0;
             foreach (var m in b.Spec.Modifiers)
                 mods |= m.Group switch { 0 => MOD_CONTROL, 1 => MOD_ALT, 2 => MOD_SHIFT, _ => MOD_WIN };
 

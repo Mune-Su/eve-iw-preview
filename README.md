@@ -6,6 +6,10 @@ A lightweight Windows utility for permanent live previews of your running EVE On
 
 **Run it:** double-click `EVE-IW-Preview.exe` in this folder (needs the .NET 8 Desktop Runtime, already installed if you have the .NET SDK). It runs in the **system tray only** (no taskbar button): right-click the tray icon for the menu, double-click it for Configuration.
 
+## v0.9.8
+- Holding Next or Previous now cycles continuously at the Windows keyboard repeat rate; releasing the key stops it. Taps still switch once.
+- Accepted direct switches no longer wait up to 60 ms before returning, so held-key cycling can move through clients quickly while the existing pending-switch tracking preserves the correct order.
+
 ## v0.9.7
 - Fixed the Next hotkey bouncing back when switching from the last client to the first. Windows only allows a switch from the program that got the last keypress, and the swallowed hotkey never reached the app. Plain-key hotkeys (optionally with Ctrl/Alt/Shift/Win) are now registered with Windows, like EVE-O Preview, so every switch is allowed directly. Mouse buttons, chords, left/right-only modifiers, modifier-only hotkeys, and all hotkeys while "pass the key through" or "only while EVE is in front" is on still use the hook.
 - Switching no longer freezes input for up to 0.2 s while waiting for Windows.

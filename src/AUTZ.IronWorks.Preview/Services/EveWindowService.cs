@@ -123,7 +123,9 @@ public sealed class EveWindowService
             // Windows said yes. The switch can take a few ms to land (nothing, or still the old client, in front);
             // that is NOT a refusal, so no fallback runs. The manager treats this client as active until Windows
             // confirms it (v0.9.6).
-            how = Settled(handle, true) ? "direct" : "direct (Windows finishing the switch)";
+            // Return immediately. PreviewManager treats the target as active until Windows confirms it, so waiting
+            // here only throttles held-key cycling. This keeps each repeat free to start the next switch at once.
+            how = NativeMethods.GetForegroundWindow() == handle ? "direct" : "direct (Windows finishing the switch)";
             return true;
         }
 

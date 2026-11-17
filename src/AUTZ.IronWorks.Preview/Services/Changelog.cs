@@ -7,6 +7,12 @@ internal static class Changelog
 {
     public static readonly ChangelogEntry[] Entries =
     {
+        new("0.9.8", "Fast held-key cycling", new[]
+        {
+            "Holding the Next or Previous hotkey now repeats continuously at the Windows keyboard repeat rate, like EVE-APM, EVE-Maj and EVE-O Preview. Releasing the key stops it.",
+            "Removed the no-repeat flag from Windows-registered hotkeys. A normal tap still switches exactly once.",
+            "An accepted direct switch now returns immediately instead of waiting up to 60 ms for the foreground event; the existing pending-switch tracking keeps the cycle order correct while Windows finishes each switch."
+        }),
         new("0.9.7", "Hotkey switching allowed by Windows", new[]
         {
             "Fixed: switching from the last client back to the first with the Next hotkey kept bouncing back, so the hotkey looked stuck.",
