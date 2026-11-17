@@ -6,6 +6,9 @@ A lightweight Windows utility for permanent live previews of your running EVE On
 
 **Run it:** double-click `EVE-IW-Preview.exe` in this folder (needs the .NET 8 Desktop Runtime, already installed if you have the .NET SDK). It runs in the **system tray only** (no taskbar button): right-click the tray icon for the menu, double-click it for Configuration.
 
+## v0.11.3
+- **Collapsible sections:** click the heading of any card in Configuration to collapse it or open it again (arrow on the right). They start open, and open by themselves when a search matches them or a setting in them needs fixing.
+
 ## v0.11.2
 - Build fix for 0.11.1 (client-order code). Same features as 0.11.1.
 

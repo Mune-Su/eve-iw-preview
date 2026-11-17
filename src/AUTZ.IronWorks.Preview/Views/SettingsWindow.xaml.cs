@@ -219,6 +219,18 @@ public partial class SettingsWindow : Window
         if (leavingThumbs) RefreshAfterThumbEdit();
     }
 
+    /// <summary>Opens a collapsed card (a card the user has collapsed would otherwise hide what the search or an error points at).</summary>
+    private static void ExpandCard(Control card)
+    {
+        if (card is Expander expander) expander.IsExpanded = true;
+    }
+
+    private void ExpandCardsOnPage(int page)
+    {
+        if (page < 0 || page >= _pages.Count) return;
+        foreach (var card in _pages[page].Cards) ExpandCard(card);
+    }
+
     private static void ScrollToCard(ScrollViewer page, FrameworkElement card)
     {
         try
@@ -1534,6 +1546,7 @@ public partial class SettingsWindow : Window
             {
                 bool match = query.Length >= 2 && TextOf(card).Contains(query, StringComparison.OrdinalIgnoreCase);
                 card.BorderBrush = match ? accent : normal;
+                if (match) ExpandCard(card);                  // a collapsed section that matches opens so the match can be seen
                 if (match && firstCard is null)
                 {
                     firstPage = i;
@@ -1703,6 +1716,7 @@ public partial class SettingsWindow : Window
         if (!_quiet)
         {
             SelectPage(page);
+            ExpandCardsOnPage(page);                          // so the field that needs fixing isn't hidden in a collapsed section
             Warn(message);
         }
         return false;

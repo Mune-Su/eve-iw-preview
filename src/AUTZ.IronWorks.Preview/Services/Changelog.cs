@@ -7,6 +7,11 @@ internal static class Changelog
 {
     public static readonly ChangelogEntry[] Entries =
     {
+        new("0.11.3", "Collapsible sections", new[]
+        {
+            "Every section in the Configuration window (the cards with an orange heading) can now be collapsed: click its heading, or press Space on it, to fold it up or open it again. A small arrow on the right shows which way it is.",
+            "All sections start open. A section opens by itself when a search matches it, or when a setting in it needs fixing, so nothing you're looking for is hidden."
+        }),
         new("0.11.2", "Build fix for 0.11.1", new[]
         {
             "Fixed: 0.11.1 didn't build (a number type mismatch in the client-order code). Nothing else changed: everything in 0.11.1 is in this version."
