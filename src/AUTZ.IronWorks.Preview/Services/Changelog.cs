@@ -7,6 +7,13 @@ internal static class Changelog
 {
     public static readonly ChangelogEntry[] Entries =
     {
+        new("0.9.7", "Hotkey switching allowed by Windows", new[]
+        {
+            "Fixed: switching from the last client back to the first with the Next hotkey kept bouncing back, so the hotkey looked stuck.",
+            "Cause (found with the debug log): Windows only lets a program bring a window to the front if it received the last keypress. The hotkey key was swallowed before it reached the app, so Windows refused every switch and it had to be forced, which didn't always stick.",
+            "A hotkey that is a plain key (optionally with Ctrl, Alt, Shift or Win) is now registered with Windows, the same way EVE-O Preview does it, so every switch is allowed straight away. Mouse buttons, key chords, left/right-only modifiers and modifier-only hotkeys still use the old method, as do all hotkeys while \"pass the key through\" or \"only while EVE is in front\" is on.",
+            "Switching no longer freezes keyboard and mouse input for up to 0.2 seconds while it waits for Windows."
+        }),
         new("0.9.6", "Hotkey switching lands on the right client", new[]
         {
             "Fixed: the Next / Previous client hotkey could get stuck on one client, or jump back to the client you had just left.",

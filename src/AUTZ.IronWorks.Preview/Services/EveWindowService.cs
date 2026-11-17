@@ -185,9 +185,11 @@ public sealed class EveWindowService
         nint fg = NativeMethods.GetForegroundWindow();
         if (fg == handle) return true;
         if (!accepted) return false;
-        for (int i = 0; i < 12 && fg != handle; i++)
+        // real 60 ms limit: Thread.Sleep(5) can sleep ~15 ms each, which froze input for ~180 ms per press
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        while (fg != handle && sw.ElapsedMilliseconds < 60)
         {
-            Thread.Sleep(5);
+            Thread.Sleep(1);
             fg = NativeMethods.GetForegroundWindow();
         }
         if (fg != handle) Log.Debug("FOCUS", $"  settle: foreground still {Log.Win(fg)} after 60 ms (switch still landing)");
