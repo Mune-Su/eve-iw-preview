@@ -6,6 +6,12 @@ A lightweight Windows utility for permanent live previews of your running EVE On
 
 **Run it:** double-click `EVE-IW-Preview.exe` in this folder (needs the .NET 8 Desktop Runtime, already installed if you have the .NET SDK). It runs in the **system tray only** (no taskbar button): right-click the tray icon for the menu, double-click it for Configuration.
 
+## v0.11.0
+- **Client hotkeys in groups:** only "Client 1" is shown to start with; + adds a line for another client. Keep several sets in groups and pick the group in use (New / Rename / Delete). Existing hotkeys become the "Default" group.
+- **Thumbnails in groups:** the same design for the characters that get a thumbnail: groups, one line per character (tick = show), + to add a line. The group in use decides which thumbnails show (tick "Also show thumbnails for logged-in characters that aren't in this group" to show the others). The old character list becomes the "Default" group.
+- The red X on thumbnails the next / previous hotkeys skip is always on, shown as a note instead of an option.
+- Text in the Configuration window (descriptions, notes, paths, status line, version) can be selected and copied.
+
 ## v0.10.2
 - Build fix for 0.10.1 (client-order code). Same features as 0.10.1.
 

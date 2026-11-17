@@ -336,8 +336,10 @@ public sealed class PreviewManager : IDisposable
     private bool ShouldShow(EveClientWindow client)
     {
         if (client.IsLoginScreen) return _settings.ShowLoginScreens;
-        if (!_settings.ShowUnlistedCharacters &&
-            !_settings.Roster.Any(n => n.Equals(client.CharacterName, StringComparison.OrdinalIgnoreCase)))
+        // the thumbnail group in use: only its characters get a thumbnail (unless the group also shows others)
+        var group = _settings.ActiveThumbGroup();
+        if (group is not null && !group.ShowOthers &&
+            !group.Characters.Any(n => n.Equals(client.CharacterName, StringComparison.OrdinalIgnoreCase)))
             return false;
         var c = _settings.TryGetCharacter(client.CharacterName);
         return c is null || !c.Hidden;
@@ -496,7 +498,7 @@ public sealed class PreviewManager : IDisposable
             _settings.LabelFontName, Math.Clamp(_settings.LabelFontSize, 6, 72), _settings.LabelBold,
             background, _settings.LabelPosition, _settings.LabelOffsetX, _settings.LabelOffsetY));
 
-        window.SetExcluded(!login && _settings.ShowExcludedOverlay && c is not null && c.ExcludeFromCycling);
+        window.SetExcluded(!login && c is not null && c.ExcludeFromCycling);     // the red X is always shown for skipped clients
     }
 
     private BorderSpec? BorderFor(ThumbnailWindow window)
@@ -854,7 +856,7 @@ public sealed class PreviewManager : IDisposable
     private void RegisterLogNames()
     {
         foreach (string name in _settings.Characters.Keys.Where(AppSettings.IsCharacterKey)) Log.RegisterPilot(name);
-        foreach (string name in _settings.Roster) Log.RegisterPilot(name);
+        foreach (string name in _settings.AllGroupCharacters()) Log.RegisterPilot(name);
         foreach (string name in _settings.ClientOrder) Log.RegisterPilot(name);
         foreach (string name in _settings.SlotCharacters.Values) Log.RegisterPilot(name);
         Log.RegisterProfile(_state.ActiveProfile);
@@ -1153,7 +1155,7 @@ public sealed class PreviewManager : IDisposable
             Register(pair.Value.Hotkey, name, () => ActivateCharacter(name));
         }
 
-        foreach (var pair in _settings.ClientSlotHotkeys)
+        foreach (var pair in _settings.ActiveSlotHotkeys())            // the client-hotkey group in use
         {
             if (!int.TryParse(pair.Key, out int slot) || slot < 1) continue;
             Register(pair.Value, "Client " + slot, () => ActivateSlot(slot));

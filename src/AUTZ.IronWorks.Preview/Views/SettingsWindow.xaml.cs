@@ -25,7 +25,8 @@ public partial class SettingsWindow : Window
     private const int PageNotifications_ = 6;
     private const int PageLogs_ = 7;
 
-    private const int SlotCount = 10;
+    private const int MaxSlotRows = 20;
+    private const int MaxThumbRows = 60;
 
     private static readonly string[] Positions =
     {
@@ -50,7 +51,16 @@ public partial class SettingsWindow : Window
     private readonly Dictionary<string, AppSettings> _edited = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, string> _baseline = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, string> _profileHotkeys = new(StringComparer.OrdinalIgnoreCase);
-    private readonly List<(string Name, CheckBox Box)> _rosterBoxes = new();
+    private sealed class ThumbRow
+    {
+        public Grid Panel = null!;
+        public CheckBox Show = null!;
+        public TextBox Name = null!;
+    }
+    private readonly List<ThumbRow> _thumbRows = new();
+    private ThumbnailGroup? _shownThumbGroup;      // the thumbnail group on screen (it is in use)
+    private SlotHotkeyGroup? _shownSlotGroup;      // the client-hotkey group on screen (it is in use)
+    private bool _groupLoading;
     private readonly List<(string Name, CheckBox Box)> _scanBoxes = new();
     private readonly List<HotkeyField> _slotFields = new();
     private HashSet<string> _running;
@@ -98,7 +108,7 @@ public partial class SettingsWindow : Window
         };
         CharColourBox.HexChanged += UpdatePreview;
 
-        BuildSlotRows();
+        PreviewMouseWheel += OnPreviewMouseWheel;
 
         foreach (var pair in _state.ProfileHotkeys) _profileHotkeys[pair.Key] = pair.Value;
         NextProfileBox.Text = _state.NextProfileHotkey;
@@ -192,6 +202,7 @@ public partial class SettingsWindow : Window
     private void SelectPage(int index)
     {
         if (index < 0 || index >= _pages.Count) return;
+        bool leavingThumbs = _pageIndex == PageThumbs_ && index != PageThumbs_;
         _pageIndex = index;
 
         for (int i = 0; i < _pages.Count; i++)
@@ -205,6 +216,7 @@ public partial class SettingsWindow : Window
         }
         PageTitleText.Text = _pages[index].Title;
         _pages[index].Page.ScrollToVerticalOffset(0);
+        if (leavingThumbs) RefreshAfterThumbEdit();
     }
 
     private static void ScrollToCard(ScrollViewer page, FrameworkElement card)
@@ -233,14 +245,17 @@ public partial class SettingsWindow : Window
     {
         var s = _work;
 
-        // fill the Thumbnails list from the characters already known the first time a profile is opened
+        s.EnsureGroups();
+
+        // fill the group in use from the characters already known the first time a profile is opened
         if (!s.RosterInitialised)
         {
+            var first = s.ActiveThumbGroup() ?? s.ThumbnailGroups[0];
             foreach (string name in s.Characters.Keys.Where(AppSettings.IsCharacterKey)
                          .Concat(s.SlotCharacters.Values.Where(v => !string.IsNullOrWhiteSpace(v)))
                          .Concat(_running))
             {
-                if (!s.Roster.Contains(name, StringComparer.OrdinalIgnoreCase)) s.Roster.Add(name);
+                if (!first.Characters.Contains(name, StringComparer.OrdinalIgnoreCase)) first.Characters.Add(name);
             }
             s.RosterInitialised = true;
         }
@@ -286,7 +301,7 @@ public partial class SettingsWindow : Window
 
         // Thumbnails
         LoginScreensBox.IsChecked = s.ShowLoginScreens;
-        ShowUnlistedBox.IsChecked = s.ShowUnlistedCharacters;
+        LoadThumbGroups();
         HideActiveBox.IsChecked = s.HideActiveThumbnail;
         HideUnfocusedBox.IsChecked = s.HideWhenEveNotFocused;
         HideDelayBox.Text = s.HideDelayMs.ToString();
@@ -302,11 +317,9 @@ public partial class SettingsWindow : Window
              s.ClientOrderMode == AppSettings.OrderSaved ? OrderSavedRadio : OrderAutoRadio).IsChecked = true;
         }
         finally { _orderLoading = false; }
-        ShowExcludedBox.IsChecked = s.ShowExcludedOverlay;
         HotkeysOnlyEveBox.IsChecked = s.HotkeysOnlyInEve;
         PassThroughBox.IsChecked = s.HotkeyPassThrough;
-        for (int i = 0; i < _slotFields.Count; i++)
-            _slotFields[i].Text = s.ClientSlotHotkeys.TryGetValue((i + 1).ToString(), out var slotKey) ? slotKey : "";
+        LoadSlotGroups();
         ProfileHotkeyBox.Text = _profileHotkeys.TryGetValue(_shownProfile, out var hotkey) ? hotkey : "";
 
         // Clients
@@ -355,11 +368,66 @@ public partial class SettingsWindow : Window
     private void OpacitySlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e) => UpdateSliderLabels();
     private void BgOpacitySlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e) => UpdateSliderLabels();
 
-    // ---------- client slot hotkeys ----------
+    // ---------- client hotkey groups ----------
 
+    private string? AskGroupName(string title, string initial, IEnumerable<string> existing, string current = "")
+    {
+        string? raw = PromptWindow.Ask(this, title, "Group name:", initial);
+        if (raw is null) return null;
+        string name = raw.Trim();
+        if (name.Length == 0)
+        {
+            Warn("Please type a name.");
+            return null;
+        }
+        if (name.Length > 40)
+        {
+            Warn("Please keep the name to 40 characters or fewer.");
+            return null;
+        }
+        if (existing.Any(n => n.Equals(name, StringComparison.OrdinalIgnoreCase) && !n.Equals(current, StringComparison.OrdinalIgnoreCase)))
+        {
+            Warn("There's already a group called \"" + name + "\".");
+            return null;
+        }
+        return name;
+    }
+
+    /// <summary>Fills the group drop-down, shows the group in use and builds its lines.</summary>
+    private void LoadSlotGroups()
+    {
+        _work.EnsureGroups();
+        _groupLoading = true;
+        try
+        {
+            SlotGroupBox.Items.Clear();
+            foreach (var g in _work.ClientHotkeyGroups) SlotGroupBox.Items.Add(g.Name);
+            _shownSlotGroup = _work.FindSlotGroup(_work.ActiveClientHotkeyGroup);
+            SlotGroupBox.SelectedItem = _shownSlotGroup is null
+                ? null
+                : SlotGroupBox.Items.Cast<string>().FirstOrDefault(n => n.Equals(_shownSlotGroup.Name, StringComparison.OrdinalIgnoreCase));
+        }
+        finally { _groupLoading = false; }
+        DeleteSlotGroupBtn.IsEnabled = _work.ClientHotkeyGroups.Count > 1;
+        BuildSlotRows();
+    }
+
+    /// <summary>One line per client: "Client 1" with its hotkey box. A group starts with just the first line; + adds more.</summary>
     private void BuildSlotRows()
     {
-        for (int i = 1; i <= SlotCount; i++)
+        SlotHotkeyHost.Children.Clear();
+        _slotFields.Clear();
+        var group = _shownSlotGroup;
+        if (group is null) return;
+
+        int highest = 0;
+        foreach (string key in group.Hotkeys.Keys)
+        {
+            if (int.TryParse(key, out int n) && n > highest) highest = n;
+        }
+        int rows = Math.Clamp(Math.Max(group.Rows, highest), 1, MaxSlotRows);
+
+        for (int i = 1; i <= rows; i++)
         {
             var row = new Grid();
             row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(96) });
@@ -372,13 +440,103 @@ public partial class SettingsWindow : Window
                 VerticalAlignment = VerticalAlignment.Top,
                 Margin = new Thickness(0, 8, 0, 0)
             };
-            var field = new HotkeyField();
+            var field = new HotkeyField { Text = group.Hotkeys.TryGetValue(i.ToString(), out var key) ? key : "" };
             Grid.SetColumn(field, 1);
             row.Children.Add(label);
             row.Children.Add(field);
             SlotHotkeyHost.Children.Add(row);
             _slotFields.Add(field);
         }
+
+        AddSlotBtn.IsEnabled = rows < MaxSlotRows;
+        RemoveSlotBtn.IsEnabled = rows > 1;
+    }
+
+    /// <summary>Stores what is typed in the lines into the group on screen.</summary>
+    private void CommitSlotGroup()
+    {
+        var group = _shownSlotGroup;
+        if (group is null) return;
+        group.Hotkeys = new Dictionary<string, string>();
+        for (int i = 0; i < _slotFields.Count; i++)
+        {
+            if (_slotFields[i].Text.Length > 0) group.Hotkeys[(i + 1).ToString()] = _slotFields[i].Text;
+        }
+        group.Rows = Math.Max(1, _slotFields.Count);
+    }
+
+    private void SlotGroup_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_groupLoading || _work is null || SlotGroupBox.SelectedItem is not string name) return;
+        var group = _work.FindSlotGroup(name);
+        if (group is null || ReferenceEquals(group, _shownSlotGroup)) return;
+        CommitSlotGroup();
+        _work.ActiveClientHotkeyGroup = group.Name;
+        _shownSlotGroup = group;
+        BuildSlotRows();
+        SetStatus($"Client hotkey group “{group.Name}” is in use. Press Apply or Save to use it.", false);
+    }
+
+    private void AddSlot_Click(object sender, RoutedEventArgs e)
+    {
+        var group = _shownSlotGroup;
+        if (group is null) return;
+        CommitSlotGroup();
+        if (group.Rows >= MaxSlotRows) return;
+        group.Rows++;
+        BuildSlotRows();
+        if (_slotFields.Count > 0) _slotFields[_slotFields.Count - 1].Focus();
+    }
+
+    private void RemoveSlot_Click(object sender, RoutedEventArgs e)
+    {
+        var group = _shownSlotGroup;
+        if (group is null) return;
+        CommitSlotGroup();
+        if (group.Rows <= 1) return;
+        group.Hotkeys.Remove(group.Rows.ToString());
+        group.Rows--;
+        BuildSlotRows();
+    }
+
+    private void NewSlotGroup_Click(object sender, RoutedEventArgs e)
+    {
+        string? name = AskGroupName("New client hotkey group", "", _work.ClientHotkeyGroups.Select(g => g.Name));
+        if (name is null) return;
+        CommitSlotGroup();
+        _work.ClientHotkeyGroups.Add(new SlotHotkeyGroup { Name = name });
+        _work.ActiveClientHotkeyGroup = name;
+        LoadSlotGroups();
+        SetStatus($"Group “{name}” created and in use. Press Apply or Save to use it.", false);
+    }
+
+    private void RenameSlotGroup_Click(object sender, RoutedEventArgs e)
+    {
+        var group = _shownSlotGroup;
+        if (group is null) return;
+        string? name = AskGroupName("Rename client hotkey group", group.Name, _work.ClientHotkeyGroups.Select(g => g.Name), group.Name);
+        if (name is null) return;
+        CommitSlotGroup();
+        group.Name = name;
+        _work.ActiveClientHotkeyGroup = name;
+        LoadSlotGroups();
+    }
+
+    private void DeleteSlotGroup_Click(object sender, RoutedEventArgs e)
+    {
+        var group = _shownSlotGroup;
+        if (group is null) return;
+        if (_work.ClientHotkeyGroups.Count <= 1)
+        {
+            Warn("There has to be at least one group.");
+            return;
+        }
+        if (Dialogs.Ask(this, "Delete group", "Delete the client hotkey group \"" + group.Name + "\" and its hotkeys?", "Delete", "Cancel") != 0) return;
+        CommitSlotGroup();
+        _work.ClientHotkeyGroups.Remove(group);
+        _work.ActiveClientHotkeyGroup = _work.ClientHotkeyGroups[0].Name;
+        LoadSlotGroups();
+        SetStatus("Group deleted. Press Apply or Save to use it.", false);
     }
 
     // ---------- the character lists ----------
@@ -386,57 +544,21 @@ public partial class SettingsWindow : Window
     /// <summary>Rebuilds every list that shows characters: the Thumbnails list, the skip and never-minimise ticks and the Characters picker.</summary>
     private void RebuildCharacterLists()
     {
-        _characters = _work.Roster
+        _characters = _work.AllGroupCharacters()
             .Concat(_work.Characters.Keys.Where(AppSettings.IsCharacterKey))
             .Concat(_running)
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToList();
 
-        ClientChecks.Children.Clear();
         SkipChecks.Children.Clear();
         MinChecks.Children.Clear();
-        _rosterBoxes.Clear();
-
-        foreach (string name in _work.Roster.ToList())
-        {
-            string chosen = name;
-            var existing = _work.TryGetCharacter(name);
-            var row = new Grid { Margin = new Thickness(0, 0, 0, 8) };
-            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-
-            var box = new CheckBox
-            {
-                Content = _running.Contains(name) ? name + "   (logged in)" : name,
-                IsChecked = !(existing?.Hidden ?? false),
-                Margin = new Thickness(0),
-                VerticalAlignment = VerticalAlignment.Center
-            };
-            box.Click += (_, _) => _work.GetOrAddCharacter(chosen).Hidden = box.IsChecked != true;
-
-            var remove = new Button
-            {
-                Content = "Remove",
-                FontSize = 11,
-                Padding = new Thickness(10, 3, 10, 3),
-                Margin = new Thickness(8, 0, 0, 0),
-                ToolTip = "Take this character off the list (its saved settings go too)"
-            };
-            remove.Click += (_, _) => RemoveCharacter(chosen);
-
-            Grid.SetColumn(remove, 1);
-            row.Children.Add(box);
-            row.Children.Add(remove);
-            ClientChecks.Children.Add(row);
-            _rosterBoxes.Add((name, box));
-        }
+        BuildThumbRows(0);
 
         RebuildOrderList();
         BuildTickList(SkipChecks, c => c.ExcludeFromCycling, (c, v) => c.ExcludeFromCycling = v);
         BuildTickList(MinChecks, c => c.NeverMinimise, (c, v) => c.NeverMinimise = v);
 
         bool any = _characters.Count > 0;
-        NoThumbText.Visibility = _work.Roster.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
         NoSkipText.Visibility = any ? Visibility.Collapsed : Visibility.Visible;
         NoMinText.Visibility = any ? Visibility.Collapsed : Visibility.Visible;
         NoCharText.Visibility = any ? Visibility.Collapsed : Visibility.Visible;
@@ -482,7 +604,7 @@ public partial class SettingsWindow : Window
     {
         var cmp = StringComparer.OrdinalIgnoreCase;
         var order = _work.ClientOrder;
-        var others = _work.Roster
+        var others = _work.AllGroupCharacters()
             .Concat(_work.Characters.Keys.Where(AppSettings.IsCharacterKey))
             .Concat(_work.SlotCharacters.Values.Where(v => !string.IsNullOrWhiteSpace(v)))
             .Except(_runningList, cmp)
@@ -651,75 +773,229 @@ public partial class SettingsWindow : Window
     private void SetAllShown(bool shown)
     {
         LoginScreensBox.IsChecked = shown;
-        foreach (var (name, box) in _rosterBoxes)
-        {
-            box.IsChecked = shown;
-            _work.GetOrAddCharacter(name).Hidden = !shown;
-        }
+        foreach (var row in _thumbRows) row.Show.IsChecked = shown;       // stored when you press Apply or Save
     }
 
-    // ---------- adding, removing and scanning characters ----------
+    // ---------- thumbnail groups ----------
 
-    private bool AddCharacterByName(string raw, bool announce)
+    /// <summary>Fills the group drop-down and shows the group in use. (The lines are built by RebuildCharacterLists.)</summary>
+    private void LoadThumbGroups()
     {
-        string name = raw.Trim();
-        if (name.Length == 0)
+        _work.EnsureGroups();
+        _groupLoading = true;
+        try
         {
-            if (announce) Warn("Type a character name first.");
-            return false;
+            ThumbGroupBox.Items.Clear();
+            foreach (var g in _work.ThumbnailGroups) ThumbGroupBox.Items.Add(g.Name);
+            _shownThumbGroup = _work.FindThumbGroup(_work.ActiveThumbnailGroup);
+            ThumbGroupBox.SelectedItem = _shownThumbGroup is null
+                ? null
+                : ThumbGroupBox.Items.Cast<string>().FirstOrDefault(n => n.Equals(_shownThumbGroup.Name, StringComparison.OrdinalIgnoreCase));
         }
-        if (name.Length > 60 || name.StartsWith('['))
+        finally { _groupLoading = false; }
+        ShowUnlistedBox.IsChecked = _shownThumbGroup?.ShowOthers ?? true;
+        DeleteThumbGroupBtn.IsEnabled = _work.ThumbnailGroups.Count > 1;
+    }
+
+    /// <summary>One line per character in the group. A group with nobody in it starts with a single empty line; + adds more.</summary>
+    private void BuildThumbRows(int extraBlank)
+    {
+        ClientChecks.Children.Clear();
+        _thumbRows.Clear();
+        var group = _shownThumbGroup;
+        if (group is null) return;
+
+        foreach (string name in group.Characters) AddThumbRow(name);
+        int blanks = Math.Max(extraBlank, group.Characters.Count == 0 ? 1 : 0);
+        for (int i = 0; i < blanks; i++) AddThumbRow("");
+        AddThumbBtn.IsEnabled = _thumbRows.Count < MaxThumbRows;
+    }
+
+    private ThumbRow AddThumbRow(string name)
+    {
+        var existing = name.Length == 0 ? null : _work.TryGetCharacter(name);
+
+        var panel = new Grid { Margin = new Thickness(0, 0, 0, 8) };
+        panel.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        panel.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        panel.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        panel.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+        var show = new CheckBox
         {
-            if (announce) Warn("That isn't a valid character name.");
-            return false;
-        }
-        if (_work.Roster.Contains(name, StringComparer.OrdinalIgnoreCase))
+            IsChecked = !(existing?.Hidden ?? false),
+            Margin = new Thickness(0, 0, 10, 0),
+            VerticalAlignment = VerticalAlignment.Center,
+            ToolTip = "Show this character's thumbnail"
+        };
+        var box = new TextBox { Text = name, Margin = new Thickness(0), ToolTip = "Character name" };
+        var tag = new TextBlock
         {
-            if (announce) Warn(name + " is already in the list.");
-            return false;
+            Text = name.Length > 0 && _running.Contains(name) ? "logged in" : "",
+            FontSize = 11,
+            Foreground = Theme.Success,
+            Margin = new Thickness(10, 0, 0, 0),
+            VerticalAlignment = VerticalAlignment.Center
+        };
+        var remove = new Button
+        {
+            Content = "✕",
+            Padding = new Thickness(11, 6, 11, 6),
+            Margin = new Thickness(8, 0, 0, 0),
+            ToolTip = "Take this character out of the group"
+        };
+
+        var row = new ThumbRow { Panel = panel, Show = show, Name = box };
+        remove.Click += (_, _) => RemoveThumbRow(row);
+
+        Grid.SetColumn(box, 1);
+        Grid.SetColumn(tag, 2);
+        Grid.SetColumn(remove, 3);
+        panel.Children.Add(show);
+        panel.Children.Add(box);
+        panel.Children.Add(tag);
+        panel.Children.Add(remove);
+        ClientChecks.Children.Add(panel);
+        _thumbRows.Add(row);
+        return row;
+    }
+
+    /// <summary>
+    /// Stores the lines into the group on screen. With validate = true a bad name is reported (and false returned);
+    /// otherwise a bad name is just left out.
+    /// </summary>
+    private bool CommitThumbRows(bool validate)
+    {
+        var group = _shownThumbGroup;
+        if (group is null) return true;
+
+        var names = new List<string>();
+        foreach (var row in _thumbRows)
+        {
+            string name = row.Name.Text.Trim();
+            if (name.Length == 0) continue;
+            if (name.Length > 60 || name.StartsWith('['))
+            {
+                if (validate) return Fail(PageThumbs_, "“" + name + "” isn't a valid character name.");
+                continue;
+            }
+            if (names.Contains(name, StringComparer.OrdinalIgnoreCase)) continue;
+            names.Add(name);
+
+            if (row.Show.IsChecked != true) _work.GetOrAddCharacter(name).Hidden = true;
+            else if (_work.TryGetCharacter(name) is { } known) known.Hidden = false;
         }
-        _work.Roster.Add(name);
+
+        group.Characters = names;
+        group.ShowOthers = ShowUnlistedBox.IsChecked == true;
         return true;
     }
 
-    private void AddChar_Click(object sender, RoutedEventArgs e)
+    private void AddThumb_Click(object sender, RoutedEventArgs e)
     {
-        CommitCurrentQuietly();
-        if (!AddCharacterByName(RosterAddBox.Text, true)) return;
-        RosterAddBox.Text = "";
-        RebuildCharacterLists();
-        SetStatus("Added to the list. Press Apply or Save to use it.", false);
+        if (_thumbRows.Count >= MaxThumbRows) return;
+        var row = AddThumbRow("");
+        AddThumbBtn.IsEnabled = _thumbRows.Count < MaxThumbRows;
+        row.Name.Focus();
     }
 
-    private void RosterAddBox_KeyDown(object sender, KeyEventArgs e)
+    private void RemoveThumbRow(ThumbRow row)
     {
-        if (e.Key != Key.Enter) return;
-        e.Handled = true;
-        AddChar_Click(sender, e);
+        _thumbRows.Remove(row);
+        ClientChecks.Children.Remove(row.Panel);
+        CommitThumbRows(false);
+        CommitCurrentQuietly();
+        RebuildCharacterLists();
+        SetStatus("Taken out of the group. Press Apply or Save to use it.", false);
     }
 
-    private void RemoveCharacter(string name)
+    private string ThumbSignature() => string.Join("|", _work.AllGroupCharacters());
+
+    /// <summary>Leaving the Thumbnails page: if the names changed, the other lists (skip, never minimise, characters, order) follow.</summary>
+    private void RefreshAfterThumbEdit()
     {
-        if (Dialogs.Ask(this, "Remove character",
-                $"Take {name} off the list? Its saved label, colour, size, position and hotkeys are deleted too (when you save).",
-                "Remove", "Cancel") != 0) return;
-
+        string before = ThumbSignature();
+        CommitThumbRows(false);
+        if (ThumbSignature() == before) return;
         CommitCurrentQuietly();
-        _work.Roster.RemoveAll(n => n.Equals(name, StringComparison.OrdinalIgnoreCase));
-        foreach (string key in _work.Characters.Keys.Where(k => k.Equals(name, StringComparison.OrdinalIgnoreCase)).ToList())
-            _work.Characters.Remove(key);
-        foreach (string slot in _work.SlotCharacters.Where(p => p.Value.Equals(name, StringComparison.OrdinalIgnoreCase)).Select(p => p.Key).ToList())
-            _work.SlotCharacters.Remove(slot);
-
         RebuildCharacterLists();
-        if (ScanHost.Children.Count > 0) RunScan();
-        SetStatus($"{name} removed. Press Apply or Save to use it.", false);
+    }
+
+    private void ThumbGroup_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_groupLoading || _work is null || ThumbGroupBox.SelectedItem is not string name) return;
+        var group = _work.FindThumbGroup(name);
+        if (group is null || ReferenceEquals(group, _shownThumbGroup)) return;
+        CommitThumbRows(false);
+        _work.ActiveThumbnailGroup = group.Name;
+        _shownThumbGroup = group;
+        ShowUnlistedBox.IsChecked = group.ShowOthers;
+        CommitCurrentQuietly();
+        RebuildCharacterLists();
+        SetStatus($"Thumbnail group “{group.Name}” is in use. Press Apply or Save to use it.", false);
+    }
+
+    private void NewThumbGroup_Click(object sender, RoutedEventArgs e)
+    {
+        string? name = AskGroupName("New thumbnail group", "", _work.ThumbnailGroups.Select(g => g.Name));
+        if (name is null) return;
+        CommitThumbRows(false);
+        _work.ThumbnailGroups.Add(new ThumbnailGroup { Name = name });
+        _work.ActiveThumbnailGroup = name;
+        LoadThumbGroups();
+        CommitCurrentQuietly();
+        RebuildCharacterLists();
+        SetStatus($"Group “{name}” created and in use. Add its characters, then press Apply or Save.", false);
+    }
+
+    private void RenameThumbGroup_Click(object sender, RoutedEventArgs e)
+    {
+        var group = _shownThumbGroup;
+        if (group is null) return;
+        string? name = AskGroupName("Rename thumbnail group", group.Name, _work.ThumbnailGroups.Select(g => g.Name), group.Name);
+        if (name is null) return;
+        CommitThumbRows(false);
+        group.Name = name;
+        _work.ActiveThumbnailGroup = name;
+        LoadThumbGroups();
+        CommitCurrentQuietly();
+        RebuildCharacterLists();
+    }
+
+    private void DeleteThumbGroup_Click(object sender, RoutedEventArgs e)
+    {
+        var group = _shownThumbGroup;
+        if (group is null) return;
+        if (_work.ThumbnailGroups.Count <= 1)
+        {
+            Warn("There has to be at least one group.");
+            return;
+        }
+        if (Dialogs.Ask(this, "Delete group", "Delete the thumbnail group \"" + group.Name + "\"? The characters' own settings are kept.", "Delete", "Cancel") != 0) return;
+        _work.ThumbnailGroups.Remove(group);
+        _work.ActiveThumbnailGroup = _work.ThumbnailGroups[0].Name;
+        LoadThumbGroups();
+        CommitCurrentQuietly();
+        RebuildCharacterLists();
+        SetStatus("Group deleted. Press Apply or Save to use it.", false);
+    }
+
+    // ---------- scanning for running clients ----------
+
+    private bool AddToShownGroup(string name)
+    {
+        var group = _shownThumbGroup;
+        if (group is null || name.Length == 0 || name.Length > 60 || name.StartsWith('[')) return false;
+        if (group.Characters.Contains(name, StringComparer.OrdinalIgnoreCase)) return false;
+        group.Characters.Add(name);
+        return true;
     }
 
     private void Scan_Click(object sender, RoutedEventArgs e) => RunScan();
 
     private void RunScan()
     {
+        CommitThumbRows(false);                       // keep what is typed in the lines
         var found = _manager.ScanCharacters();
         _running = new HashSet<string>(found, StringComparer.OrdinalIgnoreCase);
 
@@ -727,10 +1003,10 @@ public partial class SettingsWindow : Window
         _scanBoxes.Clear();
         foreach (string name in found)
         {
-            bool already = _work.Roster.Contains(name, StringComparer.OrdinalIgnoreCase);
+            bool already = _shownThumbGroup?.Characters.Contains(name, StringComparer.OrdinalIgnoreCase) ?? false;
             var box = new CheckBox
             {
-                Content = already ? name + "   (already in the list)" : name,
+                Content = already ? name + "   (already in the group)" : name,
                 IsChecked = !already,
                 IsEnabled = !already,
                 Margin = new Thickness(0, 0, 0, 8)
@@ -759,9 +1035,10 @@ public partial class SettingsWindow : Window
     private void AddScanned_Click(object sender, RoutedEventArgs e)
     {
         int added = 0;
+        CommitThumbRows(false);
         foreach (var (name, box) in _scanBoxes)
         {
-            if (box.IsEnabled && box.IsChecked == true && AddCharacterByName(name, false)) added++;
+            if (box.IsEnabled && box.IsChecked == true && AddToShownGroup(name)) added++;
         }
         if (added == 0)
         {
@@ -772,7 +1049,7 @@ public partial class SettingsWindow : Window
         CommitCurrentQuietly();
         RebuildCharacterLists();
         RunScan();
-        SetStatus($"Added {added} character(s) to the list. Press Apply or Save to use them.", false);
+        SetStatus($"Added {added} character(s) to the group. Press Apply or Save to use them.", false);
     }
 
     // ---------- characters page ----------
@@ -1162,6 +1439,37 @@ public partial class SettingsWindow : Window
         OpenPath(this, LogPath);
     }
 
+    // ---------- selectable text ----------
+
+    private static DependencyObject? ParentOf(DependencyObject d) =>
+        d is Visual || d is System.Windows.Media.Media3D.Visual3D ? VisualTreeHelper.GetParent(d) : LogicalTreeHelper.GetParent(d);
+
+    /// <summary>
+    /// The descriptions are read-only text boxes (so their text can be selected and copied). A text box swallows the mouse
+    /// wheel, so while the pointer is over one the wheel is passed on to the page to scroll it.
+    /// </summary>
+    private void OnPreviewMouseWheel(object sender, MouseWheelEventArgs e)
+    {
+        if (e.Handled || e.OriginalSource is not DependencyObject source) return;
+
+        TextBox? text = null;
+        for (DependencyObject? d = source; d is not null; d = ParentOf(d))
+        {
+            if (d is TextBox box) { text = box; break; }
+        }
+        if (text is null || text.Tag as string != "SelectableText") return;
+
+        for (DependencyObject? d = ParentOf(text); d is not null; d = ParentOf(d))
+        {
+            if (d is ScrollViewer page)
+            {
+                page.ScrollToVerticalOffset(page.VerticalOffset - e.Delta);
+                e.Handled = true;
+                return;
+            }
+        }
+    }
+
     // ---------- search ----------
 
     private static string TextOf(DependencyObject root)
@@ -1179,6 +1487,9 @@ public partial class SettingsWindow : Window
                     return;
                 case TextBlock tb:
                     sb.Append(tb.Text).Append(' ');
+                    break;
+                case TextBox box:
+                    sb.Append(box.Text).Append(' ');
                     break;
                 case HeaderedContentControl h when h.Header is string header:
                     sb.Append(header).Append(' ');
@@ -1327,7 +1638,8 @@ public partial class SettingsWindow : Window
 
         var fresh = new AppSettings
         {
-            Roster = _work.Roster,
+            ThumbnailGroups = _work.ThumbnailGroups,
+            ActiveThumbnailGroup = _work.ActiveThumbnailGroup,
             RosterInitialised = true,
             Characters = _work.Characters,
             SlotCharacters = _work.SlotCharacters,
@@ -1422,6 +1734,9 @@ public partial class SettingsWindow : Window
         if (!ProfileHotkeyBox.IsValid || !NextProfileBox.IsValid || !PrevProfileBox.IsValid)
             return Fail(PageHotkeys_, "One of the profile hotkeys isn't supported. Click the box and press the keys again, or use ✕ to clear it.");
 
+        // Thumbnail group: the characters typed in its lines
+        if (!CommitThumbRows(true)) return false;
+
         // Notifications
         if (!InRange(NotifyCooldownBox.Text, 0, 3600, out int cooldown))
             return Fail(PageNotifications_, "The cooldown must be 0 to 3600 seconds.");
@@ -1478,7 +1793,6 @@ public partial class SettingsWindow : Window
         _work.InactiveBorderStyle = InactiveStyleBox.SelectedItem as string ?? "Solid";
 
         _work.ShowLoginScreens = LoginScreensBox.IsChecked == true;
-        _work.ShowUnlistedCharacters = ShowUnlistedBox.IsChecked == true;
         _work.HideActiveThumbnail = HideActiveBox.IsChecked == true;
         _work.HideWhenEveNotFocused = HideUnfocusedBox.IsChecked == true;
         _work.HideDelayMs = hideDelay;
@@ -1486,14 +1800,9 @@ public partial class SettingsWindow : Window
         _work.CycleForwardHotkey = ForwardBox.Text;
         _work.CycleBackHotkey = BackBox.Text;
         _work.CycleIncludeLoginScreens = CycleLoginBox.IsChecked == true;
-        _work.ShowExcludedOverlay = ShowExcludedBox.IsChecked == true;
         _work.HotkeysOnlyInEve = HotkeysOnlyEveBox.IsChecked == true;
         _work.HotkeyPassThrough = PassThroughBox.IsChecked == true;
-        _work.ClientSlotHotkeys = new Dictionary<string, string>();
-        for (int i = 0; i < _slotFields.Count; i++)
-        {
-            if (_slotFields[i].Text.Length > 0) _work.ClientSlotHotkeys[(i + 1).ToString()] = _slotFields[i].Text;
-        }
+        CommitSlotGroup();
 
         _work.AutoMinimiseInactive = AutoMinBox.IsChecked == true;
         _work.AutoMinimiseKeepLastActive = KeepLastBox.IsChecked == true;

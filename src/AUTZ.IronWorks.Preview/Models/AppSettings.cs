@@ -29,6 +29,25 @@ public sealed class CharacterSettings
     public bool MinimiseOnLeave { get; set; }
 }
 
+/// <summary>A named set of client hotkeys: line 1 = the hotkey for the 1st client in the client order, line 2 = the 2nd, and so on.</summary>
+public sealed class SlotHotkeyGroup
+{
+    public string Name { get; set; } = "Default";
+    /// <summary>"1" = hotkey for the 1st client, "2" = the 2nd, and so on.</summary>
+    public Dictionary<string, string> Hotkeys { get; set; } = new();
+    /// <summary>How many client lines the group shows (at least 1).</summary>
+    public int Rows { get; set; } = 1;
+}
+
+/// <summary>A named list of characters. The group in use decides which characters get a thumbnail.</summary>
+public sealed class ThumbnailGroup
+{
+    public string Name { get; set; } = "Default";
+    public List<string> Characters { get; set; } = new();
+    /// <summary>True = logged-in characters that aren't in this group still get a thumbnail.</summary>
+    public bool ShowOthers { get; set; } = false;
+}
+
 /// <summary>Everything in one profile (a "layout"): appearance, behaviour, positions, per-character settings.</summary>
 public sealed class AppSettings
 {
@@ -85,11 +104,14 @@ public sealed class AppSettings
     public string InactiveBorderStyle { get; set; } = "Solid";
 
     // ----- which thumbnails are shown -----
-    /// <summary>The characters listed on the Thumbnails page.</summary>
+    /// <summary>Older versions: the characters listed on the Thumbnails page. Moved into the "Default" thumbnail group; kept only so old profiles still load.</summary>
     public List<string> Roster { get; set; } = new();
+    /// <summary>The thumbnail groups (lists of characters). The one named by ActiveThumbnailGroup is in use.</summary>
+    public List<ThumbnailGroup> ThumbnailGroups { get; set; } = new();
+    public string ActiveThumbnailGroup { get; set; } = "Default";
     /// <summary>False until the list has been filled in from the characters already known.</summary>
     public bool RosterInitialised { get; set; } = false;
-    /// <summary>True = logged-in characters that aren't in the list still get a thumbnail.</summary>
+    /// <summary>Older versions: now a setting of each thumbnail group (ShowOthers). Only read when an old profile is moved over.</summary>
     public bool ShowUnlistedCharacters { get; set; } = true;
     /// <summary>Show a thumbnail for clients that are still on the login screen.</summary>
     public bool ShowLoginScreens { get; set; } = true;
@@ -103,7 +125,7 @@ public sealed class AppSettings
     public string CycleForwardHotkey { get; set; } = "Ctrl+Alt+Right";
     public string CycleBackHotkey { get; set; } = "Ctrl+Alt+Left";
     public bool CycleIncludeLoginScreens { get; set; } = true;
-    /// <summary>Draw a red X on thumbnails that the next / previous hotkeys skip.</summary>
+    /// <summary>Older versions: the red X on skipped thumbnails was an option. It is always shown now; this value is ignored.</summary>
     public bool ShowExcludedOverlay { get; set; } = true;
     /// <summary>"Automatic" = clients are in the order they were opened. "Saved" = the order is remembered (new characters are added
     /// to the end by themselves). "Manual" = the order is whatever you set in Settings > Hotkeys.</summary>
@@ -112,8 +134,11 @@ public sealed class AppSettings
     public List<string> ClientOrder { get; set; } = new();
     /// <summary>True after "Reset order": the saved order is cleared the next time no EVE client is open, then builds again in opening order.</summary>
     public bool ClientOrderResetPending { get; set; } = false;
-    /// <summary>"1" = hotkey for the 1st client to open, "2" = the 2nd, and so on.</summary>
+    /// <summary>Older versions: the client hotkeys. Moved into the "Default" client-hotkey group; kept only so old profiles still load.</summary>
     public Dictionary<string, string> ClientSlotHotkeys { get; set; } = new();
+    /// <summary>The client-hotkey groups. The one named by ActiveClientHotkeyGroup is in use.</summary>
+    public List<SlotHotkeyGroup> ClientHotkeyGroups { get; set; } = new();
+    public string ActiveClientHotkeyGroup { get; set; } = "Default";
     /// <summary>Hotkeys only work while an EVE client is the window in front.</summary>
     public bool HotkeysOnlyInEve { get; set; } = false;
     /// <summary>The key or button still reaches the program as well (it is not swallowed).</summary>
@@ -175,6 +200,72 @@ public sealed class AppSettings
             Characters[name] = c;
         }
         return c;
+    }
+
+    // ---------- groups ----------
+
+    public SlotHotkeyGroup? FindSlotGroup(string? name) =>
+        ClientHotkeyGroups.FirstOrDefault(g => g.Name.Equals(name ?? "", StringComparison.OrdinalIgnoreCase));
+
+    public ThumbnailGroup? FindThumbGroup(string? name) =>
+        ThumbnailGroups.FirstOrDefault(g => g.Name.Equals(name ?? "", StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>The client hotkeys of the group in use.</summary>
+    public IReadOnlyDictionary<string, string> ActiveSlotHotkeys() =>
+        (FindSlotGroup(ActiveClientHotkeyGroup) ?? ClientHotkeyGroups.FirstOrDefault())?.Hotkeys ?? ClientSlotHotkeys;
+
+    /// <summary>The thumbnail group in use (null only for a profile that hasn't been through EnsureGroups yet).</summary>
+    public ThumbnailGroup? ActiveThumbGroup() =>
+        FindThumbGroup(ActiveThumbnailGroup) ?? ThumbnailGroups.FirstOrDefault();
+
+    /// <summary>Every character that is in any thumbnail group.</summary>
+    public IEnumerable<string> AllGroupCharacters() =>
+        ThumbnailGroups.SelectMany(g => g.Characters).Concat(Roster);
+
+    /// <summary>
+    /// Makes sure there is at least one group of each kind. A profile from an older version gets a "Default" group built
+    /// from what it had before (its client hotkeys, its character list, "also show other characters").
+    /// </summary>
+    public void EnsureGroups()
+    {
+        if (ClientHotkeyGroups.Count == 0)
+        {
+            var g = new SlotHotkeyGroup { Name = "Default" };
+            foreach (var pair in ClientSlotHotkeys)
+            {
+                if (!string.IsNullOrWhiteSpace(pair.Value)) g.Hotkeys[pair.Key] = pair.Value;
+            }
+            int highest = 0;
+            foreach (string key in g.Hotkeys.Keys)
+            {
+                if (int.TryParse(key, out int n) && n > highest) highest = n;
+            }
+            g.Rows = Math.Max(1, highest);
+            ClientHotkeyGroups.Add(g);
+            ClientSlotHotkeys = new Dictionary<string, string>();
+            ActiveClientHotkeyGroup = g.Name;
+        }
+        else if (FindSlotGroup(ActiveClientHotkeyGroup) is null)
+        {
+            ActiveClientHotkeyGroup = ClientHotkeyGroups[0].Name;
+        }
+
+        if (ThumbnailGroups.Count == 0)
+        {
+            var g = new ThumbnailGroup { Name = "Default", ShowOthers = ShowUnlistedCharacters };
+            foreach (string name in Roster)
+            {
+                string trimmed = (name ?? "").Trim();
+                if (trimmed.Length > 0 && !g.Characters.Contains(trimmed, StringComparer.OrdinalIgnoreCase)) g.Characters.Add(trimmed);
+            }
+            ThumbnailGroups.Add(g);
+            Roster = new List<string>();
+            ActiveThumbnailGroup = g.Name;
+        }
+        else if (FindThumbGroup(ActiveThumbnailGroup) is null)
+        {
+            ActiveThumbnailGroup = ThumbnailGroups[0].Name;
+        }
     }
 
     public AppSettings Clone() =>

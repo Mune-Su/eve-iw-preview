@@ -7,6 +7,14 @@ internal static class Changelog
 {
     public static readonly ChangelogEntry[] Entries =
     {
+        new("0.11.0", "Groups for client hotkeys and thumbnails, selectable text", new[]
+        {
+            "Client hotkeys (Settings > Hotkeys) now show just the first line, \"Client 1\". Press + to add a line for another client (and - to take the last one off).",
+            "Client hotkeys come in groups: keep several sets, and pick the group in use from the drop-down. New, Rename and Delete manage the groups. Your existing client hotkeys become the \"Default\" group.",
+            "The characters that get a thumbnail (Settings > Thumbnails) use the same design: groups, one line per character (tick it to show its thumbnail), and + to add another line. The group in use decides which thumbnails show; tick \"Also show thumbnails for logged-in characters that aren't in this group\" to show the others too. Your existing character list becomes the \"Default\" group, and Add selected under Find running clients adds to the group in use.",
+            "The red X on thumbnails that the next / previous hotkeys skip is no longer an option: it is always shown, and the Skipped clients card just says so.",
+            "Text in the Configuration window can now be selected and copied (descriptions, notes, the folder paths, the status line and the version). The labels next to tick boxes and radio buttons still toggle when clicked, so they can't be selected."
+        }),
         new("0.10.2", "Build fix for 0.10.1", new[]
         {
             "Fixed: 0.10.1 didn't build (an out parameter was used inside a local function in the client-order code). Nothing else changed: everything in 0.10.1 is in this version."

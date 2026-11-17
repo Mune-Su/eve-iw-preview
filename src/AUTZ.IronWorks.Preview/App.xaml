@@ -397,12 +397,33 @@
             </Setter>
         </Style>
 
+        <!-- text you can select and copy: a read-only text box with no border or background, so it looks like plain text.
+             (A TextBlock can't be selected in WPF.) Tag lets the settings window pass the mouse wheel on to the page. -->
+        <Style x:Key="SelectableText" TargetType="TextBox">
+            <Setter Property="IsReadOnly" Value="True"/>
+            <Setter Property="IsTabStop" Value="False"/>
+            <Setter Property="Tag" Value="SelectableText"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Padding" Value="0"/>
+            <Setter Property="Margin" Value="0"/>
+            <Setter Property="Foreground" Value="{StaticResource BrushText}"/>
+            <Setter Property="SelectionBrush" Value="{StaticResource BrushAccent}"/>
+            <Setter Property="SelectionOpacity" Value="0.55"/>
+            <Setter Property="TextWrapping" Value="Wrap"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="TextBox">
+                        <ScrollViewer x:Name="PART_ContentHost" Focusable="False" Background="Transparent"
+                                      HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Disabled"/>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
         <!-- website .note / p: muted, not italic -->
-        <Style x:Key="Desc" TargetType="TextBlock">
+        <Style x:Key="Desc" TargetType="TextBox" BasedOn="{StaticResource SelectableText}">
             <Setter Property="Foreground" Value="{StaticResource BrushMuted}"/>
             <Setter Property="FontSize" Value="12.5"/>
-            <Setter Property="TextWrapping" Value="Wrap"/>
-            <Setter Property="LineHeight" Value="18"/>
             <Setter Property="Margin" Value="0,0,0,12"/>
         </Style>
 
@@ -420,7 +441,7 @@
             </Style.Triggers>
         </Style>
         <!-- website label: muted 13px -->
-        <Style x:Key="FieldLabel" TargetType="TextBlock">
+        <Style x:Key="FieldLabel" TargetType="TextBox" BasedOn="{StaticResource SelectableText}">
             <Setter Property="Foreground" Value="{StaticResource BrushMuted}"/>
             <Setter Property="FontWeight" Value="SemiBold"/>
             <Setter Property="Margin" Value="0,4,0,6"/>
