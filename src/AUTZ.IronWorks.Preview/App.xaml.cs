@@ -37,6 +37,16 @@ public partial class App : System.Windows.Application
         _ownsMutex = true;
 
         var (settings, state) = ProfileStore.LoadActive();
+
+        // the logs hold no names any more: the key that makes the name codes is created once, and logs written by
+        // older versions (which did hold names) are deleted once
+        bool stateChanged = false;
+        if (string.IsNullOrEmpty(state.LogSalt)) { state.LogSalt = Guid.NewGuid().ToString("N"); stateChanged = true; }
+        Log.Salt = state.LogSalt;
+        if (!state.LogsScrubbed) { Log.DeleteOldLogs(); state.LogsScrubbed = true; stateChanged = true; }
+        if (stateChanged) ProfileStore.SaveState(state);
+
+        Log.PerSessionFiles = state.DebugLogMode == "PerSession";
         Log.Verbose = state.DebugLogging;
         _manager = new PreviewManager(settings, state);
 

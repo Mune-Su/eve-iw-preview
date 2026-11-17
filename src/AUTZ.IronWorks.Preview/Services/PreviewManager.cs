@@ -48,6 +48,7 @@ public sealed class PreviewManager : IDisposable
     private readonly DispatcherTimer _displayTimer = new() { Interval = TimeSpan.FromMilliseconds(1500) };
     private readonly DispatcherTimer _refreshSoonTimer = new() { Interval = TimeSpan.FromMilliseconds(60) };
     private IReadOnlyList<EveClientWindow> _clients = Array.Empty<EveClientWindow>();
+    private Dictionary<nint, string> _loginAssign = new();   // v0.10.0: login screen -> the saved character whose place it holds
     private SettingsWindow? _settingsWindow;
 
     private bool _visible = true;          // the tray "hide / show all thumbnails" switch
@@ -65,6 +66,7 @@ public sealed class PreviewManager : IDisposable
     private bool _blink;
 
     public bool ThumbnailsVisible => _visible;
+    public bool SettingsOpen => _settingsWindow is not null;
     public bool HotkeysSuspended { get; private set; }
     public AppSettings Settings => _settings;
     public AppState State => _state;
@@ -161,10 +163,11 @@ public sealed class PreviewManager : IDisposable
 
     public void Refresh()
     {
-        _clients = _eve.FindClients();   // already in the order the clients were opened
+        _clients = OrderClients(_eve.FindClients());   // the client order: opening order, or the saved / manual order
         if (Log.Verbose)
         {
-            string list = string.Join(", ", _clients.Select((c, i) => $"#{i + 1} {(c.IsLoginScreen ? "[login]" : c.CharacterName)} 0x{c.Handle:X}"));
+            string list = $"(order: {_settings.ClientOrderMode}) " +
+                string.Join(", ", _clients.Select((c, i) => $"#{i + 1} {(c.IsLoginScreen ? "[login]" : c.CharacterName)} 0x{c.Handle:X}"));
             if (list != _lastClientList)
             {
                 _lastClientList = list;
@@ -220,6 +223,67 @@ public sealed class PreviewManager : IDisposable
         // (every 1.5 s) overwrite the active client with it.
         if (IsPending()) SyncForeground(_pendingTarget, true);
         else SyncForeground(NativeMethods.GetForegroundWindow(), true);
+    }
+
+    // ---------- client order ----------
+
+    /// <summary>Puts the clients (given oldest first) in the order the profile asks for. "Saved" also remembers new characters and handles "Reset order".</summary>
+    private IReadOnlyList<EveClientWindow> OrderClients(IReadOnlyList<EveClientWindow> openOrder)
+    {
+        if (_settings.ClientOrderResetPending)
+        {
+            if (_settings.ClientOrderMode != AppSettings.OrderSaved)
+            {
+                Persist(s => s.ClientOrderResetPending = false);               // the mode changed since: nothing to reset
+            }
+            else if (openOrder.Count == 0)
+            {
+                // every client is closed (or none was ever detected): wipe the list, it builds again as clients open
+                Log.Debug("ORDER", "saved order cleared (no EVE clients are open)");
+                Persist(s =>
+                {
+                    s.ClientOrder.Clear();
+                    s.ClientOrderResetPending = false;
+                });
+            }
+        }
+
+        if (_settings.ClientOrderMode == AppSettings.OrderSaved)
+        {
+            var list = new List<string>(_settings.ClientOrder);
+            var added = new List<string>();
+            foreach (var client in openOrder.Where(c => !c.IsLoginScreen))
+            {
+                if (list.Contains(client.CharacterName, StringComparer.OrdinalIgnoreCase)) continue;
+                ClientOrdering.AddInPlace(list, client.CharacterName, openOrder);
+                added.Add(client.CharacterName);
+            }
+            if (added.Count > 0)
+            {
+                Log.Debug("ORDER", "saved order: adding " + string.Join(", ", added));
+                Persist(s => s.ClientOrder = new List<string>(list));
+            }
+        }
+
+        var ordered = ClientOrdering.Apply(openOrder, _settings, out var assign);
+        _loginAssign = assign;
+        return ordered;
+    }
+
+    public bool OrderResetPending => _settings.ClientOrderResetPending;
+
+    /// <summary>"Reset order": the saved order is cleared the next time no EVE client is open (at once if none is open now).</summary>
+    public void ArmClientOrderReset()
+    {
+        Log.Debug("ORDER", "reset order requested");
+        Persist(s => s.ClientOrderResetPending = true);
+        Refresh();
+    }
+
+    public void CancelClientOrderReset()
+    {
+        Log.Debug("ORDER", "reset order cancelled");
+        Persist(s => s.ClientOrderResetPending = false);
     }
 
     // ---------- switch in progress ----------
@@ -289,6 +353,10 @@ public sealed class PreviewManager : IDisposable
     {
         if (_settings.PositionMode == AppSettings.ModeClient) return $"[client {slot}]";
         if (!client.IsLoginScreen) return client.CharacterName;
+
+        // saved / manual order: a login screen sits where the saved character whose place it holds will be
+        if (_settings.ClientOrderMode != AppSettings.OrderAutomatic && _loginAssign.TryGetValue(client.Handle, out var held))
+            return held;
 
         if (_settings.SlotCharacters.TryGetValue(slot.ToString(), out var mapped) &&
             !string.IsNullOrWhiteSpace(mapped) &&
@@ -755,6 +823,7 @@ public sealed class PreviewManager : IDisposable
 
     public void ApplySettings()
     {
+        RegisterLogNames();
         _scanTimer.Interval = TimeSpan.FromMilliseconds(Math.Clamp(_settings.RefreshMilliseconds, 500, 10000));
         LogSettings("settings applied");
 
@@ -781,10 +850,22 @@ public sealed class PreviewManager : IDisposable
         RegisterHotkeys();
     }
 
+    /// <summary>The logs never show a character or profile name, only a code: tell the log which names to replace.</summary>
+    private void RegisterLogNames()
+    {
+        foreach (string name in _settings.Characters.Keys.Where(AppSettings.IsCharacterKey)) Log.RegisterPilot(name);
+        foreach (string name in _settings.Roster) Log.RegisterPilot(name);
+        foreach (string name in _settings.ClientOrder) Log.RegisterPilot(name);
+        foreach (string name in _settings.SlotCharacters.Values) Log.RegisterPilot(name);
+        Log.RegisterProfile(_state.ActiveProfile);
+        foreach (string name in ProfileStore.List()) Log.RegisterProfile(name);
+    }
+
     /// <summary>Detailed log: the settings that change what happens when you switch clients.</summary>
     private void LogSettings(string why)
     {
         if (!Log.Verbose) return;
+        RegisterLogNames();            // so no name can reach the log before it has been registered
         var s = _settings;
         Log.Debug("SETTINGS", $"{why}: profile '{_state.ActiveProfile}'" +
             $" | auto-minimise {(s.AutoMinimiseInactive ? $"ON delay {s.AutoMinimiseDelaySeconds}s keepLast {s.AutoMinimiseKeepLastActive} onStart {s.AutoMinimiseOnStart}" : "off")}" +
@@ -803,6 +884,7 @@ public sealed class PreviewManager : IDisposable
     public void SetDebugLogging(bool on)
     {
         _state.DebugLogging = on;
+        Log.PerSessionFiles = _state.DebugLogMode == "PerSession";
         Log.Verbose = on;
         ProfileStore.SaveState(_state);
         if (on)
@@ -934,6 +1016,9 @@ public sealed class PreviewManager : IDisposable
         _state.RunOnStartup = disk.RunOnStartup;
         StartupService.Set(_state.RunOnStartup);
         _state.DebugLogging = disk.DebugLogging;
+        _state.DebugLogMode = disk.DebugLogMode;
+        _state.PinTrayIcon = disk.PinTrayIcon;
+        Log.PerSessionFiles = disk.DebugLogMode == "PerSession";
         Log.Verbose = disk.DebugLogging;
 
         var saved = ProfileStore.Exists(disk.ActiveProfile) ? ProfileStore.Load(disk.ActiveProfile) : new AppSettings();
@@ -968,7 +1053,11 @@ public sealed class PreviewManager : IDisposable
         _state.RunOnStartup = global.RunOnStartup;
         StartupService.Set(_state.RunOnStartup);
         _state.DebugLogging = global.DebugLogging;
+        _state.DebugLogMode = global.DebugLogMode;
+        _state.PinTrayIcon = global.PinTrayIcon;
+        Log.PerSessionFiles = global.DebugLogMode == "PerSession";
         Log.Verbose = global.DebugLogging;
+        if (_state.PinTrayIcon) TrayPinService.Promote();
     }
 
     /// <summary>
@@ -994,13 +1083,17 @@ public sealed class PreviewManager : IDisposable
             }
         }
         foreach (var slot in _settings.SlotCharacters) incoming.SlotCharacters[slot.Key] = slot.Value;
+
+        // the "Saved" order builds itself while the window is open, and "Reset order" acts at once: the live values win
+        incoming.ClientOrderResetPending = _settings.ClientOrderResetPending;
+        if (_settings.ClientOrderMode == AppSettings.OrderSaved && incoming.ClientOrderMode == AppSettings.OrderSaved)
+            incoming.ClientOrder = new List<string>(_settings.ClientOrder);
     }
 
     // ---------- profiles ----------
 
     public void SwitchProfile(string name)
     {
-        if (_settingsWindow is not null) return;
         if (name.Equals(_state.ActiveProfile, StringComparison.OrdinalIgnoreCase) || !ProfileStore.Exists(name)) return;
 
         foreach (nint handle in _windows.Keys.ToList()) CloseWindow(handle, false);
@@ -1013,6 +1106,9 @@ public sealed class PreviewManager : IDisposable
 
         ApplySettings();
         Refresh();
+
+        // the Configuration window shows the same profile list: it follows the switch
+        _settingsWindow?.FollowActiveProfile(name);
     }
 
     private void CycleProfile(int direction)
@@ -1092,7 +1188,7 @@ public sealed class PreviewManager : IDisposable
     private List<EveClientWindow> CurrentClients()
     {
         var list = _clients.Where(c => NativeMethods.IsWindow(c.Handle)).ToList();
-        if (list.Count == 0 || list.Count != _clients.Count) list = _eve.FindClients().ToList();
+        if (list.Count == 0 || list.Count != _clients.Count) list = OrderClients(_eve.FindClients()).ToList();
         return list;
     }
 

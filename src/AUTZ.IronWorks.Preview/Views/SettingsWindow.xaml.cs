@@ -54,6 +54,8 @@ public partial class SettingsWindow : Window
     private readonly List<(string Name, CheckBox Box)> _scanBoxes = new();
     private readonly List<HotkeyField> _slotFields = new();
     private HashSet<string> _running;
+    private readonly List<string> _runningList;    // the logged-in characters, in client order
+    private bool _orderLoading;
     private List<string> _characters = new();
     private AppSettings _work;                 // the profile shown right now (a copy: nothing real changes until APPLY or SAVE)
     private AppState _state;
@@ -76,7 +78,8 @@ public partial class SettingsWindow : Window
         _shownProfile = _activeProfile;
         _work = manager.Settings.Clone();
         _edited[_shownProfile] = _work;
-        _running = new HashSet<string>(manager.RunningCharacters(), StringComparer.OrdinalIgnoreCase);
+        _runningList = manager.RunningCharacters().ToList();
+        _running = new HashSet<string>(_runningList, StringComparer.OrdinalIgnoreCase);
 
         // drop-down contents
         FontBox.ItemsSource = Fonts.SystemFontFamilies.Select(f => f.Source).OrderBy(n => n, StringComparer.OrdinalIgnoreCase).ToList();
@@ -102,6 +105,8 @@ public partial class SettingsWindow : Window
         PrevProfileBox.Text = _state.PreviousProfileHotkey;
         RunOnStartupBox.IsChecked = _state.RunOnStartup;
         DebugLogBox.IsChecked = _state.DebugLogging;
+        (_state.DebugLogMode == "PerSession" ? DebugSessionRadio : DebugContinuousRadio).IsChecked = true;
+        PinTrayBox.IsChecked = _state.PinTrayIcon;
         WhatsNewCombo.SelectedIndex = _state.WhatsNewMode switch { "Always" => 1, "Never" => 2, _ => 0 };
 
         VersionText.Text = "v" + AppInfo.Version;
@@ -124,11 +129,11 @@ public partial class SettingsWindow : Window
 
     private void BuildNav()
     {
-        _pages.Add(new PageDef("General", PageGeneral, new Control[] { CardPositions, CardSize, CardInteraction, CardStartup, CardScanning }));
+        _pages.Add(new PageDef("General", PageGeneral, new Control[] { CardPositions, CardSize, CardInteraction, CardStartup, CardTray, CardScanning }));
         _pages.Add(new PageDef("Appearance", PageAppearance, new Control[] { CardOpacity, CardLabel, CardLabelBg, CardActiveBorder, CardInactiveBorder }));
         _pages.Add(new PageDef("Thumbnails", PageThumbs, new Control[] { CardRoster, CardScan, CardHiding }));
         _pages.Add(new PageDef("Characters", PageCharacters, new Control[] { CardCharacter, CardCharSize, CardCharHotkey, CardCharActions }));
-        _pages.Add(new PageDef("Hotkeys", PageHotkeys, new Control[] { CardCycling, CardHotkeyOptions, CardSlotKeys, CardSkipped, CardProfileKeys }));
+        _pages.Add(new PageDef("Hotkeys", PageHotkeys, new Control[] { CardCycling, CardClientOrder, CardHotkeyOptions, CardSlotKeys, CardSkipped, CardProfileKeys }));
         _pages.Add(new PageDef("Clients", PageClients, new Control[] { CardAutoMin, CardNeverMin }));
         _pages.Add(new PageDef("Notifications", PageNotifications, new Control[] { CardNotifyMain, CardNotifyHow }));
         _pages.Add(new PageDef("Log Monitoring", PageLogs, new Control[] { CardLogMain, CardLogFolders, CardLogEvents, CardLogSystem }));
@@ -290,6 +295,13 @@ public partial class SettingsWindow : Window
         ForwardBox.Text = s.CycleForwardHotkey;
         BackBox.Text = s.CycleBackHotkey;
         CycleLoginBox.IsChecked = s.CycleIncludeLoginScreens;
+        _orderLoading = true;
+        try
+        {
+            (s.ClientOrderMode == AppSettings.OrderManual ? OrderManualRadio :
+             s.ClientOrderMode == AppSettings.OrderSaved ? OrderSavedRadio : OrderAutoRadio).IsChecked = true;
+        }
+        finally { _orderLoading = false; }
         ShowExcludedBox.IsChecked = s.ShowExcludedOverlay;
         HotkeysOnlyEveBox.IsChecked = s.HotkeysOnlyInEve;
         PassThroughBox.IsChecked = s.HotkeyPassThrough;
@@ -419,6 +431,7 @@ public partial class SettingsWindow : Window
             _rosterBoxes.Add((name, box));
         }
 
+        RebuildOrderList();
         BuildTickList(SkipChecks, c => c.ExcludeFromCycling, (c, v) => c.ExcludeFromCycling = v);
         BuildTickList(MinChecks, c => c.NeverMinimise, (c, v) => c.NeverMinimise = v);
 
@@ -450,6 +463,161 @@ public partial class SettingsWindow : Window
             CharActionBox.SelectedIndex = 0;
             CharMinLeaveBox.IsChecked = false;
         }
+    }
+
+    // ---------- client order ----------
+
+    private static string ModeOfRadios(bool manual, bool saved) =>
+        manual ? AppSettings.OrderManual : saved ? AppSettings.OrderSaved : AppSettings.OrderAutomatic;
+
+    private void OrderMode_Changed(object sender, RoutedEventArgs e)
+    {
+        if (_orderLoading || _work is null) return;
+        _work.ClientOrderMode = ModeOfRadios(OrderManualRadio.IsChecked == true, OrderSavedRadio.IsChecked == true);
+        RebuildOrderList();
+    }
+
+    /// <summary>Known characters that aren't in the order yet: the logged-in ones first (in client order), then the rest A-Z.</summary>
+    private List<string> PendingOrderCharacters()
+    {
+        var cmp = StringComparer.OrdinalIgnoreCase;
+        var order = _work.ClientOrder;
+        var others = _work.Roster
+            .Concat(_work.Characters.Keys.Where(AppSettings.IsCharacterKey))
+            .Concat(_work.SlotCharacters.Values.Where(v => !string.IsNullOrWhiteSpace(v)))
+            .Except(_runningList, cmp)
+            .Distinct(cmp)
+            .OrderBy(n => n, cmp);
+        return _runningList.Concat(others)
+            .Distinct(cmp)
+            .Where(n => !order.Contains(n, cmp))
+            .ToList();
+    }
+
+    private void RebuildOrderList()
+    {
+        if (OrderChecks is null || _work is null) return;
+        OrderChecks.Children.Clear();
+        OrderListPanel.Visibility = _work.ClientOrderMode == AppSettings.OrderManual ? Visibility.Visible : Visibility.Collapsed;
+        OrderSavedPanel.Visibility = _work.ClientOrderMode == AppSettings.OrderSaved ? Visibility.Visible : Visibility.Collapsed;
+        if (_work.ClientOrderMode == AppSettings.OrderSaved) UpdateSavedOrderPanel();
+        if (_work.ClientOrderMode != AppSettings.OrderManual) return;
+
+        var order = _work.ClientOrder;
+        for (int i = 0; i < order.Count; i++)
+        {
+            int index = i;
+            string name = order[i];
+            var row = new Grid { Margin = new Thickness(0, 0, 0, 6) };
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+            var box = new CheckBox
+            {
+                Content = $"{i + 1}.  {name}" + (_running.Contains(name) ? "   (logged in)" : ""),
+                IsChecked = true,
+                Margin = new Thickness(0),
+                VerticalAlignment = VerticalAlignment.Center,
+                ToolTip = "Untick to take this character out of the order"
+            };
+            box.Click += (_, _) =>
+            {
+                if (box.IsChecked != true) order.RemoveAt(index);
+                RebuildOrderList();
+            };
+
+            var up = new Button { Content = "▲", FontSize = 11, Padding = new Thickness(10, 3, 10, 3), Margin = new Thickness(8, 0, 0, 0), IsEnabled = index > 0, ToolTip = "Move up" };
+            up.Click += (_, _) => MoveInOrder(index, -1);
+            var down = new Button { Content = "▼", FontSize = 11, Padding = new Thickness(10, 3, 10, 3), Margin = new Thickness(4, 0, 0, 0), IsEnabled = index < order.Count - 1, ToolTip = "Move down" };
+            down.Click += (_, _) => MoveInOrder(index, 1);
+
+            Grid.SetColumn(up, 1);
+            Grid.SetColumn(down, 2);
+            row.Children.Add(box);
+            row.Children.Add(up);
+            row.Children.Add(down);
+            OrderChecks.Children.Add(row);
+        }
+
+        // known characters that aren't part of the order yet: shown unticked, and only counted once ticked
+        foreach (string name in PendingOrderCharacters())
+        {
+            string chosen = name;
+            var box = new CheckBox
+            {
+                Content = name + (_running.Contains(name) ? "   (logged in)" : "") + "   (not in the order)",
+                IsChecked = false,
+                Margin = new Thickness(0, 0, 0, 6),
+                ToolTip = "Tick to add this character to the end of the order"
+            };
+            box.Click += (_, _) =>
+            {
+                if (box.IsChecked == true && !order.Contains(chosen, StringComparer.OrdinalIgnoreCase)) order.Add(chosen);
+                RebuildOrderList();
+            };
+            OrderChecks.Children.Add(box);
+        }
+
+        NoOrderText.Visibility = OrderChecks.Children.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    /// <summary>The "Saved" order as it is right now (it builds itself while the window is open), and the state of "Reset order".</summary>
+    private void UpdateSavedOrderPanel()
+    {
+        bool isActive = _shownProfile.Equals(_activeProfile, StringComparison.OrdinalIgnoreCase);
+        var order = isActive ? _manager.Settings.ClientOrder : _work.ClientOrder;
+        SavedOrderText.Text = order.Count == 0
+            ? "Nothing saved yet. It builds up by itself as your clients log in."
+            : string.Join("\n", order.Select((n, i) => $"{i + 1}.  {n}" + (_running.Contains(n) ? "   (logged in)" : "")));
+
+        bool pending = isActive && _manager.OrderResetPending;
+        ResetOrderBtn.IsEnabled = isActive && !pending;
+        CancelResetBtn.Visibility = pending ? Visibility.Visible : Visibility.Collapsed;
+        OrderResetNote.Visibility = pending || !isActive ? Visibility.Visible : Visibility.Collapsed;
+        OrderResetNote.Text = !isActive
+            ? "Switch to this profile first: Reset order works on the profile that is running."
+            : "Reset is waiting: the saved order will be cleared the next time no EVE clients are open, then built again in the order they open.";
+    }
+
+    private void ResetOrder_Click(object sender, RoutedEventArgs e)
+    {
+        if (Dialogs.Ask(this, "Reset client order",
+                "Clear the saved client order?\n\nIt is cleared the next time all your EVE clients are closed (or none are open), then built again in the order the clients are opened. Nothing changes until then.",
+                "Reset", "Cancel") != 0) return;
+        _manager.ArmClientOrderReset();
+        UpdateSavedOrderPanel();
+        SetStatus(_manager.OrderResetPending
+            ? "Reset order is set: it happens the next time no EVE clients are open."
+            : "The saved order was cleared and will build again as your clients open.", true);
+    }
+
+    private void CancelReset_Click(object sender, RoutedEventArgs e)
+    {
+        _manager.CancelClientOrderReset();
+        UpdateSavedOrderPanel();
+        SetStatus("Reset order cancelled.", true);
+    }
+
+    private void MoveInOrder(int index, int direction)
+    {
+        var order = _work.ClientOrder;
+        int to = index + direction;
+        if (index < 0 || index >= order.Count || to < 0 || to >= order.Count) return;
+        (order[index], order[to]) = (order[to], order[index]);
+        RebuildOrderList();
+    }
+
+    private void OrderTickAll_Click(object sender, RoutedEventArgs e)
+    {
+        _work.ClientOrder.AddRange(PendingOrderCharacters());
+        RebuildOrderList();
+    }
+
+    private void OrderUntickAll_Click(object sender, RoutedEventArgs e)
+    {
+        _work.ClientOrder.Clear();
+        RebuildOrderList();
     }
 
     private void BuildTickList(StackPanel host, Func<CharacterSettings, bool> get, Action<CharacterSettings, bool> set)
@@ -753,6 +921,24 @@ public partial class SettingsWindow : Window
         return true;
     }
 
+    /// <summary>
+    /// The tray menu switched the running profile while this window is open: show the same profile here. Edits that are
+    /// still on screen for the profile that was shown are kept (they stay unsaved, like when you change profile in the box).
+    /// </summary>
+    public void FollowActiveProfile(string name)
+    {
+        bool before = _quiet;
+        _quiet = true;
+        try { TryApply(); }                      // an invalid field is simply not kept: the switch never waits on it
+        finally { _quiet = before; }
+        StoreProfileHotkeyEdit();
+        _edited[_shownProfile] = _work;
+
+        _activeProfile = name;
+        ShowProfile(name);
+        SetStatus($"Switched to profile “{name}” from the tray menu.", true);
+    }
+
     private void ProfileBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
         if (_loading || ProfileBox.SelectedItem is not string name) return;
@@ -941,6 +1127,8 @@ public partial class SettingsWindow : Window
         e.Handled = true;
     }
 
+    private void OpenTaskbarSettings_Click(object sender, RoutedEventArgs e) => OpenPath(this, "ms-settings:taskbar");
+
     private void OpenFolder_Click(object sender, RoutedEventArgs e)
     {
         try { Directory.CreateDirectory(DataFolder); } catch { }
@@ -949,12 +1137,13 @@ public partial class SettingsWindow : Window
 
     private void OpenDebugLog_Click(object sender, RoutedEventArgs e)
     {
-        if (!File.Exists(Log.DebugPath))
+        string? latest = Log.LatestDebugPath();
+        if (latest is null)
         {
             Dialogs.Info(this, "There's no debug log yet. Tick Detailed logging, press Apply or Save, then use the app.");
             return;
         }
-        OpenPath(this, Log.DebugPath);
+        OpenPath(this, latest);
     }
 
     private void ClearDebugLog_Click(object sender, RoutedEventArgs e)
@@ -1051,7 +1240,7 @@ public partial class SettingsWindow : Window
     }
 
     private string StateSnapshot() => string.Join("|",
-        _state.NextProfileHotkey, _state.PreviousProfileHotkey, _state.RunOnStartup, _state.WhatsNewMode, _state.DebugLogging,
+        _state.NextProfileHotkey, _state.PreviousProfileHotkey, _state.RunOnStartup, _state.WhatsNewMode, _state.DebugLogging, _state.DebugLogMode, _state.PinTrayIcon,
         string.Join(",", _profileHotkeys.OrderBy(p => p.Key, StringComparer.OrdinalIgnoreCase)
             .Where(p => p.Value.Length > 0).Select(p => p.Key + "=" + p.Value)));
 
@@ -1066,6 +1255,8 @@ public partial class SettingsWindow : Window
             .ToDictionary(p => p.Key, p => p.Value);
         _state.RunOnStartup = RunOnStartupBox.IsChecked == true;
         _state.DebugLogging = DebugLogBox.IsChecked == true;
+        _state.DebugLogMode = DebugSessionRadio.IsChecked == true ? "PerSession" : "Continuous";
+        _state.PinTrayIcon = PinTrayBox.IsChecked == true;
         _state.WhatsNewMode = WhatsNewCombo.SelectedIndex switch { 1 => "Always", 2 => "Never", _ => "Update" };
     }
 
@@ -1139,7 +1330,8 @@ public partial class SettingsWindow : Window
             Roster = _work.Roster,
             RosterInitialised = true,
             Characters = _work.Characters,
-            SlotCharacters = _work.SlotCharacters
+            SlotCharacters = _work.SlotCharacters,
+            ClientOrder = _work.ClientOrder
         };
         _work = fresh;
         _edited[_shownProfile] = _work;
@@ -1252,6 +1444,7 @@ public partial class SettingsWindow : Window
         }
 
         _work.PositionMode = ModeClientRadio.IsChecked == true ? AppSettings.ModeClient : AppSettings.ModeCharacter;
+        _work.ClientOrderMode = ModeOfRadios(OrderManualRadio.IsChecked == true, OrderSavedRadio.IsChecked == true);
         _work.NewCharactersInheritPosition = InheritBox.IsChecked == true;
         _work.SameSizeForAll = SameSizeBox.IsChecked == true;
         _work.PreviewWidth = width;

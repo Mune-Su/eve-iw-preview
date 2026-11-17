@@ -35,6 +35,10 @@ public sealed class AppSettings
     public const string ModeCharacter = "Character";
     public const string ModeClient = "Client";
 
+    public const string OrderAutomatic = "Automatic";
+    public const string OrderSaved = "Saved";
+    public const string OrderManual = "Manual";
+
     // ----- general -----
     /// <summary>"Character": a character's thumbnail follows them. "Client": the Nth client to open always uses the Nth position.</summary>
     public string PositionMode { get; set; } = ModeCharacter;
@@ -101,6 +105,13 @@ public sealed class AppSettings
     public bool CycleIncludeLoginScreens { get; set; } = true;
     /// <summary>Draw a red X on thumbnails that the next / previous hotkeys skip.</summary>
     public bool ShowExcludedOverlay { get; set; } = true;
+    /// <summary>"Automatic" = clients are in the order they were opened. "Saved" = the order is remembered (new characters are added
+    /// to the end by themselves). "Manual" = the order is whatever you set in Settings > Hotkeys.</summary>
+    public string ClientOrderMode { get; set; } = OrderAutomatic;
+    /// <summary>Characters in client order, for "Saved" and "Manual". A character that isn't in the list sits after the ones that are.</summary>
+    public List<string> ClientOrder { get; set; } = new();
+    /// <summary>True after "Reset order": the saved order is cleared the next time no EVE client is open, then builds again in opening order.</summary>
+    public bool ClientOrderResetPending { get; set; } = false;
     /// <summary>"1" = hotkey for the 1st client to open, "2" = the 2nd, and so on.</summary>
     public Dictionary<string, string> ClientSlotHotkeys { get; set; } = new();
     /// <summary>Hotkeys only work while an EVE client is the window in front.</summary>
@@ -192,6 +203,14 @@ public sealed class AppState
     public string LastSeenVersion { get; set; } = "";
     /// <summary>Detailed (admin) logging to debug.log. App-wide, not per profile.</summary>
     public bool DebugLogging { get; set; } = false;
+    /// <summary>"Continuous" = one debug.log that carries on. "PerSession" = a new debug-DATE_TIME.log every time detailed logging is turned on.</summary>
+    public string DebugLogMode { get; set; } = "Continuous";
+    /// <summary>Keep the tray icon on the main tray instead of the hidden-icons overflow (Windows 11).</summary>
+    public bool PinTrayIcon { get; set; } = true;
+    /// <summary>A random value mixed into the codes that replace names in the logs (so the codes can't be matched against a list of names).</summary>
+    public string LogSalt { get; set; } = "";
+    /// <summary>True once the logs written before names were removed from them have been deleted (done once).</summary>
+    public bool LogsScrubbed { get; set; } = false;
 
     public AppState Clone() =>
         JsonSerializer.Deserialize<AppState>(JsonSerializer.Serialize(this)) ?? new AppState();

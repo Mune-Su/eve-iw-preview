@@ -6,6 +6,19 @@ A lightweight Windows utility for permanent live previews of your running EVE On
 
 **Run it:** double-click `EVE-IW-Preview.exe` in this folder (needs the .NET 8 Desktop Runtime, already installed if you have the .NET SDK). It runs in the **system tray only** (no taskbar button): right-click the tray icon for the menu, double-click it for Configuration.
 
+## v0.10.2
+- Build fix for 0.10.1 (client-order code). Same features as 0.10.1.
+
+## v0.10.1
+- **Reset order** (Settings > Hotkeys > Client order, Saved mode): clears the saved order the next time all EVE clients are closed (or none are open); it then builds again in the order the clients are opened. Can be cancelled first.
+- **Private logs:** debug.log and preview.log hold no names or personal data, so a log can be shared. Character and profile names appear as a short code (Pilot-3FA9C1), other windows' titles are never written, and your Windows user name, PC name, folder paths, e-mail addresses and game-log file names are removed. Logs from older versions are deleted once on first start.
+- **Tray Profiles menu** switches profile even while the Configuration window is open, and the window follows.
+
+## v0.10.0
+- **Client order** (Settings > Hotkeys): Automatic (the order the clients were opened), Saved (the order is remembered, so closing and reopening a client puts it back in the same place; new characters join the end by themselves) or Manual (you set the order with the arrows; a new character shows up unticked and only counts once you tick it). A client on the login screen takes the first free place in the list. Saved per profile; Next / Previous, the numbered positions and the client hotkeys all follow it.
+- **Tray menu:** a Profiles menu to switch profile, and the tray icon is kept on the taskbar instead of the hidden-icons arrow (Windows 11; Settings > General > Tray icon).
+- **Debug log:** one continuous debug.log, or a new debug-DATE_TIME.log each time detailed logging is turned on (Settings > About > Diagnostics). The newest 20 are kept.
+
 ## v0.9.9
 - Holding Next / Previous no longer makes the active-client highlight jump back to a client you already passed. Late focus reports from earlier clients are ignored for 250 ms after each switch.
 

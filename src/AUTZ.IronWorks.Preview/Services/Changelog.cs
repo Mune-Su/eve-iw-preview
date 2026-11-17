@@ -7,6 +7,27 @@ internal static class Changelog
 {
     public static readonly ChangelogEntry[] Entries =
     {
+        new("0.10.2", "Build fix for 0.10.1", new[]
+        {
+            "Fixed: 0.10.1 didn't build (an out parameter was used inside a local function in the client-order code). Nothing else changed: everything in 0.10.1 is in this version."
+        }),
+        new("0.10.1", "Reset order, private logs, tray profile switch", new[]
+        {
+            "New: Reset order (Settings > Hotkeys > Client order, in Saved mode). It clears the saved order the next time all your EVE clients are closed (or none are open), then the list builds up again in the order the clients are opened, like the first time. You can cancel it before it happens.",
+            "The saved order now keeps the opening order while it builds: if the 3rd client you opened logs in first, it still goes 3rd.",
+            "Private logs: debug.log and preview.log no longer contain anything personal, so a log can be sent to someone. Character and profile names show as a short code (for example Pilot-3FA9C1); the same name always gives the same code on this PC, but the name can't be worked out from it. The title of any window that isn't an EVE client is never written (browser tabs, documents), and your Windows user name, PC name, folder paths, e-mail addresses and game-log file names (they hold the character ID) are removed.",
+            "Logs written by older versions did contain names, so they are deleted once, the first time this version starts.",
+            "The tray Profiles menu now switches profile even while the Configuration window is open, and the window shows the new profile straight away."
+        }),
+        new("0.10.0", "Client order, tray profiles and per-run debug logs", new[]
+        {
+            "New: CLIENT ORDER (Settings > Hotkeys). Automatic is the order the clients were opened, as before. Saved remembers the order, so closing and reopening a client puts it back in the same place; new characters are added to the end by themselves. Manual lets you set the order with the arrows, and a new character shows up unticked and only counts once you tick it.",
+            "A client still on the login screen takes the first free place in the saved or manual list, so it is already in position when the character logs in.",
+            "Next / Previous, the numbered thumbnail positions and the client hotkeys all follow the client order. The order is saved per profile.",
+            "New: the tray menu has a Profiles menu. Pick a profile to switch to it; the one in use is ticked.",
+            "New: the tray icon is kept on the taskbar instead of the hidden-icons arrow (Windows 11). Settings > General > Tray icon turns this off, and has a shortcut to Windows' own taskbar settings.",
+            "New: Settings > About > Diagnostics can write one continuous debug.log, or start a new debug-DATE_TIME.log every time detailed logging is turned on (the newest 20 are kept). Open debug log opens the newest."
+        }),
         new("0.9.9", "Steady highlight while holding the hotkey", new[]
         {
             "Fixed: while holding Next / Previous, the active-client highlight could briefly jump back to a client you had already passed. Windows reports focus changes a little late when they come this fast, and those late reports were being treated as current.",

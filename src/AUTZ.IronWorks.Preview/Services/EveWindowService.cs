@@ -39,7 +39,9 @@ public sealed class EveWindowService
 
             if (!IsEveTitle(title)) return true;
             _titles[h] = title;
-            found.Add(new EveClientWindow(h, title, ParseCharacter(title), OpenedAt(h)));
+            string character = ParseCharacter(title);
+            if (!title.Equals("EVE", StringComparison.OrdinalIgnoreCase)) Log.RegisterPilot(character);   // so the logs show a code, not the name
+            found.Add(new EveClientWindow(h, title, character, OpenedAt(h)));
             return true;
         }, 0);
 

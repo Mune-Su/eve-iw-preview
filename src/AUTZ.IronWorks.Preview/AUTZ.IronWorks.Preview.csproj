@@ -8,7 +8,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <AssemblyName>EVE-IW-Preview</AssemblyName>
     <RootNamespace>AUTZ.IronWorks.Preview</RootNamespace>
-    <Version>0.9.9</Version>
+    <Version>0.10.2</Version>
     <Product>EVE-IronWorks-Preview</Product>
     <Company>AUTZ IronWorks</Company>
     <Authors>AUTZ IronWorks</Authors>
