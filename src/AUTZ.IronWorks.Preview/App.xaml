@@ -465,6 +465,14 @@
                 </Setter.Value>
             </Setter>
         </Style>
+        <!-- selectable text that takes no room while it is empty (the result lines under the memory buttons) -->
+        <Style x:Key="AutoHideText" TargetType="TextBox" BasedOn="{StaticResource SelectableText}">
+            <Style.Triggers>
+                <Trigger Property="Text" Value="">
+                    <Setter Property="Visibility" Value="Collapsed"/>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
         <!-- website .note / p: muted, not italic -->
         <Style x:Key="Desc" TargetType="TextBox" BasedOn="{StaticResource SelectableText}">
             <Setter Property="Foreground" Value="{StaticResource BrushMuted}"/>

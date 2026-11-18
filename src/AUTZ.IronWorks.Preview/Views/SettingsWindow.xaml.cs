@@ -66,6 +66,9 @@ public partial class SettingsWindow : Window
     private readonly System.Windows.Threading.DispatcherTimer _memTimer = new() { Interval = TimeSpan.FromSeconds(2) };   // runs only while the Memory page is showing
     private readonly System.Windows.Threading.DispatcherTimer _progTimer = new() { Interval = TimeSpan.FromSeconds(10) };  // Top Programs: only while the Memory page is showing and the window isn't minimised
     private bool _progBusy;
+    private TrimEstimate? _trimEstimate;
+    private ClipboardInfo? _clipInfo;
+    private bool _clipBusy;
     private IReadOnlyList<ProgramUsage> _programs = Array.Empty<ProgramUsage>();
     private readonly List<string> _runningList;    // the logged-in characters, in client order
     private bool _orderLoading;
@@ -1910,6 +1913,59 @@ public partial class SettingsWindow : Window
 
         _memPercent = s.LoadPercent;
         UpdateMemoryBar();
+        RefreshClipboardEstimate();
+        UpdateEstimates();
+    }
+
+    /// <summary>The clipboard size is read on a background thread, and only again when the clipboard has changed.</summary>
+    private async void RefreshClipboardEstimate()
+    {
+        if (_clipBusy) return;
+        _clipBusy = true;
+        try
+        {
+            _clipInfo = await _manager.ReadClipboardAsync();
+            UpdateEstimates();
+        }
+        catch
+        {
+            _clipInfo = new ClipboardInfo(2, 0);
+        }
+        finally
+        {
+            _clipBusy = false;
+        }
+    }
+
+    /// <summary>The small grey line under each button: what pressing it would free (an estimate, not a promise).</summary>
+    private void UpdateEstimates()
+    {
+        if (MemTrimEstimate is null || MemCacheEstimate is null || MemClipEstimate is null) return;
+        var t = _trimEstimate;
+        MemTrimEstimate.Text =
+            t is null ? "Estimating..." :
+            t.Programs == 0 || t.Bytes < 5L * 1048576 ? "Nothing worth trimming right now" :
+            t.Ratio > 0
+                ? $"Estimate: about {MemoryCleaner.FormatMb((long)(t.Bytes * t.Ratio))} (from {t.Programs} programs)"
+                : $"Estimate: up to {MemoryCleaner.FormatMb(t.Bytes)} (from {t.Programs} programs)";
+        if (!PreviewManager.IsAdministrator)
+        {
+            MemCacheEstimate.Text = "Needs administrator rights";
+        }
+        else
+        {
+            var cache = MemoryCleaner.ReadCacheLists();
+            MemCacheEstimate.Text = !cache.Ok
+                ? "Couldn't read the cache size"
+                : $"Cached files: up to {MemoryCleaner.FormatSize(cache.StandbyBytes)}; {MemoryCleaner.FormatSize(cache.ModifiedBytes)} to disk";
+        }
+        var clip = _clipInfo;
+        MemClipEstimate.Text =
+            clip is null ? "Estimating..." :
+            clip.Value.State == 0 ? "The clipboard is empty" :
+            clip.Value.State == 1 ? $"Frees about {MemoryCleaner.FormatSize(clip.Value.Bytes)}" :
+            clip.Value.State == 3 ? "Another program is using it" :
+            "Holds data (size not measured)";
     }
 
     private int _memPercent;
@@ -1937,6 +1993,7 @@ public partial class SettingsWindow : Window
         {
             MemTrimBtn.IsEnabled = true;
             RefreshMemory();
+            RefreshPrograms();
         }
     }
 
@@ -1966,8 +2023,10 @@ public partial class SettingsWindow : Window
         {
             try
             {
+                long held = _clipInfo is { State: 1 } info ? info.Bytes : 0;
                 System.Windows.Clipboard.Clear();
-                MemResultText.Text = $"{DateTime.Now:HH:mm:ss}  Clipboard cleared.";
+                MemResultText.Text = $"{DateTime.Now:HH:mm:ss}  Clipboard cleared" + (held > 0 ? $" ({MemoryCleaner.FormatSize(held)})." : ".");
+                RefreshClipboardEstimate();
                 return;
             }
             catch
@@ -2012,6 +2071,8 @@ public partial class SettingsWindow : Window
             if (_pageIndex != PageMemory_) return;                 // the page was left while the programs were being read
             _programs = list;
             BuildProgramRows();
+            _trimEstimate = await _manager.EstimateTrimAsync(ReadMemorySettings());
+            UpdateEstimates();
         }
         catch (Exception ex)
         {

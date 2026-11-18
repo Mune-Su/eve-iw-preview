@@ -53,6 +53,7 @@ public sealed class PreviewManager : IDisposable
     private readonly Dictionary<nint, DateTime> _lastActiveAt = new();            // memory cleaner: when each EVE client last had focus (for trimming idle background clients)
     private readonly Dictionary<string, List<(DateTime At, long Bytes)>> _programHistory = new(StringComparer.OrdinalIgnoreCase);   // Top Programs: recent readings per program
     private readonly Dictionary<string, DateTime> _limitTrimmedAt = new(StringComparer.OrdinalIgnoreCase);   // per-program limits: when a program was last trimmed for going over
+    private double _trimRatio;                             // memory cleaner: what Trim Programs really gave back per byte trimmed (0 = not known yet)
     private long _sessionFreed;                            // memory cleaner: total returned to available memory by every clean this run
     private int _sessionCleans;
     private DateTime _lastTrimAt = DateTime.UtcNow;       // memory cleaner: when programs were last trimmed (periodic runs and the cool-down count from here)
@@ -1071,9 +1072,29 @@ public sealed class PreviewManager : IDisposable
         var scope = NewScope(settings);
         var result = await RunLow(() => MemoryCleaner.TrimWorkingSets(settings, scope));
         _lastTrimAt = DateTime.UtcNow;
+        LearnTrimRatio(result);
         RememberMemoryResult(result);
         return result;
     }
+
+    /// <summary>After a real trim, remember how much of what was trimmed really came back, so the estimate gets closer each time.</summary>
+    private void LearnTrimRatio(CleanResult result)
+    {
+        if (!result.Ok || result.TrimmedBytes < 100L * 1048576) return;
+        double sample = Math.Clamp(result.FreedBytes / (double)result.TrimmedBytes, 0.02, 1.0);
+        _trimRatio = _trimRatio <= 0 ? sample : (_trimRatio + sample) / 2;
+    }
+
+    /// <summary>What Trim Programs would reach right now: the memory held by the programs it would trim (nothing is trimmed).</summary>
+    public async Task<TrimEstimate> EstimateTrimAsync(MemoryCleanerSettings settings)
+    {
+        var scope = NewScope(settings);
+        var result = await RunLow(() => MemoryCleaner.TrimWorkingSets(settings, scope, dryRun: true));
+        return new TrimEstimate(result.TrimmedBytes, result.Count, _trimRatio);
+    }
+
+    /// <summary>The size of what is on the clipboard, read on a background thread.</summary>
+    public Task<ClipboardInfo> ReadClipboardAsync() => RunLow(MemoryCleaner.ReadClipboard);
 
     /// <summary>Trims one program (the Trim button next to it in Top Programs): its size and the never-trim list don't matter.</summary>
     public async Task<CleanResult> TrimProgramAsync(string name, MemoryCleanerSettings settings)

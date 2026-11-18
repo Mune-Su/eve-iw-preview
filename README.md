@@ -6,6 +6,10 @@ A lightweight Windows utility for permanent live previews of your running EVE On
 
 **Run it:** double-click `EVE-IW-Preview.exe` in this folder (needs the .NET 8 Desktop Runtime, already installed if you have the .NET SDK). It runs in the **system tray only** (no taskbar button): right-click the tray icon for the menu, double-click it for Configuration.
 
+## v0.16.2
+
+- **Estimates under the memory buttons** (Settings > Memory): Trim Programs shows what it would reach ("up to", then "about" once a real trim has taught it the ratio), Clear system cache shows the cached files and unsaved data, Clear clipboard shows the size on the clipboard. The empty result lines no longer leave a gap.
+
 ## v0.16.1
 
 - **Client Order And Positions** is one card on the Grouping page: what the order is for, then 1. how clients are ordered and 2. where thumbnail positions are remembered, with clearer wording.

@@ -7,6 +7,14 @@ internal static class Changelog
 {
     public static readonly ChangelogEntry[] Entries =
     {
+        new("0.16.2", "Estimates under the memory buttons", new[]
+        {
+            "New: a small grey line under Trim Programs, Clear system cache and Clear clipboard says roughly what pressing it would free. It refreshes while the Memory page is open.",
+            "Trim Programs shows the memory held by the programs it would trim right now (your smallest-size rule, the never-trim list, the EVE client setting and the program in front all count), as \"up to\" that much. After you have trimmed once it switches to \"about\", using how much of the trimmed memory really came back last time, and gets closer with each trim.",
+            "Clear system cache shows the cached files it can drop and the unsaved data it will write to disk (administrator rights needed). Windows already counts cached files as available memory, so the Memory in use figure barely moves when they go.",
+            "Clear clipboard shows the size of the text or picture on the clipboard, and says so when it is empty.",
+            "The result lines under the buttons take no room while they are empty, which closes the gap on the Memory page."
+        }),
         new("0.16.1", "Client order and positions together", new[]
         {
             "Client Order and Positions are now one card, Client Order And Positions, on the Grouping page. It starts with a short explanation of what the order is used for, then two numbered steps: 1. How Clients Are Ordered (Automatic, Saved or Manual) and 2. Where Thumbnail Positions Are Remembered (by character or by client), with the Recover and Reset buttons. The wording of every option is clearer, and the warning about Automatic order and positions saved by client sits right under the position choice.",
