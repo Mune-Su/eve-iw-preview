@@ -6,6 +6,12 @@ A lightweight Windows utility for permanent live previews of your running EVE On
 
 **Run it:** double-click `EVE-IW-Preview.exe` in this folder (needs the .NET 8 Desktop Runtime, already installed if you have the .NET SDK). It runs in the **system tray only** (no taskbar button): right-click the tray icon for the menu, double-click it for Configuration.
 
+## v0.14.2
+
+- **Check boxes:** only the box itself is clickable (not the text, not the empty space across the window).
+- The login-screen option now reads "Thumbnails of clients that aren't logged in yet are clickable".
+- **All opacities default to 60%** (thumbnail, text, text background) for new profiles and Reset; saved values are kept.
+
 ## v0.14.1
 
 - **Label text: colour, size and opacity.** New **Text Opacity** slider (Settings > Appearance > Text Label), and a **Label Size** and **Label Opacity** for each character on the Characters page, next to its existing label colour (0 = use the default). The box behind the text keeps its own opacity.

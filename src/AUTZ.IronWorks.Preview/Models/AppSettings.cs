@@ -89,11 +89,11 @@ public sealed class AppSettings
     public string DefaultLabelColourHex { get; set; } = "#FFFFFF";
     public string LabelFontName { get; set; } = "Segoe UI";
     public int LabelFontSize { get; set; } = 13;
-    /// <summary>How solid the label text is (10-100). 100 = fully solid. (The box behind it has its own opacity.)</summary>
-    public int LabelOpacityPercent { get; set; } = 100;
+    /// <summary>How solid the label text is (10-100). (The box behind it has its own opacity.)</summary>
+    public int LabelOpacityPercent { get; set; } = 60;
     public bool LabelBold { get; set; } = true;
     public string LabelBackgroundHex { get; set; } = "#0C0C0E";
-    public int LabelBackgroundOpacityPercent { get; set; } = 67;
+    public int LabelBackgroundOpacityPercent { get; set; } = 60;
     /// <summary>TopLeft, TopCenter, TopRight, LeftCenter, Center, RightCenter, BottomLeft, BottomCenter, BottomRight.</summary>
     public string LabelPosition { get; set; } = "TopLeft";
     public int LabelOffsetX { get; set; } = 0;

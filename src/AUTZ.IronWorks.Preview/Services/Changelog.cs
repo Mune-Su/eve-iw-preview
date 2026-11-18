@@ -7,6 +7,12 @@ internal static class Changelog
 {
     public static readonly ChangelogEntry[] Entries =
     {
+        new("0.14.2", "Check box and opacity tweaks", new[]
+        {
+            "Check boxes: only the box itself is clickable now. The text beside it, and the empty space across the window, no longer tick or untick it.",
+            "The option under Interaction is now just \"Thumbnails of clients that aren't logged in yet are clickable\".",
+            "Every opacity now starts at 60%: thumbnail opacity, text opacity and the text background opacity. This is the default for new profiles and for Reset; values you have already saved are kept."
+        }),
         new("0.14.1", "Label text: colour, size and opacity", new[]
         {
             "New: Text Opacity (Settings > Appearance > Text Label). It sets how solid the text on the thumbnails is, from 10 to 100 percent. The box behind the text keeps its own opacity under Text Background.",
