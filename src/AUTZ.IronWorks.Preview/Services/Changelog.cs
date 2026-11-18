@@ -7,6 +7,12 @@ internal static class Changelog
 {
     public static readonly ChangelogEntry[] Entries =
     {
+        new("0.16.1", "Client order and positions together", new[]
+        {
+            "Client Order and Positions are now one card, Client Order And Positions, on the Grouping page. It starts with a short explanation of what the order is used for, then two numbered steps: 1. How Clients Are Ordered (Automatic, Saved or Manual) and 2. Where Thumbnail Positions Are Remembered (by character or by client), with the Recover and Reset buttons. The wording of every option is clearer, and the warning about Automatic order and positions saved by client sits right under the position choice.",
+            "On a wide window the settings no longer stretch edge to edge: the page content stops at a comfortable width and is centred, so text lines stay readable and there is no long empty strip inside each card. The window can still be resized freely.",
+            "The Hotkeys page points to the new place for the client order. Nothing was removed and your saved settings are unchanged."
+        }),
         new("0.16.0", "Tighter, simpler Settings", new[]
         {
             "Less empty space: every box, field, drop-down, button, tick box and slider is smaller, and the section cards have less padding, so a lot more fits on screen.",

@@ -154,9 +154,9 @@ public partial class SettingsWindow : Window
     private void BuildNav()
     {
         _pages.Add(new PageDef("General", PageGeneral, new Control[] { CardStartup, CardClients }));
-        _pages.Add(new PageDef("Thumbnails", PageThumbs, new Control[] { CardSize, CardLabel, CardActiveBorder, CardCharacter, CardPositions, CardInteraction }));
-        _pages.Add(new PageDef("Grouping", PageGroups, new Control[] { CardRoster, CardScan }));
-        _pages.Add(new PageDef("Hotkeys", PageHotkeys, new Control[] { CardCycling, CardClientOrder, CardHotkeyOptions, CardSlotKeys, CardCharActions, CardSkipped, CardProfileKeys }));
+        _pages.Add(new PageDef("Thumbnails", PageThumbs, new Control[] { CardSize, CardLabel, CardActiveBorder, CardCharacter, CardInteraction }));
+        _pages.Add(new PageDef("Grouping", PageGroups, new Control[] { CardRoster, CardScan, CardClientOrder }));
+        _pages.Add(new PageDef("Hotkeys", PageHotkeys, new Control[] { CardCycling, CardHotkeyOptions, CardSlotKeys, CardCharActions, CardSkipped, CardProfileKeys }));
         _pages.Add(new PageDef("Alerts", PageAlerts, new Control[] { CardNotifyMain, CardLogMain, CardLogEvents }));
         _pages.Add(new PageDef("Memory", PageMemory, new Control[] { CardMemoryNow, CardMemoryAuto, CardMemoryTop, CardMemoryKeep }));
         _pages.Add(new PageDef("About", PageAbout, new Control[] { CardAbout, CardWhatsNew, CardFiles, CardDiagnostics }));

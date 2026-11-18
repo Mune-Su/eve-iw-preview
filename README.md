@@ -6,6 +6,11 @@ A lightweight Windows utility for permanent live previews of your running EVE On
 
 **Run it:** double-click `EVE-IW-Preview.exe` in this folder (needs the .NET 8 Desktop Runtime, already installed if you have the .NET SDK). It runs in the **system tray only** (no taskbar button): right-click the tray icon for the menu, double-click it for Configuration.
 
+## v0.16.1
+
+- **Client Order And Positions** is one card on the Grouping page: what the order is for, then 1. how clients are ordered and 2. where thumbnail positions are remembered, with clearer wording.
+- Settings content is capped at a comfortable width and centred on wide windows (the window itself is still freely resizable).
+
 ## v0.16.0
 
 - **Tighter Settings:** smaller boxes, fields, drop-downs, buttons and cards, so less empty space.
