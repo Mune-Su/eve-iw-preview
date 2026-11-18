@@ -77,7 +77,9 @@ internal static class ClientOrdering
         var slotMap = new Dictionary<nint, int>();
         slots = slotMap;
         var plain = openOrder.ToList();
-        if (s.ClientOrderMode == AppSettings.OrderAutomatic || s.ClientOrder.Count == 0) return plain;
+        if (s.ClientOrderMode == AppSettings.OrderAutomatic) return plain;
+        bool hasSavedAccounts = s.ClientOrderMode == AppSettings.OrderSaved && s.SavedAccountSlots.Count > 0;
+        if (s.ClientOrder.Count == 0 && !hasSavedAccounts) return plain;
 
         var order = s.ClientOrder;
         int IndexOfName(string name)
@@ -92,7 +94,12 @@ internal static class ClientOrdering
         // saved characters that aren't logged in right now leave their place free
         var loggedIn = new HashSet<string>(
             openOrder.Where(c => !c.IsLoginScreen).Select(c => c.CharacterName), StringComparer.OrdinalIgnoreCase);
-        var vacant = new Queue<string>(order.Where(n => !loggedIn.Contains(n)));
+        var occupiedSavedSlots = hasSavedAccounts
+            ? new HashSet<int>(openOrder
+                .Where(c => c.AccountSignature.Length > 0 && s.SavedAccountSlots.ContainsKey(c.AccountSignature))
+                .Select(c => s.SavedAccountSlots[c.AccountSignature]))
+            : new HashSet<int>();
+        var vacant = new Queue<string>(order.Where((n, i) => !loggedIn.Contains(n) && !occupiedSavedSlots.Contains(i + 1)));
 
         // a client on the login screen has no name yet: it takes the first free place, so it is already where the
         // character will be when they log in
@@ -105,9 +112,15 @@ internal static class ClientOrdering
         int Key(EveClientWindow client, int openIndex)
         {
             int slot = -1;
-            if (!client.IsLoginScreen) slot = IndexOfName(client.CharacterName);
+            // Saved order: the launcher signature identifies the account while it is still on the login screen.
+            // It also keeps the same slot if another character on that account is selected.
+            if (hasSavedAccounts && client.AccountSignature.Length > 0 &&
+                s.SavedAccountSlots.TryGetValue(client.AccountSignature, out int savedSlot) && savedSlot > 0)
+                slot = savedSlot - 1;
+            else if (!client.IsLoginScreen) slot = IndexOfName(client.CharacterName);
             else if (assign.TryGetValue(client.Handle, out var name)) slot = IndexOfName(name);
-            return slot >= 0 ? slot : order.Count + openIndex;       // not in the list: after the ones that are, in opening order
+            int reserved = Math.Max(order.Count, s.SavedAccountSlots.Values.DefaultIfEmpty(0).Max());
+            return slot >= 0 ? slot : reserved + openIndex;       // not saved: after the reserved places, in opening order
         }
 
         var keyed = openOrder.Select((c, i) => (Client: c, Key: Key(c, i), Open: i));
@@ -118,7 +131,8 @@ internal static class ClientOrdering
         int extra = 0;
         foreach (var k in sorted)
         {
-            slotMap[k.Client.Handle] = k.Key < order.Count ? k.Key + 1 : order.Count + (++extra);
+            int reserved = Math.Max(order.Count, s.SavedAccountSlots.Values.DefaultIfEmpty(0).Max());
+            slotMap[k.Client.Handle] = k.Key < reserved ? k.Key + 1 : reserved + (++extra);
         }
         return sorted.Select(k => k.Client).ToList();
     }

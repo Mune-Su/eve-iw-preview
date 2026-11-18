@@ -135,11 +135,13 @@ public sealed class AppSettings
     public bool CycleIncludeLoginScreens { get; set; } = true;
     /// <summary>Older versions: the red X on skipped thumbnails was an option. It is always shown now; this value is ignored.</summary>
     public bool ShowExcludedOverlay { get; set; } = true;
-    /// <summary>"Automatic" = clients are in the order they were opened. "Saved" = the order is remembered (new characters are added
-    /// to the end by themselves). "Manual" = the order is whatever you set in Settings > Hotkeys.</summary>
+    /// <summary>"Automatic" = opening order. "Saved" = account signatures return to the slots captured by Save current order.
+    /// "Manual" = the character order selected in Configuration.</summary>
     public string ClientOrderMode { get; set; } = OrderAutomatic;
     /// <summary>Characters in client order, for "Saved" and "Manual". A character that isn't in the list sits after the ones that are.</summary>
     public List<string> ClientOrder { get; set; } = new();
+    /// <summary>Saved order only: salted launcher account signature -> numbered client slot. This identifies a login screen before a character is selected.</summary>
+    public Dictionary<string, int> SavedAccountSlots { get; set; } = new(StringComparer.OrdinalIgnoreCase);
     /// <summary>True after "Reset order": the saved order is cleared the next time no EVE client is open, then builds again in opening order.</summary>
     public bool ClientOrderResetPending { get; set; } = false;
     /// <summary>Older versions: the client hotkeys. Moved into the "Default" client-hotkey group; kept only so old profiles still load.</summary>

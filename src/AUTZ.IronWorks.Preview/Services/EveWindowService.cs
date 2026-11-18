@@ -8,6 +8,7 @@ namespace AUTZ.IronWorks.Preview.Services;
 public sealed class EveWindowService
 {
     private readonly Dictionary<uint, DateTime> _startTimes = new();
+    private readonly Dictionary<uint, string> _accountSignatures = new();
     private readonly Dictionary<nint, DateTime> _firstSeen = new();
     private readonly Dictionary<nint, string> _titles = new();
     private readonly HashSet<uint> _pidsThisScan = new();
@@ -41,7 +42,7 @@ public sealed class EveWindowService
         {
             if (!_pidsThisScan.Contains(pid)) _gonePids.Add(pid);
         }
-        foreach (uint pid in _gonePids) { _startTimes.Remove(pid); _diagLogged.Remove(pid); }
+        foreach (uint pid in _gonePids) { _startTimes.Remove(pid); _accountSignatures.Remove(pid); _diagLogged.Remove(pid); }
 
         _goneHandles.Clear();
         foreach (nint h in _firstSeen.Keys)
@@ -106,7 +107,19 @@ public sealed class EveWindowService
                 : $"window 0x{h:X} pid {titlePid}: {was} -> {now}";
             Log.Debug("CLIENTINFO", line);
         }
-        _scan.Add(new EveClientWindow(h, title, character, OpenedAt(h)));
+        DateTime opened = OpenedAt(h);
+        NativeMethods.GetWindowThreadProcessId(h, out uint clientPid);
+        string accountSignature = "";
+        if (clientPid != 0)
+        {
+            if (_accountSignatures.TryGetValue(clientPid, out string? cachedSignature)) accountSignature = cachedSignature;
+            else
+            {
+                accountSignature = ClientDiagnostics.AccountSignature(clientPid);
+                _accountSignatures[clientPid] = accountSignature;
+            }
+        }
+        _scan.Add(new EveClientWindow(h, title, character, opened, accountSignature));
         return true;
     }
 

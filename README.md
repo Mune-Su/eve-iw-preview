@@ -6,6 +6,10 @@ A lightweight Windows utility for permanent live previews of your running EVE On
 
 **Run it:** double-click `EVE-IW-Preview.exe` in this folder (needs the .NET 8 Desktop Runtime, already installed if you have the .NET SDK). It runs in the **system tray only** (no taskbar button): right-click the tray icon for the menu, double-click it for Configuration.
 
+## v0.18.7
+- **Saved login slots by account signature:** Save current order links each EVE account to its numbered slot. In Saved mode, login screens return to the correct slot before a character is selected, regardless of reopening order. Any character on that account uses the same slot.
+- **Automatic order is unchanged.** Radio-button text is selectable, and Configuration wording has been proofread.
+
 ## v0.18.6
 
 - **Client start-up details in the detailed log** (CLIENTINFO lines): for each EVE client, its window and process, start time, the program that started it, and its start-up arguments (names as they are, values only as a short salted code). Also logs the moment a login screen turns into a character. Used to find out whether anything stays the same per account so login screens could be told apart automatically.

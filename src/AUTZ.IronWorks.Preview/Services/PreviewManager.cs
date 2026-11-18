@@ -358,6 +358,8 @@ public sealed class PreviewManager : IDisposable
             var added = new List<string>();
             foreach (var client in openOrder.Where(c => !c.IsLoginScreen))
             {
+                // A saved account owns a slot regardless of which of its characters is selected.
+                if (client.AccountSignature.Length > 0 && _settings.SavedAccountSlots.ContainsKey(client.AccountSignature)) continue;
                 if (list.Contains(client.CharacterName, StringComparer.OrdinalIgnoreCase)) continue;
                 ClientOrdering.AddInPlace(list, client.CharacterName, openOrder);
                 added.Add(client.CharacterName);
@@ -390,6 +392,7 @@ public sealed class PreviewManager : IDisposable
         Persist(s =>
         {
             s.ClientOrder.Clear();
+            s.SavedAccountSlots.Clear();
             s.ClientOrderResetPending = false;
         });
         Log.Debug("ORDER", $"saved order cleared now ({cleared} names)");
@@ -405,18 +408,22 @@ public sealed class PreviewManager : IDisposable
     public IReadOnlyList<string> SaveCurrentClientOrder()
     {
         var names = new List<string>();
-        foreach (var client in _clients)
+        var accountSlots = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        for (int i = 0; i < _clients.Count; i++)
         {
-            if (client.IsLoginScreen || names.Contains(client.CharacterName, StringComparer.OrdinalIgnoreCase)) continue;
-            names.Add(client.CharacterName);
+            var client = _clients[i];
+            if (client.IsLoginScreen) continue;
+            if (!names.Contains(client.CharacterName, StringComparer.OrdinalIgnoreCase)) names.Add(client.CharacterName);
+            if (client.AccountSignature.Length > 0) accountSlots[client.AccountSignature] = SlotOf(client, i);
         }
         if (names.Count == 0) return names;
         Persist(s =>
         {
             s.ClientOrder = new List<string>(names);
+            s.SavedAccountSlots = new Dictionary<string, int>(accountSlots, StringComparer.OrdinalIgnoreCase);
             s.ClientOrderResetPending = false;
         });
-        Log.Debug("ORDER", $"saved the current client order ({names.Count} clients)");
+        Log.Debug("ORDER", $"saved the current client order ({names.Count} clients, {accountSlots.Count} account signatures)");
         return names;
     }
 
@@ -1618,6 +1625,7 @@ public sealed class PreviewManager : IDisposable
             }
         }
         foreach (var slot in _settings.SlotCharacters) incoming.SlotCharacters[slot.Key] = slot.Value;
+        incoming.SavedAccountSlots = new Dictionary<string, int>(_settings.SavedAccountSlots, StringComparer.OrdinalIgnoreCase);
 
         // the "Saved" order builds itself while the window is open, and "Reset order" acts at once: the live values win
         incoming.ClientOrderResetPending = _settings.ClientOrderResetPending;

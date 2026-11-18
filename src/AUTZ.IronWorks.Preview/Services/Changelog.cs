@@ -7,6 +7,14 @@ internal static class Changelog
 {
     public static readonly ChangelogEntry[] Entries =
     {
+        new("0.18.7", "Saved login slots by EVE account", new[]
+        {
+            "Save current order stores each open EVE account's private launcher signature against its numbered slot. In Saved mode, the login screen returns to that slot immediately, even when accounts are reopened in a different order.",
+            "The mapping belongs to the EVE account, not the character. A second or third character on the same account keeps the same client slot.",
+            "Automatic mode is unchanged: clients remain in the order they were opened.",
+            "The text beside radio buttons can now be selected and copied; only the selection circle changes the option.",
+            "Configuration wording, capitalisation and punctuation have been cleaned up."
+        }),
         new("0.18.6", "Client start-up details in the detailed log", new[]
         {
             "New: when Detailed logging is on, debug.log now has CLIENTINFO lines. For every EVE client it records which window and process it is, when it was started, which program started it (for example a launcher), and the start-up arguments it was given. It also records the moment a login screen turns into a character (window, process, and the old and new title).",

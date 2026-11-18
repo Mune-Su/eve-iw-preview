@@ -39,6 +39,33 @@ internal static class ClientDiagnostics
     [DllImport("kernel32.dll")] private static extern bool IsWow64Process(nint process, out bool wow64);
     [DllImport("ntdll.dll")] private static extern int NtQueryInformationProcess(nint process, int infoClass, ref PROCESS_BASIC_INFORMATION info, int size, out int returned);
 
+    /// <summary>
+    /// Returns a private, stable code for the EVE account that launched this client. LauncherData stays the same for an
+    /// account across restarts and across every character on that account. The raw launcher value is never stored.
+    /// </summary>
+    public static string AccountSignature(uint pid)
+    {
+        nint handle = OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, false, pid);
+        if (handle == 0) return "";
+        try
+        {
+            string? commandLine = ReadCommandLine(handle, out _, out _);
+            if (commandLine is null) return "";
+            foreach (string arg in SplitArguments(commandLine))
+            {
+                int cut = arg.IndexOfAny(new[] { '=', ':' });
+                if (cut <= 0) continue;
+                string name = arg[..cut].TrimStart('-', '/');
+                if (!name.Equals("LauncherData", StringComparison.OrdinalIgnoreCase)) continue;
+                string value = arg[(cut + 1)..];
+                return value.Length == 0 ? "" : Log.ArgCode(value);
+            }
+        }
+        catch { }
+        finally { CloseHandle(handle); }
+        return "";
+    }
+
     /// <summary>One CLIENTINFO line in the detailed log for this client. Does nothing while detailed logging is off.</summary>
     public static void LogClient(uint pid, nint hwnd, string why)
     {

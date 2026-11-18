@@ -808,12 +808,14 @@ public partial class SettingsWindow : Window
     private void SyncOrderFromManager(IReadOnlyList<string> order)
     {
         _work.ClientOrder = new List<string>(order);
+        _work.SavedAccountSlots = new Dictionary<string, int>(_manager.Settings.SavedAccountSlots, StringComparer.OrdinalIgnoreCase);
         if (!_baseline.TryGetValue(_shownProfile, out var json)) return;
         try
         {
             var baseline = JsonSerializer.Deserialize<AppSettings>(json);
             if (baseline is null) return;
             baseline.ClientOrder = new List<string>(order);
+            baseline.SavedAccountSlots = new Dictionary<string, int>(_manager.Settings.SavedAccountSlots, StringComparer.OrdinalIgnoreCase);
             _baseline[_shownProfile] = ToJson(baseline);
         }
         catch { }
@@ -1826,7 +1828,8 @@ public partial class SettingsWindow : Window
             RosterInitialised = true,
             Characters = _work.Characters,
             SlotCharacters = _work.SlotCharacters,
-            ClientOrder = _work.ClientOrder
+            ClientOrder = _work.ClientOrder,
+            SavedAccountSlots = _work.SavedAccountSlots
         };
         _work = fresh;
         _edited[_shownProfile] = _work;
