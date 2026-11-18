@@ -6,6 +6,10 @@ A lightweight Windows utility for permanent live previews of your running EVE On
 
 **Run it:** double-click `EVE-IW-Preview.exe` in this folder (needs the .NET 8 Desktop Runtime, already installed if you have the .NET SDK). It runs in the **system tray only** (no taskbar button): right-click the tray icon for the menu, double-click it for Configuration.
 
+## v0.18.6
+
+- **Client start-up details in the detailed log** (CLIENTINFO lines): for each EVE client, its window and process, start time, the program that started it, and its start-up arguments (names as they are, values only as a short salted code). Also logs the moment a login screen turns into a character. Used to find out whether anything stays the same per account so login screens could be told apart automatically.
+
 ## v0.18.4
 
 - **Reset order works straight away** (it used to wait until no EVE client was open). It clears the saved order and rebuilds it from the clients that are open now, in opening order. No more Cancel reset.

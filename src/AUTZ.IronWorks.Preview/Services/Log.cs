@@ -260,6 +260,9 @@ internal static class Log
         }
     }
 
+    /// <summary>The code a command-line value of an EVE client is shown as in the detailed log (salted, so the value can't be worked out).</summary>
+    public static string ArgCode(string value) => CodeFor(value, "Arg");
+
     private static string CodeFor(string name, string kind)
     {
         byte[] hash = System.Security.Cryptography.SHA256.HashData(Encoding.UTF8.GetBytes(_salt + "|" + kind + "|" + name.ToLowerInvariant()));

@@ -7,6 +7,14 @@ internal static class Changelog
 {
     public static readonly ChangelogEntry[] Entries =
     {
+        new("0.18.6", "Client start-up details in the detailed log", new[]
+        {
+            "New: when Detailed logging is on, debug.log now has CLIENTINFO lines. For every EVE client it records which window and process it is, when it was started, which program started it (for example a launcher), and the start-up arguments it was given. It also records the moment a login screen turns into a character (window, process, and the old and new title).",
+            "Why: a client on the login screen has no character name yet, so the app can't tell which saved character it will become. If something in the start-up arguments stays the same for each account, it could be used to match login screens automatically.",
+            "Private: argument names are written as they are, but every argument value is only a short code (Arg-XXXXXX) and its length. The code is salted per install: the same value gives the same code every time on this PC, so you can compare two starts, but the value itself (a token, a name) can't be worked out from it.",
+            "If a line says the arguments are not available with error 5, the client is running as administrator and this app isn't: use Restart as administrator.",
+            "Nothing else changed."
+        }),
         new("0.18.4", "Reset order works straight away", new[]
         {
             "Fixed: Reset order did nothing while your clients were running. It only set a flag and waited until every EVE client was closed. It now clears the saved order at once. The clients that are open right now are put back in the order they were opened (that is how the saved list always builds), and any character that isn't open is forgotten. The list on screen updates straight away.",

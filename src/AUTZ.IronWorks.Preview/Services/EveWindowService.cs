@@ -11,6 +11,7 @@ public sealed class EveWindowService
     private readonly Dictionary<nint, DateTime> _firstSeen = new();
     private readonly Dictionary<nint, string> _titles = new();
     private readonly HashSet<uint> _pidsThisScan = new();
+    private readonly HashSet<uint> _diagLogged = new();      // clients whose start-up details are already in the detailed log
     private readonly List<EveClientWindow> _scan = new();
     private readonly List<uint> _gonePids = new();
     private readonly List<nint> _goneHandles = new();
@@ -31,6 +32,7 @@ public sealed class EveWindowService
     {
         _scan.Clear();
         _pidsThisScan.Clear();
+        if (!Log.Verbose && _diagLogged.Count > 0) _diagLogged.Clear();     // logging was switched off: log every client again next time
         NativeMethods.EnumWindows(_enumProc, 0);
 
         // forget clients that have closed (no allocations unless something actually closed)
@@ -39,7 +41,7 @@ public sealed class EveWindowService
         {
             if (!_pidsThisScan.Contains(pid)) _gonePids.Add(pid);
         }
-        foreach (uint pid in _gonePids) _startTimes.Remove(pid);
+        foreach (uint pid in _gonePids) { _startTimes.Remove(pid); _diagLogged.Remove(pid); }
 
         _goneHandles.Clear();
         foreach (nint h in _firstSeen.Keys)
@@ -89,9 +91,21 @@ public sealed class EveWindowService
         }
 
         if (!IsEveTitle(title)) return true;
+        _titles.TryGetValue(h, out string? before);
         _titles[h] = title;
         string character = ParseCharacter(title);
         if (!title.Equals("EVE", StringComparison.OrdinalIgnoreCase)) Log.RegisterPilot(character);   // so the logs show a code, not the name
+        if (Log.Verbose && before != title)
+        {
+            // detailed log: which client (process) is behind each window, and when a login screen turns into a character
+            NativeMethods.GetWindowThreadProcessId(h, out uint titlePid);
+            string now = title.Equals("EVE", StringComparison.OrdinalIgnoreCase) ? "login screen" : "'" + title + "'";
+            string was = before is null ? "" : (before.Equals("EVE", StringComparison.OrdinalIgnoreCase) ? "login screen" : "'" + before + "'");
+            string line = before is null
+                ? $"window 0x{h:X} pid {titlePid}: appeared as {now}"
+                : $"window 0x{h:X} pid {titlePid}: {was} -> {now}";
+            Log.Debug("CLIENTINFO", line);
+        }
         _scan.Add(new EveClientWindow(h, title, character, OpenedAt(h)));
         return true;
     }
@@ -109,6 +123,7 @@ public sealed class EveWindowService
         if (pid != 0)
         {
             _pidsThisScan.Add(pid);
+            if (Log.Verbose && _diagLogged.Add(pid)) ClientDiagnostics.LogClient(pid, hwnd, "client found");
             if (_startTimes.TryGetValue(pid, out var cached)) return cached;
             try
             {
