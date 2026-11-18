@@ -1369,7 +1369,7 @@ public sealed class PreviewManager : IDisposable
         Log.Debug("SETTINGS", $"{why}: profile '{_state.ActiveProfile}'" +
             $" | auto-minimise {(s.AutoMinimiseInactive ? $"ON delay {s.AutoMinimiseDelaySeconds}s keepLast {s.AutoMinimiseKeepLastActive} onStart {s.AutoMinimiseOnStart}" : "off")}" +
             $" | hide active {s.HideActiveThumbnail} | hide when EVE not in front {s.HideWhenEveNotFocused} ({s.HideDelayMs} ms)" +
-            $" | highlight {s.HighlightActive} | always on top {s.AlwaysOnTop} | clickable {s.ThumbnailsClickable}" +
+            $" | highlight {s.HighlightActive} | always on top {s.AlwaysOnTop} | clickable characters {s.ThumbnailsClickable} logins {s.LoginScreensClickable}" +
             $" | hotkeys only in EVE {s.HotkeysOnlyInEve} pass-through {s.HotkeyPassThrough} | scan {s.RefreshMilliseconds} ms");
         foreach (var pair in s.Characters.Where(p => AppSettings.IsCharacterKey(p.Key) &&
                      (p.Value.ActivateAction != "None" || p.Value.MinimiseOnLeave || p.Value.NeverMinimise || p.Value.ExcludeFromCycling)))

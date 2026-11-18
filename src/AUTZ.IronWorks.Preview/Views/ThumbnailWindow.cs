@@ -11,14 +11,15 @@ namespace AUTZ.IronWorks.Preview.Views;
 
 /// <summary>
 /// One borderless, always-on-top window per EVE client showing a live DWM thumbnail.
-/// Left-click switches to that client (unless "Thumbnails clickable" is off). Hold SHIFT and drag with the
-/// left button to move it (it snaps to neighbouring thumbnails). There is no right-click menu.
-/// Drag the bottom-right corner with the left button to resize (the shape is kept).
+/// Left-click switches to that client (unless it is switched off for characters / login screens). Hold SHIFT and drag
+/// with the RIGHT button to move it (it snaps to neighbouring thumbnails). There is no right-click menu.
+/// Hold SHIFT and the orange corner appears: drag it with the left button to resize (the shape is kept).
+/// Without Shift the corner is not shown and does nothing special, so a click there switches like anywhere else.
 /// The window is a non-activating overlay: clicking it never takes focus away from the game.
 /// </summary>
 public sealed class ThumbnailWindow : Window
 {
-    private const int DragThreshold = 4;     // pixels before a shift-click turns into a drag
+    private const int DragThreshold = 4;     // pixels before a Shift + right-click turns into a drag
     private const double GripSize = 18;      // size of the resize corner, in DIPs
     private const double MinWidthDip = 80;
     private const double MaxWidthDip = 1600;
@@ -36,6 +37,11 @@ public sealed class ThumbnailWindow : Window
     private bool _dragMoved;
     private NativeMethods.POINT _dragStartCursor;
     private NativeMethods.RECT _dragStartRect;
+
+    // Shift is polled only while the mouse is over this thumbnail (nothing runs the rest of the time), so the corner
+    // appears the moment Shift goes down even if the mouse is not moving
+    private readonly System.Windows.Threading.DispatcherTimer _shiftTimer =
+        new(System.Windows.Threading.DispatcherPriority.Background) { Interval = TimeSpan.FromMilliseconds(80) };
 
     private bool _resizing;
     private NativeMethods.POINT _resizeStartCursor;
@@ -79,9 +85,24 @@ public sealed class ThumbnailWindow : Window
         DpiChanged += (_, _) => UpdateThumbnail();
         MouseLeftButtonDown += OnLeftDown;
         MouseLeftButtonUp += OnLeftUp;
+        MouseRightButtonDown += OnRightDown;             // Shift + right-drag moves the thumbnail
+        MouseRightButtonUp += OnRightUp;
         MouseMove += OnMouseMoved;
-        MouseEnter += (_, _) => UpdateGrip();
-        MouseLeave += (_, _) => UpdateGrip();
+        _shiftTimer.Tick += (_, _) =>
+        {
+            UpdateGrip();
+            UpdateCursor(Mouse.GetPosition(this));
+        };
+        MouseEnter += (_, _) =>
+        {
+            _shiftTimer.Start();
+            UpdateGrip();
+        };
+        MouseLeave += (_, _) =>
+        {
+            if (!_resizing && !_dragging) _shiftTimer.Stop();
+            UpdateGrip();
+        };
         LostMouseCapture += (_, _) =>
         {
             bool moved = _dragging && _dragMoved;
@@ -95,8 +116,8 @@ public sealed class ThumbnailWindow : Window
         Closed += OnClosed;
     }
 
-    /// <summary>Thumbnails of clients that aren't logged in yet are only clickable if you switch that on.</summary>
-    private bool CanClick => _settings.ThumbnailsClickable && (!Client.IsLoginScreen || _settings.LoginScreensClickable);
+    /// <summary>Character thumbnails and login screen thumbnails each have their own "clickable" option.</summary>
+    private bool CanClick => Client.IsLoginScreen ? _settings.LoginScreensClickable : _settings.ThumbnailsClickable;
 
     private Cursor DefaultCursor => CanClick ? Cursors.Hand : Cursors.Arrow;
 
@@ -147,8 +168,19 @@ public sealed class ThumbnailWindow : Window
         if (_label is not null) _label.Topmost = onTop;
     }
 
+    /// <summary>The orange resize corner shows only while Shift is held over the thumbnail (or while it is being resized).</summary>
     private void UpdateGrip() =>
-        _label?.SetGripVisible((IsMouseOver || _resizing) && !_settings.LockPositions);
+        _label?.SetGripVisible(!_settings.LockPositions && (_resizing || (IsMouseOver && ShiftHeld())));
+
+    /// <summary>Cursor hints: corner (Shift held) = resize, Shift = move, otherwise a hand only when clicking does something.</summary>
+    private void UpdateCursor(Point p)
+    {
+        if (_resizing || _dragging) return;
+        bool shift = ShiftHeld();
+        if (!_settings.LockPositions && shift && IsInGrip(p)) Cursor = Cursors.SizeNWSE;
+        else if (!_settings.LockPositions && shift) Cursor = Cursors.SizeAll;
+        else Cursor = DefaultCursor;
+    }
 
     // ---------- thumbnail ----------
 
@@ -213,18 +245,14 @@ public sealed class ThumbnailWindow : Window
     {
         e.Handled = true;
 
-        if (IsInGrip(e.GetPosition(this)))
+        // the corner only exists while Shift is held; without Shift a click there is a normal click
+        if (ShiftHeld() && IsInGrip(e.GetPosition(this)))
         {
             if (!_settings.LockPositions) BeginResize();
             return; // the corner never switches clients
         }
 
-        if (ShiftHeld())
-        {
-            if (!_settings.LockPositions) BeginDrag(); // Shift + left-drag moves the thumbnail
-            return; // a shift-click never switches clients
-        }
-
+        // the left button only ever switches (or, in the corner, resizes): it never moves the thumbnail
         if (CanClick) Clicked?.Invoke(this);
     }
 
@@ -235,11 +263,19 @@ public sealed class ThumbnailWindow : Window
             e.Handled = true;
             EndResize();
         }
-        else if (_dragging)
-        {
-            e.Handled = true;
-            FinishDrag();
-        }
+    }
+
+    private void OnRightDown(object sender, MouseButtonEventArgs e)
+    {
+        e.Handled = true;
+        if (ShiftHeld() && !_settings.LockPositions) BeginDrag();     // Shift + right-drag moves the thumbnail; a plain right-click does nothing
+    }
+
+    private void OnRightUp(object sender, MouseButtonEventArgs e)
+    {
+        if (!_dragging) return;
+        e.Handled = true;
+        FinishDrag();
     }
 
     private void BeginResize()
@@ -284,6 +320,7 @@ public sealed class ThumbnailWindow : Window
     {
         _resizing = false;
         if (IsMouseCaptured) ReleaseMouseCapture();
+        if (!IsMouseOver) _shiftTimer.Stop();
         UpdateGrip();
         Resized?.Invoke(this);
     }
@@ -304,14 +341,11 @@ public sealed class ThumbnailWindow : Window
 
         if (!_dragging)
         {
-            // cursor hints: corner = resize, shift = move, otherwise a hand only when clicking does something
-            if (!_settings.LockPositions && IsInGrip(e.GetPosition(this))) Cursor = Cursors.SizeNWSE;
-            else if (!_settings.LockPositions && ShiftHeld()) Cursor = Cursors.SizeAll;
-            else Cursor = DefaultCursor;
+            UpdateCursor(e.GetPosition(this));
             return;
         }
 
-        if (e.LeftButton != MouseButtonState.Pressed) { FinishDrag(); return; }
+        if (e.RightButton != MouseButtonState.Pressed) { FinishDrag(); return; }
         if (_settings.LockPositions) return;
 
         NativeMethods.GetCursorPos(out var cursor);
@@ -339,11 +373,13 @@ public sealed class ThumbnailWindow : Window
         _dragging = false;
         _dragMoved = false;
         if (IsMouseCaptured) ReleaseMouseCapture();
+        if (!IsMouseOver) _shiftTimer.Stop();
         if (moved) Moved?.Invoke(this);
     }
 
     private void OnClosed(object? sender, EventArgs e)
     {
+        _shiftTimer.Stop();
         if (_thumbnail != 0)
         {
             NativeMethods.DwmUnregisterThumbnail(_thumbnail);

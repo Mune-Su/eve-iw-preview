@@ -72,10 +72,12 @@ public sealed class AppSettings
     public bool SameSizeForAll { get; set; } = false;
     public int RefreshMilliseconds { get; set; } = 1500;
     public bool LockPositions { get; set; } = false;
-    /// <summary>False = clicking a thumbnail does nothing, so you can only switch with the hotkeys.</summary>
+    /// <summary>Character thumbnails (logged-in clients): false = clicking one does nothing, so you can only switch with the hotkeys.</summary>
     public bool ThumbnailsClickable { get; set; } = true;
-    /// <summary>False = thumbnails of clients that aren't logged in yet can't be clicked.</summary>
+    /// <summary>Login screen thumbnails (clients that aren't logged in yet): false = clicking one does nothing. Independent of the character option.</summary>
     public bool LoginScreensClickable { get; set; } = false;
+    /// <summary>Set once old profiles have been moved to the two independent click options (login used to depend on the character option).</summary>
+    public bool ClickOptionsSplit { get; set; } = false;
     public bool AlwaysOnTop { get; set; } = true;
     public bool SnapEnabled { get; set; } = true;
     public int SnapDistance { get; set; } = 15;

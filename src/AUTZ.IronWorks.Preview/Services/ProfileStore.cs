@@ -133,6 +133,12 @@ public static class ProfileStore
     {
         static bool Is(string value, params string[] olds) => olds.Any(o => value.Equals(o, StringComparison.OrdinalIgnoreCase));
         s.EnsureGroups();      // profiles from before the groups existed get a "Default" group built from what they had
+        if (!s.ClickOptionsSplit)
+        {
+            // login screens used to be clickable only while character thumbnails were too: keep that behaviour for old profiles
+            if (!s.ThumbnailsClickable) s.LoginScreensClickable = false;
+            s.ClickOptionsSplit = true;
+        }
 
         if (Is(s.ActiveBorderHex, "#F59E0B", "#E4600C")) s.ActiveBorderHex = "#F97316";
         if (Is(s.LabelBackgroundHex, "#0A0F16", "#141414")) s.LabelBackgroundHex = "#0C0C0E";

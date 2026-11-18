@@ -7,6 +7,18 @@ internal static class Changelog
 {
     public static readonly ChangelogEntry[] Entries =
     {
+        new("0.18.1", "Resize corner only with Shift", new[]
+        {
+            "Changed: the orange resize triangle in a thumbnail's bottom-right corner now only shows, and only works, while Shift is held. Without Shift it is hidden and a click there switches clients like anywhere else on the thumbnail. So moving (Shift + right-drag) and resizing (Shift, then drag the triangle with the left button) both need Shift, and nothing moves or resizes by accident.",
+            "The triangle appears as soon as you press Shift over a thumbnail, even if the mouse isn't moving, and disappears when you let go. The cursor changes to match. The check runs only while the mouse is over a thumbnail, so it costs nothing the rest of the time.",
+            "Lock thumbnail positions and sizes still hides the triangle and blocks both."
+        }),
+        new("0.18.0", "Click to switch, Shift + right-drag to move", new[]
+        {
+            "Changed: the left mouse button only switches clients now. It can no longer move a thumbnail (a Shift + left-drag used to). To move a thumbnail, hold Shift and drag with the right mouse button. A plain right-click does nothing. The small triangle in the bottom-right corner still resizes with the left button.",
+            "Changed: character thumbnails and login screen thumbnails now have two separate, independent options under Interaction: \"Character thumbnails are clickable\" and \"Login screen thumbnails are clickable\". Before, the login option only worked while the character option was on. Your existing profiles keep exactly the behaviour they had.",
+            "Lock thumbnail positions and sizes still stops both moving and resizing."
+        }),
         new("0.17.3", "Hotkeys while Configuration is open", new[]
         {
             "New: Hotkey Options > \"Keep the hotkeys working while this Configuration window is open\". Off by default (the hotkeys are paused while the window is open, as before). Tick it and your hotkeys keep switching clients while you change settings.",
