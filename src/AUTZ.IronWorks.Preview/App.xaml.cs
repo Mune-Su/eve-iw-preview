@@ -26,6 +26,17 @@ public partial class App : System.Windows.Application
         };
 
         WaitForPreviousInstance(e.Args);               // "Restart as administrator": let the old copy finish closing first
+        // "Always start as administrator": a normal start hands over to the scheduled task (no Windows prompt) and closes itself.
+        // A copy the task started, or one that was just restarted as administrator, never hands over again.
+        if (ProfileStore.LoadState().AlwaysAdmin && !MemoryCleaner.IsAdministrator && !HasArg(e.Args, AdminTaskService.TaskArgument) && !HasArg(e.Args, "--after-pid"))
+        {
+            if (AdminTaskService.RunNow(out string why))
+            {
+                Shutdown();
+                return;
+            }
+            Log.Write("Always start as administrator: the scheduled task couldn't be started (" + why + "), so the app starts normally.");
+        }
 
         _mutex = new Mutex(true, "AUTZ.IronWorks.Preview.SingleInstance", out bool created);
         if (!created)
@@ -46,6 +57,8 @@ public partial class App : System.Windows.Application
         if (string.IsNullOrEmpty(state.LogSalt)) { state.LogSalt = Guid.NewGuid().ToString("N"); stateChanged = true; }
         Log.Salt = state.LogSalt;
         if (!state.LogsScrubbed) { Log.DeleteOldLogs(); state.LogsScrubbed = true; stateChanged = true; }
+        // "Restart as administrator > Always": this copy is the elevated one, so it remembers the choice (the task is made in PreviewManager.Start)
+        if (HasArg(e.Args, "--always-admin") && MemoryCleaner.IsAdministrator && !state.AlwaysAdmin) { state.AlwaysAdmin = true; stateChanged = true; }
         if (stateChanged) ProfileStore.SaveState(state);
 
         Log.PerSessionFiles = state.DebugLogMode == "PerSession";
@@ -58,6 +71,9 @@ public partial class App : System.Windows.Application
 
         ShowWhatsNew(state);
     }
+
+    private static bool HasArg(string[] args, string name) =>
+        args.Any(a => a.Equals(name, StringComparison.OrdinalIgnoreCase));
 
     private static void WaitForPreviousInstance(string[] args)
     {

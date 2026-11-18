@@ -134,6 +134,8 @@ public partial class SettingsWindow : Window
         DebugLogBox.IsChecked = _state.DebugLogging;
         (_state.DebugLogMode == "PerSession" ? DebugSessionRadio : DebugContinuousRadio).IsChecked = true;
         PinTrayBox.IsChecked = _state.PinTrayIcon;
+        AlwaysAdminBox.IsChecked = _state.AlwaysAdmin;
+        UpdateAlwaysAdminControls();
         WhatsNewCombo.SelectedIndex = _state.WhatsNewMode switch { "Always" => 1, "Never" => 2, _ => 0 };
 
         VersionText.Text = "v" + AppInfo.Version;
@@ -1689,7 +1691,7 @@ public partial class SettingsWindow : Window
     }
 
     private string StateSnapshot() => string.Join("|",
-        _state.NextProfileHotkey, _state.PreviousProfileHotkey, _state.RunOnStartup, _state.WhatsNewMode, _state.DebugLogging, _state.DebugLogMode, _state.PinTrayIcon,
+        _state.NextProfileHotkey, _state.PreviousProfileHotkey, _state.RunOnStartup, _state.WhatsNewMode, _state.DebugLogging, _state.DebugLogMode, _state.PinTrayIcon, _state.AlwaysAdmin,
         JsonSerializer.Serialize(_state.Memory),
         string.Join(",", _profileHotkeys.OrderBy(p => p.Key, StringComparer.OrdinalIgnoreCase)
             .Where(p => p.Value.Length > 0).Select(p => p.Key + "=" + p.Value)));
@@ -1707,6 +1709,7 @@ public partial class SettingsWindow : Window
         _state.DebugLogging = DebugLogBox.IsChecked == true;
         _state.DebugLogMode = DebugSessionRadio.IsChecked == true ? "PerSession" : "Continuous";
         _state.PinTrayIcon = PinTrayBox.IsChecked == true;
+        _state.AlwaysAdmin = AlwaysAdminBox.IsChecked == true;
         _state.Memory = ReadMemorySettings();
         _state.WhatsNewMode = WhatsNewCombo.SelectedIndex switch { 1 => "Always", 2 => "Never", _ => "Update" };
     }
@@ -2180,13 +2183,34 @@ public partial class SettingsWindow : Window
         SetStatus("The never-trim list changed. Press Apply or Save to use it.", false);
     }
 
+    /// <summary>
+    /// Changing "always start as administrator" needs the app to be running as administrator (the scheduled task can only be made or
+    /// removed from an elevated copy). Without that, the box is greyed out and says how to turn it on.
+    /// </summary>
+    private void UpdateAlwaysAdminControls()
+    {
+        bool admin = PreviewManager.IsAdministrator;
+        AlwaysAdminBox.IsEnabled = admin;
+        AlwaysAdminNote.Text = admin
+            ? "Starts the app with administrator rights every time, without a Windows prompt (it uses a scheduled task, which Save sets up or removes). Run on Startup and double-clicking the exe both start it this way."
+            : "To turn this on, go to Memory and press Restart as administrator, then choose Always. It can only be changed while the app is running as administrator.";
+    }
+
+    /// <summary>The scheduled task couldn't be made after all: untick the box and say why.</summary>
+    internal void ShowAdminTaskFailed(string reason)
+    {
+        AlwaysAdminBox.IsChecked = false;
+        _state.AlwaysAdmin = false;
+        SetStatus("Couldn't set up starting as administrator: " + reason, false);
+    }
+
     private void RestartAdmin_Click(object sender, RoutedEventArgs e)
     {
-        if (Dialogs.Ask(this, "Restart as administrator",
-                "Restart EVE-IronWorks-Preview with administrator rights?\n\nWindows will ask you to allow it. Changes in this window that you haven't saved are lost, so press Save first if you need them. Your EVE clients are not affected.",
-                "Restart", "Cancel") != 0) return;
-
-        if (!_manager.RestartAsAdministrator(out string error))
+        int choice = Dialogs.Ask(this, "Restart as administrator",
+            "Restart EVE-IronWorks-Preview with administrator rights?\n\nWindows will ask you to allow it.\n\nAlways: you only do this once. The app is set to start as administrator every time after that, without asking again (including with Windows). You can turn it off under General.\n\nJust this once: nothing is remembered.\n\nChanges in this window that you haven't saved are lost, so press Save first if you need them. Your EVE clients are not affected.",
+            "Always", "Just this once", "Cancel");
+        if (choice != 0 && choice != 1) return;
+        if (!_manager.RestartAsAdministrator(out string error, always: choice == 0))
         {
             MemResultText.Text = error;
             return;

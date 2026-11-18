@@ -340,6 +340,8 @@ public sealed class AppState
     public string DebugLogMode { get; set; } = "Continuous";
     /// <summary>Keep the tray icon on the main tray instead of the hidden-icons overflow (Windows 11).</summary>
     public bool PinTrayIcon { get; set; } = true;
+    /// <summary>True = the app always starts as administrator (through a scheduled task, so Windows doesn't ask each time). Set up once with "Restart as administrator".</summary>
+    public bool AlwaysAdmin { get; set; } = false;
     /// <summary>A random value mixed into the codes that replace names in the logs (so the codes can't be matched against a list of names).</summary>
     public string LogSalt { get; set; } = "";
     /// <summary>True once the logs written before names were removed from them have been deleted (done once).</summary>

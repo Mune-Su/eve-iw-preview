@@ -182,6 +182,7 @@ public sealed class PreviewManager : IDisposable
         Refresh();
         _scanTimer.Start();
         ConfigureMemoryTimer();
+        SyncAdminTask();
         ScheduleTrim(10000);                           // once start-up has settled, hand back the memory start-up needed
     }
 
@@ -1224,7 +1225,46 @@ public sealed class PreviewManager : IDisposable
     }
 
     /// <summary>Starts a second copy of the app with administrator rights (Windows asks first). The caller then closes this one.</summary>
-    public bool RestartAsAdministrator(out string error)
+    /// <summary>
+    /// Keeps the "start as administrator" scheduled task in line with the setting. Only possible while running as administrator
+    /// (creating or removing the task needs it), so a normal copy leaves it alone. It also re-points the task at this exe, in case
+    /// the app was moved. Runs off the UI thread.
+    /// </summary>
+    private void SyncAdminTask()
+    {
+        if (!MemoryCleaner.IsAdministrator) return;
+        bool want = _state.AlwaysAdmin;
+        string? exe = Environment.ProcessPath;
+        Task.Run(() =>
+        {
+            try
+            {
+                if (want)
+                {
+                    if (string.IsNullOrEmpty(exe)) return;
+                    if (AdminTaskService.Create(exe, out string error)) return;
+                    Log.Write("Always start as administrator: couldn't set up the scheduled task (" + error + ").");
+                    Application.Current?.Dispatcher.BeginInvoke(new Action(() =>
+                    {
+                        _state.AlwaysAdmin = false;
+                        ProfileStore.SaveState(_state);
+                        _settingsWindow?.ShowAdminTaskFailed(error);
+                        Toast?.Invoke(AppInfo.Name, "Couldn't set up starting as administrator: " + error);
+                    }));
+                }
+                else if (AdminTaskService.Exists())
+                {
+                    if (!AdminTaskService.Remove(out string error)) Log.Write("Couldn't remove the scheduled task (" + error + ").");
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Write("Always start as administrator: " + ex.Message);
+            }
+        });
+    }
+
+    public bool RestartAsAdministrator(out string error, bool always = false)
     {
         error = "";
         try
@@ -1235,7 +1275,7 @@ public sealed class PreviewManager : IDisposable
                 error = "Couldn't find the program file.";
                 return false;
             }
-            var start = new System.Diagnostics.ProcessStartInfo(exe, $"--after-pid {Environment.ProcessId}")
+            var start = new System.Diagnostics.ProcessStartInfo(exe, $"--after-pid {Environment.ProcessId}" + (always ? " --always-admin" : ""))
             {
                 UseShellExecute = true,
                 Verb = "runas",
@@ -1459,6 +1499,8 @@ public sealed class PreviewManager : IDisposable
         _state.DebugLogging = disk.DebugLogging;
         _state.DebugLogMode = disk.DebugLogMode;
         _state.PinTrayIcon = disk.PinTrayIcon;
+        _state.AlwaysAdmin = disk.AlwaysAdmin;
+        SyncAdminTask();
         _state.Memory = disk.Memory.Clone();
         ConfigureMemoryTimer();
         Log.PerSessionFiles = disk.DebugLogMode == "PerSession";
@@ -1498,6 +1540,11 @@ public sealed class PreviewManager : IDisposable
         _state.DebugLogging = global.DebugLogging;
         _state.DebugLogMode = global.DebugLogMode;
         _state.PinTrayIcon = global.PinTrayIcon;
+        if (_state.AlwaysAdmin != global.AlwaysAdmin)
+        {
+            _state.AlwaysAdmin = global.AlwaysAdmin;
+            SyncAdminTask();
+        }
         _state.Memory = global.Memory.Clone();
         ConfigureMemoryTimer();
         Log.PerSessionFiles = global.DebugLogMode == "PerSession";

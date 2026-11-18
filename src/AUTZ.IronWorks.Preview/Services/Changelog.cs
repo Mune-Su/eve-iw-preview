@@ -7,6 +7,13 @@ internal static class Changelog
 {
     public static readonly ChangelogEntry[] Entries =
     {
+        new("0.17.0", "Always start as administrator", new[]
+        {
+            "New: Restart as administrator now asks \"Always\" or \"Just this once\". Choose Always and the app is set to start as administrator every time after that, without a Windows prompt each time, so you only do it once.",
+            "How it works: Windows only skips its prompt for a task that was set up once with administrator rights. The app creates a scheduled task for itself (it has no trigger and only runs when the app starts it). After that, a normal start of the app (the exe, Run on Startup, the update script) hands over to that task and closes itself, and the task's copy carries on as administrator.",
+            "It is a setting: Settings > General > Startup And Tray Icon > Always start as administrator. It can be changed while the app is running as administrator, and Save sets up or removes the task. If the task can't be started for any reason, the app simply starts normally.",
+            "The task is re-pointed at the current exe every time the app starts as administrator, so moving the app or updating it keeps working."
+        }),
         new("0.16.2", "Estimates under the memory buttons", new[]
         {
             "New: a small grey line under Trim Programs, Clear system cache and Clear clipboard says roughly what pressing it would free. It refreshes while the Memory page is open.",
