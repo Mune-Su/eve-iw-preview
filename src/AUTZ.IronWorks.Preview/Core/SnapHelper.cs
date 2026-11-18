@@ -43,7 +43,3 @@ internal static class SnapHelper
         if (best == int.MaxValue || Math.Abs(delta) < Math.Abs(best)) best = delta;
     }
 }
-
-
-
-

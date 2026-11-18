@@ -6,6 +6,14 @@ A lightweight Windows utility for permanent live previews of your running EVE On
 
 **Run it:** double-click `EVE-IW-Preview.exe` in this folder (needs the .NET 8 Desktop Runtime, already installed if you have the .NET SDK). It runs in the **system tray only** (no taskbar button): right-click the tray icon for the menu, double-click it for Configuration.
 
+## v0.14.0
+
+- **Memory cleaner upgrades.** New **Restart Windows Explorer** button (Memory page) and tray item. The tray menu loses Refresh Clients and Reset All Positions (Reset all positions is still in Settings > General). The Trim button is now **Trim Programs**.
+- **Top Programs** card: the 10 programs using the most memory (processes of a program added together), refreshed every 10 seconds while the Memory page is open, with a **Trim** button and a **Never trim / Allow** button for each, a trend arrow against a minute ago, and a "growing" tag for a program whose memory keeps rising (a possible leak). Nothing is read while the page is closed or the window is minimised.
+- **Smallest program to trim** (default 30 MB), **EVE client modes** (never / trim background clients after they have been idle for N minutes / like any program), **per-program limits** (`chrome=1500`), and scheduled cache clearing that waits until free memory is low.
+- **Stronger Clear system cache** (file cache, modified pages written to disk, low-priority cached pages dropped; administrator). Every clean shows available memory before and after, with a running total since the app started.
+- Cleaning runs on a below-normal-priority thread, and the Windows audio engine is never trimmed. Logs still hold only counts and sizes, never program names.
+
 ## v0.13.0
 - **Memory cleaner** (Settings > Memory): memory use with a bar and average / highest / lowest, buttons to trim programs' working sets, clear the system cache and clear the clipboard, and automatic cleaning (every N minutes, or when memory use goes over a limit). All off by default, app-wide, and nothing runs while it is off. Never trims the program in front, Windows' core processes or EVE clients (unless you untick that); you can list programs to never trim. Clearing the system cache needs administrator rights (Restart as administrator button).
 
@@ -164,4 +172,3 @@ The AUTZ IronWorks emblem is built in: `src\AUTZ.IronWorks.Preview\Assets\app.ic
 
 ## Update workflow
 `update-preview.ps1` replaces the repo with the newest `EVE-IW-Preview-v*.zip` (or `AUTZ-IronWorks-Preview-v*.zip`, the name used before the rename), finds the repo and the versions folder by itself, keeps Git history, LICENSE and the Assets folder (icon + logo), builds, publishes the exe to the repo root, and stages the changes. It does not commit or push. If the app is open it is left running; Windows lets the running exe be renamed, so the new exe takes its place and is used the next time you open the app. Always launch the exe in the repo root (not one from a `bin` folder).
-

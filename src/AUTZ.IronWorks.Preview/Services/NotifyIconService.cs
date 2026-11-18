@@ -26,14 +26,13 @@ public sealed class NotifyIconService : IDisposable
         var toggleItem = new Forms.ToolStripMenuItem("Hide All Thumbnails");
         toggleItem.Click += (_, _) => manager.ToggleVisibility();
 
-        var refreshItem = new Forms.ToolStripMenuItem("Refresh Clients");
-        refreshItem.Click += (_, _) => manager.Refresh();
-
-        var resetItem = new Forms.ToolStripMenuItem("Reset All Positions");
-        resetItem.Click += (_, _) =>
+        var explorerItem = new Forms.ToolStripMenuItem("Restart Windows Explorer");
+        explorerItem.Click += async (_, _) =>
         {
-            if (Dialogs.Ask(null, "Reset positions", "Put every thumbnail back in a stack down the left edge of the screen?", "Reset", "Cancel") == 0)
-                manager.ResetPositions();
+            if (Dialogs.Ask(null, "Restart Windows Explorer",
+                    "Close and restart Windows Explorer?\n\nThe taskbar and desktop disappear for a moment, and any open File Explorer windows close.",
+                    "Restart", "Cancel") != 0) return;
+            await manager.RestartExplorerAsync();
         };
 
         var debugItem = new Forms.ToolStripMenuItem("Detailed Logging") { CheckOnClick = false };
@@ -57,8 +56,7 @@ public sealed class NotifyIconService : IDisposable
         menu.Items.Add(profilesItem);
         menu.Items.Add(new Forms.ToolStripSeparator());
         menu.Items.Add(toggleItem);
-        menu.Items.Add(refreshItem);
-        menu.Items.Add(resetItem);
+        menu.Items.Add(explorerItem);
         menu.Items.Add(new Forms.ToolStripSeparator());
         menu.Items.Add(debugItem);
         menu.Items.Add(openDebugItem);
@@ -142,7 +140,3 @@ public sealed class NotifyIconService : IDisposable
         _icon.Dispose();
     }
 }
-
-
-
-

@@ -67,6 +67,9 @@ public partial class SettingsWindow : Window
     private HashSet<string> _running;
     private bool _fontsLoaded;
     private readonly System.Windows.Threading.DispatcherTimer _memTimer = new() { Interval = TimeSpan.FromSeconds(2) };   // runs only while the Memory page is showing
+    private readonly System.Windows.Threading.DispatcherTimer _progTimer = new() { Interval = TimeSpan.FromSeconds(10) };  // Top Programs: only while the Memory page is showing and the window isn't minimised
+    private bool _progBusy;
+    private IReadOnlyList<ProgramUsage> _programs = Array.Empty<ProgramUsage>();
     private readonly List<string> _runningList;    // the logged-in characters, in client order
     private bool _orderLoading;
     private List<string> _characters = new();
@@ -116,6 +119,9 @@ public partial class SettingsWindow : Window
         PreviewMouseWheel += OnPreviewMouseWheel;
 
         _memTimer.Tick += (_, _) => RefreshMemory();
+        _progTimer.Tick += (_, _) => RefreshPrograms();
+        StateChanged += (_, _) => UpdateMemoryTimers();
+        MemExcludeBox.LostFocus += (_, _) => BuildProgramRows();
         MemTrack.SizeChanged += (_, _) => UpdateMemoryBar();
         LoadMemoryControls();
 
@@ -156,7 +162,7 @@ public partial class SettingsWindow : Window
         _pages.Add(new PageDef("Clients", PageClients, new Control[] { CardAutoMin, CardNeverMin }));
         _pages.Add(new PageDef("Notifications", PageNotifications, new Control[] { CardNotifyMain, CardNotifyHow }));
         _pages.Add(new PageDef("Log Monitoring", PageLogs, new Control[] { CardLogMain, CardLogFolders, CardLogEvents, CardLogSystem }));
-        _pages.Add(new PageDef("Memory", PageMemory, new Control[] { CardMemoryNow, CardMemoryAuto, CardMemoryKeep }));
+        _pages.Add(new PageDef("Memory", PageMemory, new Control[] { CardMemoryNow, CardMemoryTop, CardMemoryAuto, CardMemoryKeep }));
         _pages.Add(new PageDef("About", PageAbout, new Control[] { CardAbout, CardWhatsNew, CardFiles, CardDiagnostics }));
 
         for (int i = 0; i < _pages.Count; i++)
@@ -228,15 +234,27 @@ public partial class SettingsWindow : Window
         _pages[index].Page.ScrollToVerticalOffset(0);
         if (leavingThumbs) RefreshAfterThumbEdit();
 
-        // the memory readings are only taken while the Memory page is showing
-        if (index == PageMemory_)
+        // the memory and program readings are only taken while the Memory page is showing
+        if (index == PageMemory_) RefreshMemory();
+        UpdateMemoryTimers();
+    }
+
+    /// <summary>The memory readings and the Top Programs list run only while the Memory page is showing and the window isn't minimised.</summary>
+    private void UpdateMemoryTimers()
+    {
+        if (_pageIndex == PageMemory_ && WindowState != WindowState.Minimized)
         {
-            RefreshMemory();
-            _memTimer.Start();
+            if (!_memTimer.IsEnabled) _memTimer.Start();
+            if (!_progTimer.IsEnabled)
+            {
+                _progTimer.Start();
+                RefreshPrograms();
+            }
         }
         else
         {
             _memTimer.Stop();
+            _progTimer.Stop();
         }
     }
 
@@ -1770,7 +1788,13 @@ public partial class SettingsWindow : Window
         MemTrimPercentBox.Text = m.TrimUsagePercent.ToString();
         MemCacheAboveBox.IsChecked = m.ClearCacheAboveUsage;
         MemCachePercentBox.Text = m.CacheUsagePercent.ToString();
-        MemSkipEveBox.IsChecked = m.SkipEveClients;
+        (m.EveIdleTrim ? MemEveIdleRadio : m.SkipEveClients ? MemEveNeverRadio : MemEveAllRadio).IsChecked = true;
+        MemEveIdleBox.Text = m.EveIdleMinutes.ToString();
+        MemMinMbBox.Text = m.MinTrimMb.ToString();
+        MemCacheOnlyLowBox.IsChecked = m.CacheOnlyWhenLow;
+        MemCacheLowPercentBox.Text = m.CacheLowFreePercent.ToString();
+        MemLimitsBox.IsChecked = m.UseProgramLimits;
+        MemLimitsText.Text = (m.ProgramLimits ?? "").Replace("\r", "").Replace("\n", Environment.NewLine);
         MemExcludeBox.Text = m.ExcludedPrograms;
         MemNotifyBox.IsChecked = m.ShowNotification;
 
@@ -1781,6 +1805,8 @@ public partial class SettingsWindow : Window
         MemCacheMinutesBox.IsEnabled = admin;
         MemCacheAboveBox.IsEnabled = admin;
         MemCachePercentBox.IsEnabled = admin;
+        MemCacheOnlyLowBox.IsEnabled = admin;
+        MemCacheLowPercentBox.IsEnabled = admin;
         MemAdminNote.Visibility = admin ? Visibility.Collapsed : Visibility.Visible;
         MemAdminPanel.Visibility = admin ? Visibility.Collapsed : Visibility.Visible;
     }
@@ -1799,7 +1825,14 @@ public partial class SettingsWindow : Window
             TrimUsagePercent = ParseOr(MemTrimPercentBox.Text, 50, 99, old.TrimUsagePercent),
             ClearCacheAboveUsage = MemCacheAboveBox.IsChecked == true,
             CacheUsagePercent = ParseOr(MemCachePercentBox.Text, 50, 99, old.CacheUsagePercent),
-            SkipEveClients = MemSkipEveBox.IsChecked == true,
+            SkipEveClients = MemEveNeverRadio.IsChecked == true,
+            EveIdleTrim = MemEveIdleRadio.IsChecked == true,
+            EveIdleMinutes = ParseOr(MemEveIdleBox.Text, 1, 1440, old.EveIdleMinutes),
+            MinTrimMb = ParseOr(MemMinMbBox.Text, 0, 4096, old.MinTrimMb),
+            CacheOnlyWhenLow = MemCacheOnlyLowBox.IsChecked == true,
+            CacheLowFreePercent = ParseOr(MemCacheLowPercentBox.Text, 5, 90, old.CacheLowFreePercent),
+            UseProgramLimits = MemLimitsBox.IsChecked == true,
+            ProgramLimits = string.Join("\n", MemLimitsText.Text.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)),
             ExcludedPrograms = MemExcludeBox.Text.Trim(),
             ShowNotification = MemNotifyBox.IsChecked == true
         };
@@ -1823,6 +1856,7 @@ public partial class SettingsWindow : Window
         MemStatsText.Text = st.Samples == 0 ? "" :
             $"Average:  {Mb(st.AvgUsed)} ({st.AvgPercent}%)     Highest:  {Mb(st.MaxUsed)} ({st.MaxPercent}%)     Lowest:  {Mb(st.MinUsed)} ({st.MinPercent}%)";
         if (_manager.LastMemoryResult.Length > 0) MemResultText.Text = _manager.LastMemoryResult;
+        MemSessionText.Text = _manager.SessionSummary;
 
         _memPercent = s.LoadPercent;
         UpdateMemoryBar();
@@ -1894,6 +1928,147 @@ public partial class SettingsWindow : Window
         MemResultText.Text = "Couldn't clear the clipboard (another program is using it). Try again.";
     }
 
+    private async void RestartExplorer_Click(object sender, RoutedEventArgs e)
+    {
+        if (Dialogs.Ask(this, "Restart Windows Explorer",
+                "Close and restart Windows Explorer?\n\nThe taskbar and desktop disappear for a moment, and any open File Explorer windows close. Your programs keep running.",
+                "Restart", "Cancel") != 0) return;
+        MemExplorerBtn.IsEnabled = false;
+        MemResultText.Text = "Restarting Windows Explorer...";
+        try
+        {
+            var result = await _manager.RestartExplorerAsync();
+            MemResultText.Text = _manager.LastMemoryResult.Length > 0 ? _manager.LastMemoryResult : result.Message;
+        }
+        catch (Exception ex)
+        {
+            MemResultText.Text = "Couldn't restart Windows Explorer: " + ex.Message;
+        }
+        finally
+        {
+            MemExplorerBtn.IsEnabled = true;
+        }
+    }
+
+    // ----- Top Programs -----
+
+    private async void RefreshPrograms()
+    {
+        if (_progBusy) return;
+        _progBusy = true;
+        try
+        {
+            var list = await _manager.SampleProgramsAsync(10);
+            if (_pageIndex != PageMemory_) return;                 // the page was left while the programs were being read
+            _programs = list;
+            BuildProgramRows();
+        }
+        catch (Exception ex)
+        {
+            TopProgsNote.Text = "Couldn't read the programs: " + ex.Message;
+        }
+        finally
+        {
+            _progBusy = false;
+        }
+    }
+
+    /// <summary>One line per program: name, size, trend, and the Trim and Never trim buttons.</summary>
+    private void BuildProgramRows()
+    {
+        if (TopProgsHost is null) return;
+        TopProgsHost.Children.Clear();
+        var never = MemoryCleaner.ParseNames(MemExcludeBox.Text);
+        foreach (var program in _programs)
+        {
+            string name = program.Name;
+            bool isNever = never.Contains(name);
+            var row = new Grid { Margin = new Thickness(0, 0, 0, 6) };
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(86) });
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(96) });
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            var label = new TextBlock
+            {
+                Text = name + (program.Count > 1 ? $"  ×{program.Count}" : "") + (isNever ? "   (never trimmed)" : ""),
+                VerticalAlignment = VerticalAlignment.Center,
+                TextTrimming = TextTrimming.CharacterEllipsis,
+                Foreground = isNever ? Theme.Muted : Theme.Text
+            };
+            var size = new TextBlock
+            {
+                Text = MemoryCleaner.FormatMb(program.Bytes),
+                VerticalAlignment = VerticalAlignment.Center,
+                HorizontalAlignment = HorizontalAlignment.Right,
+                Margin = new Thickness(0, 0, 14, 0),
+                FontWeight = FontWeights.SemiBold
+            };
+            string trendText = program.Growing ? "▲ growing" : program.Trend;
+            var trend = new TextBlock
+            {
+                Text = trendText,
+                VerticalAlignment = VerticalAlignment.Center,
+                Foreground = program.Growing ? (Brush)FindResource("BrushWarn") : Theme.Muted,
+                FontWeight = program.Growing ? FontWeights.SemiBold : FontWeights.Normal,
+                ToolTip = program.Growing ? "This program's memory has kept rising for several minutes" : "Compared with about a minute ago"
+            };
+            var trim = new Button { Content = "Trim", Padding = new Thickness(10, 4, 10, 4), FontSize = 12, Margin = new Thickness(0, 0, 6, 0), ToolTip = "Trim this program's memory now" };
+            trim.Click += (_, _) => TrimOne(name, trim);
+            var keep = new Button
+            {
+                Content = isNever ? "Allow" : "Never trim",
+                Padding = new Thickness(10, 4, 10, 4),
+                FontSize = 12,
+                MinWidth = 78,
+                ToolTip = isNever ? "Let the automatic cleaning trim this program again" : "Put this program on the never-trim list"
+            };
+            keep.Click += (_, _) => ToggleNeverTrim(name);
+            Grid.SetColumn(size, 1);
+            Grid.SetColumn(trend, 2);
+            Grid.SetColumn(trim, 3);
+            Grid.SetColumn(keep, 4);
+            row.Children.Add(label);
+            row.Children.Add(size);
+            row.Children.Add(trend);
+            row.Children.Add(trim);
+            row.Children.Add(keep);
+            TopProgsHost.Children.Add(row);
+        }
+        TopProgsNote.Text = _programs.Count == 0 ? "Reading programs..." : $"Updated {DateTime.Now:HH:mm:ss}.";
+    }
+
+    private async void TrimOne(string name, Button button)
+    {
+        button.IsEnabled = false;
+        MemResultText.Text = "Trimming...";
+        try
+        {
+            var result = await _manager.TrimProgramAsync(name, ReadMemorySettings());
+            MemResultText.Text = _manager.LastMemoryResult.Length > 0 ? _manager.LastMemoryResult : result.Message;
+        }
+        catch (Exception ex)
+        {
+            MemResultText.Text = "Couldn't trim: " + ex.Message;
+        }
+        finally
+        {
+            button.IsEnabled = true;
+            RefreshMemory();
+            RefreshPrograms();
+        }
+    }
+
+    /// <summary>Adds the program to the never-trim list, or takes it off again. Kept like any other edit: Apply or Save makes it count.</summary>
+    private void ToggleNeverTrim(string name)
+    {
+        var names = MemoryCleaner.ParseNames(MemExcludeBox.Text);
+        if (!names.Remove(name)) names.Add(name);
+        MemExcludeBox.Text = string.Join(", ", names.OrderBy(n => n, StringComparer.OrdinalIgnoreCase));
+        BuildProgramRows();
+        SetStatus("The never-trim list changed. Press Apply or Save to use it.", false);
+    }
+
     private void RestartAdmin_Click(object sender, RoutedEventArgs e)
     {
         if (Dialogs.Ask(this, "Restart as administrator",
@@ -1912,6 +2087,7 @@ public partial class SettingsWindow : Window
     protected override void OnClosed(EventArgs e)
     {
         _memTimer.Stop();
+        _progTimer.Stop();
         base.OnClosed(e);
     }
 
@@ -1975,6 +2151,14 @@ public partial class SettingsWindow : Window
         if (!InRange(MemTrimPercentBox.Text, 50, 99, out _) || !InRange(MemCachePercentBox.Text, 50, 99, out _))
             return Fail(PageMemory_, "The memory-use limits must be 50 to 99 percent.");
 
+        if (!InRange(MemMinMbBox.Text, 0, 4096, out _))
+            return Fail(PageMemory_, "The smallest program to trim must be 0 to 4096 MB.");
+        if (!InRange(MemEveIdleBox.Text, 1, 1440, out _))
+            return Fail(PageMemory_, "The idle time for EVE clients must be 1 to 1440 minutes.");
+        if (!InRange(MemCacheLowPercentBox.Text, 5, 90, out _))
+            return Fail(PageMemory_, "The free-memory level for clearing the cache must be 5 to 90 percent.");
+        if (!MemoryCleaner.TryParseLimits(MemLimitsText.Text, out _, out string limitError))
+            return Fail(PageMemory_, limitError);
         // Notifications
         if (!InRange(NotifyCooldownBox.Text, 0, 3600, out int cooldown))
             return Fail(PageNotifications_, "The cooldown must be 0 to 3600 seconds.");
@@ -2083,7 +2267,3 @@ public partial class SettingsWindow : Window
         return true;
     }
 }
-
-
-
-

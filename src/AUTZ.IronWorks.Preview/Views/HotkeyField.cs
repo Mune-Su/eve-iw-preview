@@ -152,7 +152,3 @@ public sealed class HotkeyField : UserControl
         Release(token);
     }
 }
-
-
-
-

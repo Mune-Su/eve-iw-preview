@@ -76,7 +76,3 @@ public sealed class PromptWindow : Window
         return window.ShowDialog() == true ? window.Value : null;
     }
 }
-
-
-
-

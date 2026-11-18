@@ -63,7 +63,3 @@ internal static class AppInfo
         }
     }
 }
-
-
-
-

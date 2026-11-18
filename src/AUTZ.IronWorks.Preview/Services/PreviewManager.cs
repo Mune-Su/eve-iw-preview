@@ -50,6 +50,11 @@ public sealed class PreviewManager : IDisposable
     private readonly DispatcherTimer _trimTimer = new();
     private readonly DispatcherTimer _memoryTimer = new();
     private readonly MemoryUsageStats _memoryStats = new();
+    private readonly Dictionary<nint, DateTime> _lastActiveAt = new();            // memory cleaner: when each EVE client last had focus (for trimming idle background clients)
+    private readonly Dictionary<string, List<(DateTime At, long Bytes)>> _programHistory = new(StringComparer.OrdinalIgnoreCase);   // Top Programs: recent readings per program
+    private readonly Dictionary<string, DateTime> _limitTrimmedAt = new(StringComparer.OrdinalIgnoreCase);   // per-program limits: when a program was last trimmed for going over
+    private long _sessionFreed;                            // memory cleaner: total returned to available memory by every clean this run
+    private int _sessionCleans;
     private DateTime _lastTrimAt = DateTime.UtcNow;       // memory cleaner: when programs were last trimmed (periodic runs and the cool-down count from here)
     private DateTime _lastCacheAt = DateTime.UtcNow;
     private bool _memoryBusy;
@@ -226,11 +231,16 @@ public sealed class PreviewManager : IDisposable
             }
         }
         _clientHandles.Clear();
-        foreach (var c in _clients) _clientHandles.Add(c.Handle);
+        foreach (var c in _clients)
+        {
+            _clientHandles.Add(c.Handle);
+            _lastActiveAt.TryAdd(c.Handle, DateTime.UtcNow);
+        }
         var live = _clients.ToDictionary(c => c.Handle);
 
         foreach (nint stale in _inherit.Keys.Where(h => !live.ContainsKey(h)).ToList()) _inherit.Remove(stale);
         foreach (nint gone in _everFocused.Where(h => !live.ContainsKey(h)).ToList()) _everFocused.Remove(gone);
+        foreach (nint gone in _lastActiveAt.Keys.Where(h => !live.ContainsKey(h)).ToList()) _lastActiveAt.Remove(gone);
 
         foreach (nint handle in _windows.Keys.ToList())
         {
@@ -758,6 +768,12 @@ public sealed class PreviewManager : IDisposable
         nint active = _clientHandles.Contains(hwnd) ? hwnd : 0;
         bool changed = active != _activeClient;
         _activeClient = active;
+        if (active != 0 || previous != 0)
+        {
+            var stamp = DateTime.UtcNow;                  // memory cleaner: the client you were in, and the one you are in, count as just used
+            if (previous != 0 && changed) _lastActiveAt[previous] = stamp;
+            if (active != 0) _lastActiveAt[active] = stamp;
+        }
 
         if (changed) Log.Debug("FOCUS", $"active EVE client: {(previous == 0 ? "none" : Log.Win(previous))} -> {(active == 0 ? "none (" + Log.Win(hwnd) + " is in front)" : Log.Win(active))}");
         if (active != 0)
@@ -929,11 +945,11 @@ public sealed class PreviewManager : IDisposable
         _memoryTimer.Stop();
         var m = _state.Memory;
         if (!m.AnyAutomatic) return;
-
         _lastTrimAt = DateTime.UtcNow;                // times count from now
         _lastCacheAt = DateTime.UtcNow;
         _cacheNoAdminLogged = false;
-        _memoryTimer.Interval = TimeSpan.FromSeconds(m.TrimAboveUsage || m.ClearCacheAboveUsage ? 30 : 60);
+        bool quick = m.TrimAboveUsage || m.ClearCacheAboveUsage || (m.UseProgramLimits && !string.IsNullOrWhiteSpace(m.ProgramLimits));
+        _memoryTimer.Interval = TimeSpan.FromSeconds(quick ? 30 : 60);
         _memoryTimer.Start();
         Log.Debug("MEMORY", $"automatic cleaning on (checks every {(int)_memoryTimer.Interval.TotalSeconds} s)");
     }
@@ -949,19 +965,26 @@ public sealed class PreviewManager : IDisposable
                 _memoryTimer.Stop();
                 return;
             }
-
             var now = DateTime.UtcNow;
             var status = SampleMemory();
-
+            int freePercent = status.IsValid ? 100 - status.LoadPercent : 100;
             bool trim = m.TrimEveryMinutes && now - _lastTrimAt >= TimeSpan.FromMinutes(Math.Max(1, m.TrimMinutes));
-            bool cache = m.ClearCacheEvery && now - _lastCacheAt >= TimeSpan.FromMinutes(Math.Max(1, m.CacheMinutes));
+            // smart standby clear: on a schedule it only runs while free memory is low (the usage limit below is separate)
+            bool cache = m.ClearCacheEvery && now - _lastCacheAt >= TimeSpan.FromMinutes(Math.Max(1, m.CacheMinutes)) &&
+                         (!m.CacheOnlyWhenLow || freePercent < m.CacheLowFreePercent);
             if (!trim && m.TrimAboveUsage && status.LoadPercent >= m.TrimUsagePercent && now - _lastTrimAt >= ThresholdCooldown) trim = true;
             if (!cache && m.ClearCacheAboveUsage && status.LoadPercent >= m.CacheUsagePercent && now - _lastCacheAt >= ThresholdCooldown) cache = true;
-            if (!trim && !cache) return;
-
+            Dictionary<string, int> limits = new();
+            bool useLimits = m.UseProgramLimits && MemoryCleaner.TryParseLimits(m.ProgramLimits, out limits, out _) && limits.Count > 0;
+            if (!trim && !cache && !useLimits) return;
             _memoryBusy = true;
             var messages = new List<string>();
             if (trim) messages.Add((await TrimNowAsync(m)).Message);
+            if (useLimits)
+            {
+                var overLimit = await TrimOverLimitsAsync(m, limits);
+                if (overLimit is not null) messages.Add(overLimit.Message);
+            }
             if (cache)
             {
                 if (MemoryCleaner.IsAdministrator) messages.Add((await ClearCacheNowAsync()).Message);
@@ -975,7 +998,6 @@ public sealed class PreviewManager : IDisposable
                     }
                 }
             }
-
             if (m.ShowNotification && messages.Count > 0) Toast?.Invoke("Memory cleaned", string.Join("  ", messages));
         }
         catch (Exception ex)
@@ -988,29 +1010,191 @@ public sealed class PreviewManager : IDisposable
         }
     }
 
+    /// <summary>
+    /// Cleaning runs on its own thread at below-normal priority, so it never competes with the game or the desktop.
+    /// </summary>
+    private static Task<T> RunLow<T>(Func<T> work)
+    {
+        var done = new TaskCompletionSource<T>();
+        var thread = new Thread(() =>
+        {
+            try { done.SetResult(work()); }
+            catch (Exception ex) { done.SetException(ex); }
+        })
+        { IsBackground = true, Priority = ThreadPriority.BelowNormal, Name = "memory-clean" };
+        thread.Start();
+        return done.Task;
+    }
+
+    /// <summary>
+    /// What a trim run may touch right now. Call it on the UI thread: it reads the client list and the window in front
+    /// (copied here, before the work moves to a background thread).
+    /// </summary>
+    private TrimScope NewScope(MemoryCleanerSettings m, IReadOnlySet<string>? only = null, bool explicitNames = false, bool honourNeverList = true)
+    {
+        NativeMethods.GetWindowThreadProcessId(NativeMethods.GetForegroundWindow(), out uint foreground);
+        return new TrimScope
+        {
+            ForegroundPid = foreground,
+            EvePids = new HashSet<uint>(_eve.ClientProcessIds),
+            EveIdlePids = IdleEvePids(m),
+            OnlyNames = only,
+            Explicit = explicitNames,
+            HonourNeverList = honourNeverList
+        };
+    }
+
+    /// <summary>The EVE clients that are in the background and have not been in front for the idle time (never the one you are in).</summary>
+    private HashSet<uint> IdleEvePids(MemoryCleanerSettings m)
+    {
+        var pids = new HashSet<uint>();
+        if (!m.EveIdleTrim) return pids;
+        var limit = TimeSpan.FromMinutes(Math.Max(1, m.EveIdleMinutes));
+        var now = DateTime.UtcNow;
+        foreach (var client in _clients)
+        {
+            if (client.Handle == _activeClient || client.Handle == _pendingTarget) continue;
+            if (!_lastActiveAt.TryGetValue(client.Handle, out var at) || now - at < limit) continue;
+            NativeMethods.GetWindowThreadProcessId(client.Handle, out uint pid);
+            if (pid != 0) pids.Add(pid);
+        }
+        return pids;
+    }
+
     /// <summary>Trims the working set of the running programs (see MemoryCleaner). Used by the button and by the automatic options.</summary>
     public async Task<CleanResult> TrimNowAsync(MemoryCleanerSettings settings)
     {
-        var evePids = new HashSet<uint>(_eve.ClientProcessIds);       // copied here, on the UI thread, before the work moves to a background thread
-        NativeMethods.GetWindowThreadProcessId(NativeMethods.GetForegroundWindow(), out uint foreground);
-        var result = await Task.Run(() => MemoryCleaner.TrimWorkingSets(settings, evePids, foreground));
+        var scope = NewScope(settings);
+        var result = await RunLow(() => MemoryCleaner.TrimWorkingSets(settings, scope));
         _lastTrimAt = DateTime.UtcNow;
         RememberMemoryResult(result);
         return result;
     }
 
-    /// <summary>Flushes Windows' file cache (needs administrator rights).</summary>
+    /// <summary>Trims one program (the Trim button next to it in Top Programs): its size and the never-trim list don't matter.</summary>
+    public async Task<CleanResult> TrimProgramAsync(string name, MemoryCleanerSettings settings)
+    {
+        var scope = NewScope(settings, new HashSet<string>(StringComparer.OrdinalIgnoreCase) { name }, explicitNames: true, honourNeverList: false);
+        var result = await RunLow(() => MemoryCleaner.TrimWorkingSets(settings, scope));
+        RememberMemoryResult(result);
+        return result;
+    }
+
+    /// <summary>
+    /// Per-program limits: every program on the list that is using more than its limit is trimmed, at most once every
+    /// 3 minutes each. Null when nothing was over its limit.
+    /// </summary>
+    private async Task<CleanResult?> TrimOverLimitsAsync(MemoryCleanerSettings settings, Dictionary<string, int> limits)
+    {
+        var usage = await RunLow(MemoryCleaner.Usage);
+        var now = DateTime.UtcNow;
+        var over = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var pair in limits)
+        {
+            if (!usage.TryGetValue(pair.Key, out var u) || u.Bytes <= pair.Value * 1048576L) continue;
+            if (_limitTrimmedAt.TryGetValue(pair.Key, out var at) && now - at < ThresholdCooldown) continue;
+            over.Add(pair.Key);
+            _limitTrimmedAt[pair.Key] = now;
+        }
+        if (over.Count == 0) return null;
+        var scope = NewScope(settings, over, explicitNames: true);       // the never-trim list still wins
+        var result = await RunLow(() => MemoryCleaner.TrimWorkingSets(settings, scope));
+        RememberMemoryResult(result);
+        return result;
+    }
+
+    /// <summary>
+    /// The programs using the most memory, with a trend against about a minute ago and a "growing" flag for a program whose
+    /// memory has kept rising for several minutes. Only called while the Memory page is open, so the readings (and the trends)
+    /// build up only then.
+    /// </summary>
+    public async Task<IReadOnlyList<ProgramUsage>> SampleProgramsAsync(int top)
+    {
+        var usage = await RunLow(MemoryCleaner.Usage);
+        var now = DateTime.UtcNow;
+        foreach (string gone in _programHistory.Keys.Where(k => !usage.ContainsKey(k)).ToList()) _programHistory.Remove(gone);
+        var rows = new List<ProgramUsage>();
+        foreach (var pair in usage.OrderByDescending(p => p.Value.Bytes))
+        {
+            if (!_programHistory.TryGetValue(pair.Key, out var history))
+            {
+                history = new List<(DateTime At, long Bytes)>();
+                _programHistory[pair.Key] = history;
+            }
+            history.Add((now, pair.Value.Bytes));
+            if (history.Count > 40) history.RemoveAt(0);                      // about 6 minutes at one reading every 10 s
+            if (rows.Count < top)
+            {
+                var (trend, growing) = TrendOf(history);
+                rows.Add(new ProgramUsage(pair.Key, pair.Value.Bytes, pair.Value.Count, trend, growing));
+            }
+        }
+        return rows;
+    }
+
+    private static (string Trend, bool Growing) TrendOf(List<(DateTime At, long Bytes)> history)
+    {
+        if (history.Count < 3) return ("", false);
+        var latest = history[^1];
+        var reference = history[0];
+        for (int i = history.Count - 2; i >= 0; i--)
+        {
+            if ((latest.At - history[i].At).TotalSeconds >= 60) { reference = history[i]; break; }   // the newest reading that is at least a minute old
+        }
+        long change = latest.Bytes - reference.Bytes;
+        long small = Math.Max(10L * 1048576, reference.Bytes / 33);                                   // under 10 MB or about 3%: no change worth showing
+        string trend = Math.Abs(change) < small ? "–" : change > 0 ? "▲" : "▼";
+        // a possible leak: at least 10 readings over 2.5 minutes or more, mostly rising, never dropping much, and up by 50 MB and 8%
+        bool growing = false;
+        var first = history[0];
+        if (history.Count >= 10 && (latest.At - first.At).TotalSeconds >= 150)
+        {
+            int rises = 0;
+            bool bigDrop = false;
+            for (int i = 1; i < history.Count; i++)
+            {
+                long step = history[i].Bytes - history[i - 1].Bytes;
+                if (step >= 0) rises++;
+                if (step < -(history[i - 1].Bytes / 20)) bigDrop = true;
+            }
+            long grown = latest.Bytes - first.Bytes;
+            growing = !bigDrop && rises >= (history.Count - 1) * 3 / 4 && grown >= 50L * 1048576 && grown >= first.Bytes / 12;
+        }
+        return (trend, growing);
+    }
+
+    /// <summary>Flushes Windows' file cache and standby lists (needs administrator rights).</summary>
     public async Task<CleanResult> ClearCacheNowAsync()
     {
-        var result = await Task.Run(MemoryCleaner.ClearSystemCache);
+        var result = await RunLow(MemoryCleaner.ClearSystemCache);
         _lastCacheAt = DateTime.UtcNow;
         RememberMemoryResult(result);
         return result;
     }
 
+    /// <summary>Closes and restarts Windows Explorer (the taskbar, the desktop and File Explorer windows).</summary>
+    public async Task<CleanResult> RestartExplorerAsync()
+    {
+        Log.Debug("MEMORY", "restarting Windows Explorer");
+        var result = await RunLow(MemoryCleaner.RestartExplorer);
+        LastMemoryResult = $"{DateTime.Now:HH:mm:ss}  {result.Message}";
+        Log.Debug("MEMORY", $"{(result.Ok ? "ok" : "failed")}: {result.Message}");
+        return result;
+    }
+
+    /// <summary>What every clean since the app started has given back, for the Memory page ("" until something has been cleaned).</summary>
+    public string SessionSummary =>
+        _sessionCleans == 0 ? "" :
+        $"Since the app started: {_sessionCleans} clean{(_sessionCleans == 1 ? "" : "s")}, about {MemoryCleaner.FormatMb(_sessionFreed)} returned to available memory in total.";
+
     private void RememberMemoryResult(CleanResult result)
     {
         LastMemoryResult = $"{DateTime.Now:HH:mm:ss}  {result.Message}";
+        if (result.Ok)
+        {
+            _sessionCleans++;
+            _sessionFreed += result.FreedBytes;
+        }
         Log.Debug("MEMORY", $"{(result.Ok ? "ok" : "failed")}: {result.Message}");     // counts and sizes only: no program names are ever logged
     }
 
@@ -1671,7 +1855,3 @@ public sealed class PreviewManager : IDisposable
         _meta.Clear();
     }
 }
-
-
-
-

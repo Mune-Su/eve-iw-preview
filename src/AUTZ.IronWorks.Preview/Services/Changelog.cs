@@ -7,6 +7,20 @@ internal static class Changelog
 {
     public static readonly ChangelogEntry[] Entries =
     {
+        new("0.14.0", "Memory cleaner upgrades", new[]
+        {
+            "New: Restart Windows Explorer, a button on the Memory page and an item in the tray menu. It asks first, then closes Explorer (the taskbar, the desktop and any File Explorer windows) and starts it again. Your programs keep running.",
+            "The tray menu is shorter: Refresh Clients and Reset All Positions are gone. Reset all positions is still in Settings > General.",
+            "\"Trim programs' working set\" is now called Trim Programs.",
+            "New: a Top Programs card on the Memory page. It lists the 10 programs using the most memory (all the processes of a program added together), refreshed every 10 seconds while the page is open, and nothing is read while the page is closed or the window is minimised. Each program has a Trim button (trim just that one now) and a Never trim / Allow button (adds it to, or takes it off, the never-trim list). An arrow compares with about a minute ago, and a yellow \"growing\" tag marks a program whose memory has kept rising for several minutes, which can mean a leak. The trends build up only while the page is open.",
+            "New: Smallest program to trim (default 30 MB). Programs using less are skipped because trimming them gains almost nothing; 0 trims everything. It doesn't apply to the Trim button next to a program.",
+            "New: EVE clients have three choices: never trim them (the default), trim background clients once they have been idle for the time you set (the client you are in is never trimmed), or trim them like any other program.",
+            "New: per-program limits. Add lines like chrome=1500 and a program using more than that is trimmed (at most once every 3 minutes each). The never-trim list and the program in front still win.",
+            "New: scheduled cache clearing can wait until free memory is low (default: below 20%), so it doesn't run when there is plenty of free memory. The usage-limit option is separate.",
+            "Stronger Clear system cache: as well as flushing Windows' file cache it now writes modified pages to disk and drops the low-priority cached pages (needs administrator rights, like before).",
+            "Every clean now shows the available memory before and after, and the Memory page keeps a running total of what has been returned since the app started.",
+            "Lower impact: cleaning runs on its own thread at below-normal priority so it doesn't compete with EVE, and the Windows audio engine is never trimmed. The log still records only counts and sizes, never program names."
+        }),
         new("0.13.0", "Memory cleaner", new[]
         {
             "New: a Memory page in Configuration. It shows how much memory your PC is using (a bar, the committed memory, and the average, highest and lowest readings) and has the buttons Trim programs' working set, Clear system cache and Clear clipboard.",
@@ -194,7 +208,3 @@ internal static class Changelog
         })
     };
 }
-
-
-
-

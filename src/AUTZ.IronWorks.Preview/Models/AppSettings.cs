@@ -294,11 +294,24 @@ public sealed class MemoryCleanerSettings
     public int CacheUsagePercent { get; set; } = 80;
     /// <summary>True = EVE clients are never trimmed (a trimmed background client stutters for a moment when you switch to it).</summary>
     public bool SkipEveClients { get; set; } = true;
+    /// <summary>True = EVE clients in the background are trimmed once they have been idle for EveIdleMinutes (never the one in front). Overrides SkipEveClients.</summary>
+    public bool EveIdleTrim { get; set; } = false;
+    public int EveIdleMinutes { get; set; } = 10;
+    /// <summary>Programs using less than this many megabytes are not trimmed (0 = trim everything).</summary>
+    public int MinTrimMb { get; set; } = 30;
+    /// <summary>True = clearing the system cache on a schedule only happens while free memory is below CacheLowFreePercent.</summary>
+    public bool CacheOnlyWhenLow { get; set; } = true;
+    public int CacheLowFreePercent { get; set; } = 20;
+    /// <summary>True = a program that goes over its own limit (ProgramLimits) is trimmed.</summary>
+    public bool UseProgramLimits { get; set; } = false;
+    /// <summary>One "name=megabytes" per line, for example chrome=1500.</summary>
+    public string ProgramLimits { get; set; } = "";
     /// <summary>Program names (without .exe) that are never trimmed, separated by commas.</summary>
     public string ExcludedPrograms { get; set; } = "";
     public bool ShowNotification { get; set; } = false;
 
-    public bool AnyAutomatic => TrimEveryMinutes || ClearCacheEvery || TrimAboveUsage || ClearCacheAboveUsage;
+    public bool AnyAutomatic => TrimEveryMinutes || ClearCacheEvery || TrimAboveUsage || ClearCacheAboveUsage ||
+                                (UseProgramLimits && !string.IsNullOrWhiteSpace(ProgramLimits));
 
     public MemoryCleanerSettings Clone() =>
         JsonSerializer.Deserialize<MemoryCleanerSettings>(JsonSerializer.Serialize(this)) ?? new MemoryCleanerSettings();
@@ -331,7 +344,3 @@ public sealed class AppState
     public AppState Clone() =>
         JsonSerializer.Deserialize<AppState>(JsonSerializer.Serialize(this)) ?? new AppState();
 }
-
-
-
-
