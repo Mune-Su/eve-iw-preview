@@ -1426,18 +1426,19 @@ public sealed class PreviewManager : IDisposable
         var dialog = new SettingsWindow(this);
         _settingsWindow = dialog;
         UpdateHotkeySuspension();        // paused (so the hotkey boxes can record any key) unless the hotkeys are set to keep working here
-        try
-        {
-            dialog.ShowDialog();
-        }
-        finally
+
+        // v0.18.2: a normal window, not a modal dialog. A modal dialog makes WPF disable every other window of the app, and that
+        // includes the thumbnails, so they could not be clicked (or moved) while Configuration was open.
+        dialog.Closed += (_, _) =>
         {
             _settingsWindow = null;
             _recordingHotkey = false;
             UpdateHotkeySuspension();
             RegisterHotkeys();
             ScheduleTrim(3000);                        // the Configuration window is the biggest thing the app ever builds: give it back
-        }
+        };
+        dialog.Show();
+        dialog.Activate();
     }
 
     // ----- called by the settings window -----

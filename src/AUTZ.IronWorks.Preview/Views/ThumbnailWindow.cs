@@ -254,6 +254,7 @@ public sealed class ThumbnailWindow : Window
 
         // the left button only ever switches (or, in the corner, resizes): it never moves the thumbnail
         if (CanClick) Clicked?.Invoke(this);
+        else AUTZ.IronWorks.Preview.Services.Log.Debug("SWITCH", "thumbnail click ignored: clicking is switched off for " + (Client.IsLoginScreen ? "login screen" : "character") + " thumbnails (Thumbnails > Interaction)");
     }
 
     private void OnLeftUp(object sender, MouseButtonEventArgs e)

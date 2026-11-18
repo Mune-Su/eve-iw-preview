@@ -6,6 +6,10 @@ A lightweight Windows utility for permanent live previews of your running EVE On
 
 **Run it:** double-click `EVE-IW-Preview.exe` in this folder (needs the .NET 8 Desktop Runtime, already installed if you have the .NET SDK). It runs in the **system tray only** (no taskbar button): right-click the tray icon for the menu, double-click it for Configuration.
 
+## v0.18.2
+
+- **Thumbnails work while Configuration is open.** The Configuration window is a normal window instead of a modal dialog, so thumbnails can be clicked and moved while it is open.
+
 ## v0.18.1
 
 - **The resize triangle only shows, and only works, while Shift is held.** Without Shift a click in the corner switches like anywhere else.

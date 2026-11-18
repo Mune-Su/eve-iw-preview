@@ -7,6 +7,11 @@ internal static class Changelog
 {
     public static readonly ChangelogEntry[] Entries =
     {
+        new("0.18.2", "Thumbnails work while Configuration is open", new[]
+        {
+            "Fixed: clicking a thumbnail did nothing while the Configuration window was open. The window was a modal dialog, and Windows disables every other window of the app while a modal dialog is open, thumbnails included. It is a normal window now, so thumbnails can be clicked to switch (and moved with Shift + right-drag) while you change settings. The Configuration window is still one-at-a-time, and it stays in the taskbar if EVE covers it.",
+            "A click that is ignored because clicking is switched off for that kind of thumbnail now says so in the detailed log (Settings > About > Diagnostics)."
+        }),
         new("0.18.1", "Resize corner only with Shift", new[]
         {
             "Changed: the orange resize triangle in a thumbnail's bottom-right corner now only shows, and only works, while Shift is held. Without Shift it is hidden and a click there switches clients like anywhere else on the thumbnail. So moving (Shift + right-drag) and resizing (Shift, then drag the triangle with the left button) both need Shift, and nothing moves or resizes by accident.",
