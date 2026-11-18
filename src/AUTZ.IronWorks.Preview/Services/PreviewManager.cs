@@ -342,20 +342,14 @@ public sealed class PreviewManager : IDisposable
     {
         if (_settings.ClientOrderResetPending)
         {
-            if (_settings.ClientOrderMode != AppSettings.OrderSaved)
+            // a "Reset order" that an older version left waiting (it used to wait until no client was open): do it now
+            bool saved = _settings.ClientOrderMode == AppSettings.OrderSaved;
+            Log.Debug("ORDER", saved ? "saved order cleared (a reset was waiting)" : "a waiting reset was dropped (not in Saved mode)");
+            Persist(s =>
             {
-                Persist(s => s.ClientOrderResetPending = false);               // the mode changed since: nothing to reset
-            }
-            else if (openOrder.Count == 0)
-            {
-                // every client is closed (or none was ever detected): wipe the list, it builds again as clients open
-                Log.Debug("ORDER", "saved order cleared (no EVE clients are open)");
-                Persist(s =>
-                {
-                    s.ClientOrder.Clear();
-                    s.ClientOrderResetPending = false;
-                });
-            }
+                if (saved) s.ClientOrder.Clear();
+                s.ClientOrderResetPending = false;
+            });
         }
 
         if (_settings.ClientOrderMode == AppSettings.OrderSaved)
@@ -385,7 +379,23 @@ public sealed class PreviewManager : IDisposable
     private int SlotOf(EveClientWindow client, int indexInList) =>
         _slots.TryGetValue(client.Handle, out int slot) ? slot : indexInList + 1;
 
-    public bool OrderResetPending => _settings.ClientOrderResetPending;
+    /// <summary>
+    /// "Reset order": clears the saved client order at once. In Saved mode the clients that are open right now are put straight
+    /// back in the order they were opened (that is how the saved list always builds); anything not open is forgotten.
+    /// Returns how many names were cleared.
+    /// </summary>
+    public int ClearClientOrder()
+    {
+        int cleared = _settings.ClientOrder.Count;
+        Persist(s =>
+        {
+            s.ClientOrder.Clear();
+            s.ClientOrderResetPending = false;
+        });
+        Log.Debug("ORDER", $"saved order cleared now ({cleared} names)");
+        Refresh();                  // rebuilds the order from the clients that are open right now
+        return cleared;
+    }
 
     /// <summary>
     /// "Save current order": stores the logged-in clients, in the order they are in right now, as the saved order. In Automatic
@@ -404,24 +414,10 @@ public sealed class PreviewManager : IDisposable
         Persist(s =>
         {
             s.ClientOrder = new List<string>(names);
-            s.ClientOrderResetPending = false;               // a pending "Reset order" would only wipe what was just saved
+            s.ClientOrderResetPending = false;
         });
         Log.Debug("ORDER", $"saved the current client order ({names.Count} clients)");
         return names;
-    }
-
-    /// <summary>"Reset order": the saved order is cleared the next time no EVE client is open (at once if none is open now).</summary>
-    public void ArmClientOrderReset()
-    {
-        Log.Debug("ORDER", "reset order requested");
-        Persist(s => s.ClientOrderResetPending = true);
-        Refresh();
-    }
-
-    public void CancelClientOrderReset()
-    {
-        Log.Debug("ORDER", "reset order cancelled");
-        Persist(s => s.ClientOrderResetPending = false);
     }
 
     // ---------- switch in progress ----------

@@ -7,6 +7,12 @@ internal static class Changelog
 {
     public static readonly ChangelogEntry[] Entries =
     {
+        new("0.18.4", "Reset order works straight away", new[]
+        {
+            "Fixed: Reset order did nothing while your clients were running. It only set a flag and waited until every EVE client was closed. It now clears the saved order at once. The clients that are open right now are put back in the order they were opened (that is how the saved list always builds), and any character that isn't open is forgotten. The list on screen updates straight away.",
+            "The Cancel reset button is gone, since there is no waiting any more. A reset that an older version left waiting is done the next time the app starts.",
+            "To set the order yourself instead, open the clients in the order you want and press Save current order."
+        }),
         new("0.18.3", "Save the client order", new[]
         {
             "New: a Save current order button (Grouping > Client Order And Positions, shown for Automatic and Saved). Open your clients in the order you want, press it, and that order is stored for the Saved option. It is saved straight away, and the card shows what is stored. Then choose Saved and press Apply or Save to use it.",

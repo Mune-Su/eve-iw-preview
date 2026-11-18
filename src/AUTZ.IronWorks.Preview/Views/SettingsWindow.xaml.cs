@@ -799,13 +799,24 @@ public partial class SettingsWindow : Window
             ? "Nothing saved yet. It builds up by itself as your clients log in."
             : string.Join("\n", order.Select((n, i) => $"{i + 1}.  {n}" + (_running.Contains(n) ? "   (logged in)" : "")));
 
-        bool pending = isActive && _manager.OrderResetPending;
-        ResetOrderBtn.IsEnabled = isActive && !pending;
-        CancelResetBtn.Visibility = pending ? Visibility.Visible : Visibility.Collapsed;
-        OrderResetNote.Visibility = pending || !isActive ? Visibility.Visible : Visibility.Collapsed;
-        OrderResetNote.Text = !isActive
-            ? "Switch to this profile first: Reset order works on the profile that is running."
-            : "Reset is waiting: the saved order will be cleared the next time no EVE clients are open, then built again in the order they open.";
+        ResetOrderBtn.IsEnabled = isActive;
+        OrderResetNote.Visibility = isActive ? Visibility.Collapsed : Visibility.Visible;
+        OrderResetNote.Text = "Switch to this profile first: Reset order works on the profile that is running.";
+    }
+
+    /// <summary>The order was changed in the running app (Save current order / Reset order): this window's copy and its "nothing unsaved" baseline follow.</summary>
+    private void SyncOrderFromManager(IReadOnlyList<string> order)
+    {
+        _work.ClientOrder = new List<string>(order);
+        if (!_baseline.TryGetValue(_shownProfile, out var json)) return;
+        try
+        {
+            var baseline = JsonSerializer.Deserialize<AppSettings>(json);
+            if (baseline is null) return;
+            baseline.ClientOrder = new List<string>(order);
+            _baseline[_shownProfile] = ToJson(baseline);
+        }
+        catch { }
     }
 
     /// <summary>"Save current order" (Automatic and Saved mode): what is stored right now, and whether the button can be used.</summary>
@@ -831,21 +842,7 @@ public partial class SettingsWindow : Window
             SetStatus("No logged-in EVE clients are open, so there is no order to save. Log your characters in, then try again.", false);
             return;
         }
-        // keep this window's copy in step (and the "nothing unsaved" check), so the order that was just saved isn't overwritten or flagged
-        _work.ClientOrder = new List<string>(saved);
-        if (_baseline.TryGetValue(_shownProfile, out var json))
-        {
-            try
-            {
-                var baseline = JsonSerializer.Deserialize<AppSettings>(json);
-                if (baseline is not null)
-                {
-                    baseline.ClientOrder = new List<string>(saved);
-                    _baseline[_shownProfile] = ToJson(baseline);
-                }
-            }
-            catch { }
-        }
+        SyncOrderFromManager(saved);
         RebuildOrderList();
         SetStatus(_work.ClientOrderMode == AppSettings.OrderSaved
             ? $"Saved the order of {saved.Count} client(s)."
@@ -855,20 +852,16 @@ public partial class SettingsWindow : Window
     private void ResetOrder_Click(object sender, RoutedEventArgs e)
     {
         if (Dialogs.Ask(this, "Reset client order",
-                "Clear the saved client order?\n\nIt is cleared the next time all your EVE clients are closed (or none are open), then built again in the order the clients are opened. Nothing changes until then.",
+                "Clear the saved client order now?\n\nThe clients that are open right now are put back in the order they were opened. Any character that isn't open is forgotten.",
                 "Reset", "Cancel") != 0) return;
-        _manager.ArmClientOrderReset();
-        UpdateSavedOrderPanel();
-        SetStatus(_manager.OrderResetPending
-            ? "Reset order is set: it happens the next time no EVE clients are open."
-            : "The saved order was cleared and will build again as your clients open.", true);
-    }
-
-    private void CancelReset_Click(object sender, RoutedEventArgs e)
-    {
-        _manager.CancelClientOrderReset();
-        UpdateSavedOrderPanel();
-        SetStatus("Reset order cancelled.", true);
+        int cleared = _manager.ClearClientOrder();
+        var now = _manager.Settings.ClientOrder;
+        SyncOrderFromManager(now);
+        _running = new HashSet<string>(_manager.RunningCharacters(), StringComparer.OrdinalIgnoreCase);
+        RebuildOrderList();
+        SetStatus(now.Count == 0
+            ? $"Saved order cleared ({cleared} name(s) removed). No clients are open, so it builds again as they open."
+            : $"Saved order cleared ({cleared} name(s) removed) and rebuilt from the {now.Count} open client(s), in the order they were opened.", true);
     }
 
     private void MoveInOrder(int index, int direction)
