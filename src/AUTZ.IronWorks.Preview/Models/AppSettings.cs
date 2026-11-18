@@ -149,6 +149,8 @@ public sealed class AppSettings
     public bool HotkeysOnlyInEve { get; set; } = false;
     /// <summary>The key or button still reaches the program as well (it is not swallowed).</summary>
     public bool HotkeyPassThrough { get; set; } = false;
+    /// <summary>True = the hotkeys keep working while the Configuration window is open (they still pause while a hotkey box is recording a key).</summary>
+    public bool HotkeysInConfig { get; set; } = false;
 
     // ----- client behaviour -----
     public bool AutoMinimiseInactive { get; set; } = false;

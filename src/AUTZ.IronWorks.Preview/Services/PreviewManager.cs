@@ -85,6 +85,27 @@ public sealed class PreviewManager : IDisposable
 
     public bool ThumbnailsVisible => _visible;
     public bool SettingsOpen => _settingsWindow is not null;
+
+    private bool _recordingHotkey;                         // a hotkey box in the Configuration window has the keyboard
+
+    /// <summary>
+    /// Hotkeys are off while the user has suspended them, and while the Configuration window is open unless "keep working
+    /// while the Configuration window is open" is ticked. Even then they pause while a hotkey box is recording, so pressing a
+    /// hotkey there records it instead of firing it.
+    /// </summary>
+    private void UpdateHotkeySuspension()
+    {
+        bool configBlocks = _settingsWindow is not null && (!_settings.HotkeysInConfig || _recordingHotkey);
+        _hotkeys.Suspended = HotkeysSuspended || configBlocks;
+    }
+
+    /// <summary>Called by the Configuration window when a hotkey box starts or stops recording.</summary>
+    public void SetRecordingHotkey(bool recording)
+    {
+        if (_recordingHotkey == recording) return;
+        _recordingHotkey = recording;
+        UpdateHotkeySuspension();
+    }
     public bool HotkeysSuspended { get; private set; }
     public AppSettings Settings => _settings;
     public AppState State => _state;
@@ -1401,9 +1422,10 @@ public sealed class PreviewManager : IDisposable
             return;
         }
 
-        _hotkeys.Suspended = true;       // so the hotkey boxes in the window can record any key
+        _recordingHotkey = false;
         var dialog = new SettingsWindow(this);
         _settingsWindow = dialog;
+        UpdateHotkeySuspension();        // paused (so the hotkey boxes can record any key) unless the hotkeys are set to keep working here
         try
         {
             dialog.ShowDialog();
@@ -1411,7 +1433,8 @@ public sealed class PreviewManager : IDisposable
         finally
         {
             _settingsWindow = null;
-            _hotkeys.Suspended = HotkeysSuspended;
+            _recordingHotkey = false;
+            UpdateHotkeySuspension();
             RegisterHotkeys();
             ScheduleTrim(3000);                        // the Configuration window is the biggest thing the app ever builds: give it back
         }
@@ -1624,7 +1647,7 @@ public sealed class PreviewManager : IDisposable
         _hotkeys.Gate = _settings.HotkeysOnlyInEve
             ? () => (_pendingTarget != 0 && Log.Ms <= _pendingUntil) || _clientHandles.Contains(NativeMethods.GetForegroundWindow())   // read-only: runs on the hook thread
             : null;
-        _hotkeys.Suspended = HotkeysSuspended || _settingsWindow is not null;
+        UpdateHotkeySuspension();
 
         var invalid = new List<string>();
 
@@ -1665,7 +1688,7 @@ public sealed class PreviewManager : IDisposable
     public void ToggleHotkeysSuspended()
     {
         HotkeysSuspended = !HotkeysSuspended;
-        _hotkeys.Suspended = HotkeysSuspended || _settingsWindow is not null;
+        UpdateHotkeySuspension();
         Toast?.Invoke(AppInfo.Name, HotkeysSuspended ? "Hotkeys are suspended." : "Hotkeys are back on.");
     }
 

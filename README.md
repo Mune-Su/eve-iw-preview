@@ -6,6 +6,10 @@ A lightweight Windows utility for permanent live previews of your running EVE On
 
 **Run it:** double-click `EVE-IW-Preview.exe` in this folder (needs the .NET 8 Desktop Runtime, already installed if you have the .NET SDK). It runs in the **system tray only** (no taskbar button): right-click the tray icon for the menu, double-click it for Configuration.
 
+## v0.17.3
+
+- **Hotkeys while Configuration is open** (Hotkeys > Hotkey Options): optional, off by default. Hotkeys still pause while a hotkey box is recording a key.
+
 ## v0.17.2
 
 - **Check box text can be selected and copied again.** Clicking the text selects it; only the box itself ticks. (Radio buttons unchanged.)

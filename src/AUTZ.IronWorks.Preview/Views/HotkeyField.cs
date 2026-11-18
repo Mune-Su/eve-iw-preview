@@ -19,6 +19,9 @@ public sealed class HotkeyField : UserControl
 
     public event Action? TextChanged;
 
+    /// <summary>Raised with true when any hotkey box gets the keyboard (it is about to record a key) and false when it lets go.</summary>
+    public static event Action<bool>? RecordingChanged;
+
     public string Text
     {
         get => _box.Text.Trim();
@@ -68,7 +71,12 @@ public sealed class HotkeyField : UserControl
         _box.PreviewMouseDown += OnMouseDown;
         _box.PreviewMouseUp += OnMouseUp;
         _box.PreviewMouseWheel += OnMouseWheel;
-        _box.LostKeyboardFocus += (_, _) => Finish();
+        _box.GotKeyboardFocus += (_, _) => RecordingChanged?.Invoke(true);
+        _box.LostKeyboardFocus += (_, _) =>
+        {
+            Finish();
+            RecordingChanged?.Invoke(false);
+        };
     }
 
     private void Press(string token)

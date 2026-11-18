@@ -122,6 +122,7 @@ public partial class SettingsWindow : Window
 
         _memTimer.Tick += (_, _) => RefreshMemory();
         _progTimer.Tick += (_, _) => RefreshPrograms();
+        HotkeyField.RecordingChanged += OnHotkeyRecording;
         StateChanged += (_, _) => UpdateMemoryTimers();
         MemExcludeBox.LostFocus += (_, _) => BuildProgramRows();
         MemTrack.SizeChanged += (_, _) => UpdateMemoryBar();
@@ -381,6 +382,7 @@ public partial class SettingsWindow : Window
         UpdateOrderNote();
         HotkeysOnlyEveBox.IsChecked = s.HotkeysOnlyInEve;
         PassThroughBox.IsChecked = s.HotkeyPassThrough;
+        HotkeysInConfigBox.IsChecked = s.HotkeysInConfig;
         LoadSlotGroups();
         ProfileHotkeyBox.Text = _profileHotkeys.TryGetValue(_shownProfile, out var hotkey) ? hotkey : "";
 
@@ -2219,8 +2221,11 @@ public partial class SettingsWindow : Window
         Application.Current.Shutdown();
     }
 
+    private void OnHotkeyRecording(bool recording) => _manager.SetRecordingHotkey(recording);
+
     protected override void OnClosed(EventArgs e)
     {
+        HotkeyField.RecordingChanged -= OnHotkeyRecording;
         _memTimer.Stop();
         _progTimer.Stop();
         base.OnClosed(e);
@@ -2364,6 +2369,7 @@ public partial class SettingsWindow : Window
         _work.CycleIncludeLoginScreens = CycleLoginBox.IsChecked == true;
         _work.HotkeysOnlyInEve = HotkeysOnlyEveBox.IsChecked == true;
         _work.HotkeyPassThrough = PassThroughBox.IsChecked == true;
+        _work.HotkeysInConfig = HotkeysInConfigBox.IsChecked == true;
         CommitSlotGroup();
 
         _work.AutoMinimiseInactive = AutoMinBox.IsChecked == true;

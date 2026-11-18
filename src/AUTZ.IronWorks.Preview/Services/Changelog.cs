@@ -7,6 +7,12 @@ internal static class Changelog
 {
     public static readonly ChangelogEntry[] Entries =
     {
+        new("0.17.3", "Hotkeys while Configuration is open", new[]
+        {
+            "New: Hotkey Options > \"Keep the hotkeys working while this Configuration window is open\". Off by default (the hotkeys are paused while the window is open, as before). Tick it and your hotkeys keep switching clients while you change settings.",
+            "While you are recording a key in one of the hotkey boxes the hotkeys still pause, so pressing a hotkey there records it instead of firing it. They come back the moment you click out of the box, and they stay on when you click over to EVE.",
+            "With the window open the hotkeys in use are the ones you last applied or saved, not unsaved edits. \"Hotkeys only work while an EVE client is the window in front\" still applies, and the Configuration window is not an EVE client."
+        }),
         new("0.17.2", "Check box text can be selected", new[]
         {
             "Fixed: the text beside a check box can be highlighted and copied again. Clicking the text selects it and does not tick the box; only the box itself ticks it. This covers every check box in Settings, including the character lists.",
