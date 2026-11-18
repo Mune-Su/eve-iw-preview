@@ -7,6 +7,18 @@ internal static class Changelog
 {
     public static readonly ChangelogEntry[] Entries =
     {
+        new("0.16.0", "Tighter, simpler Settings", new[]
+        {
+            "Less empty space: every box, field, drop-down, button, tick box and slider is smaller, and the section cards have less padding, so a lot more fits on screen.",
+            "Pages are now General, Thumbnails, Grouping, Hotkeys, Alerts, Memory and About. Appearance and Thumbnails are one page called Thumbnails, and Clients and Characters are gone as pages.",
+            "Thumbnails holds everything about how a thumbnail looks and behaves: Size And Opacity, Text Label (the text background is part of it now), Borders (active, inactive and the alert flash colour), Per-Character Overrides, Positions, and Interaction And Hiding. Every colour setting is on this page.",
+            "Text Label: Font, Font Size and Position are on one line, Show names and Bold share a line, and the text and background colours, opacities and offsets sit side by side.",
+            "Grouping holds the character groups and Find Running Clients.",
+            "General is Startup And Tray Icon and Clients (scan interval, auto-minimize and the never-minimize list).",
+            "The per-character jump-to hotkey, and what happens when you switch to or away from a client, are on the Hotkeys page.",
+            "Alerts is Notifications, Log Monitoring and Events To Watch. The alert flash colour moved to Thumbnails > Borders.",
+            "Memory is now in the order Memory, Settings (automatic cleaning), Top Programs and Exclusions (what it leaves alone). Nothing was removed and your saved settings are unchanged."
+        }),
         new("0.15.0", "Tidier Settings menus", new[]
         {
             "Appearance now holds every colour, size and opacity option in one place: Size and Opacity (thumbnail width, height and opacity), Text Label (font, size, colour, opacity, position), Text Background, Borders (active and inactive together) and Per-Character Overrides (each character's own label, colour, size, opacity and thumbnail size). The thumbnail size options moved here from General, and the per-character look options moved here from Characters.",

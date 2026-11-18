@@ -34,7 +34,7 @@ public sealed class HotkeyField : UserControl
 
     public HotkeyField()
     {
-        var grid = new Grid { Margin = new Thickness(0, 0, 0, 12) };
+        var grid = new Grid { Margin = new Thickness(0, 0, 0, 8) };
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
 

@@ -88,8 +88,8 @@
             <Setter Property="BorderThickness" Value="1"/>
             <Setter Property="CaretBrush" Value="{StaticResource BrushText}"/>
             <Setter Property="SelectionBrush" Value="{StaticResource BrushAccentLine}"/>
-            <Setter Property="Padding" Value="9,7"/>
-            <Setter Property="Margin" Value="0,0,0,12"/>
+            <Setter Property="Padding" Value="7,3"/>
+            <Setter Property="Margin" Value="0,0,0,8"/>
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="TextBox">
@@ -119,7 +119,7 @@
             <Setter Property="Background" Value="{StaticResource BrushCard}"/>
             <Setter Property="BorderBrush" Value="{StaticResource BrushLine}"/>
             <Setter Property="BorderThickness" Value="1"/>
-            <Setter Property="Padding" Value="14,7"/>
+            <Setter Property="Padding" Value="12,4"/>
             <Setter Property="FontWeight" Value="SemiBold"/>
             <Setter Property="Cursor" Value="Hand"/>
             <Setter Property="Template">
@@ -153,7 +153,7 @@
             <Setter Property="Background" Value="{StaticResource BrushAccent}"/>
             <Setter Property="BorderBrush" Value="{StaticResource BrushAccent}"/>
             <Setter Property="BorderThickness" Value="1"/>
-            <Setter Property="Padding" Value="14,7"/>
+            <Setter Property="Padding" Value="12,4"/>
             <Setter Property="FontWeight" Value="Bold"/>
             <Setter Property="Cursor" Value="Hand"/>
             <Setter Property="Template">
@@ -192,7 +192,7 @@
         <!-- ===== check boxes and radio buttons: orange when ticked, like the website's accent-color ===== -->
         <Style TargetType="CheckBox">
             <Setter Property="Foreground" Value="{StaticResource BrushText}"/>
-            <Setter Property="Margin" Value="0,0,0,10"/>
+            <Setter Property="Margin" Value="0,0,0,6"/>
             <Setter Property="Cursor" Value="Hand"/>
             <Setter Property="Template">
                 <Setter.Value>
@@ -229,7 +229,7 @@
 
         <Style TargetType="RadioButton">
             <Setter Property="Foreground" Value="{StaticResource BrushText}"/>
-            <Setter Property="Margin" Value="0,0,0,10"/>
+            <Setter Property="Margin" Value="0,0,0,6"/>
             <Setter Property="Cursor" Value="Hand"/>
             <Setter Property="Template">
                 <Setter.Value>
@@ -282,7 +282,7 @@
             <Setter Property="Background" Value="{StaticResource BrushInput}"/>
             <Setter Property="BorderBrush" Value="{StaticResource BrushLine}"/>
             <Setter Property="BorderThickness" Value="1"/>
-            <Setter Property="Margin" Value="0,0,0,12"/>
+            <Setter Property="Margin" Value="0,0,0,8"/>
             <Setter Property="MaxDropDownHeight" Value="300"/>
             <Setter Property="Template">
                 <Setter.Value>
@@ -298,7 +298,7 @@
                                               Content="{TemplateBinding SelectionBoxItem}"
                                               ContentTemplate="{TemplateBinding SelectionBoxItemTemplate}"
                                               ContentTemplateSelector="{TemplateBinding ItemTemplateSelector}"
-                                              Margin="10,8,32,8" VerticalAlignment="Center" HorizontalAlignment="Left"/>
+                                              Margin="8,4,28,4" VerticalAlignment="Center" HorizontalAlignment="Left"/>
                             <Popup x:Name="Popup" Placement="Bottom" IsOpen="{TemplateBinding IsDropDownOpen}"
                                    AllowsTransparency="True" Focusable="False" PopupAnimation="None">
                                 <Grid MinWidth="{TemplateBinding ActualWidth}" MaxHeight="{TemplateBinding MaxDropDownHeight}">
@@ -321,7 +321,7 @@
 
         <Style TargetType="ComboBoxItem">
             <Setter Property="Foreground" Value="{StaticResource BrushText}"/>
-            <Setter Property="Padding" Value="10,7"/>
+            <Setter Property="Padding" Value="8,4"/>
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="ComboBoxItem">
@@ -344,11 +344,11 @@
 
         <!-- ===== slider ===== -->
         <Style TargetType="Slider">
-            <Setter Property="Margin" Value="0,2,0,14"/>
+            <Setter Property="Margin" Value="0,0,0,8"/>
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Slider">
-                        <Grid Height="22" Background="Transparent">
+                        <Grid Height="20" Background="Transparent">
                             <Border Height="3" CornerRadius="1.5" Background="{StaticResource BrushLine}" VerticalAlignment="Center"/>
                             <Track x:Name="PART_Track">
                                 <Track.DecreaseRepeatButton>
@@ -408,7 +408,7 @@
 
         <!-- a settings card: click the header to collapse it or open it again -->
         <Style x:Key="Card" TargetType="Expander">
-            <Setter Property="Margin" Value="0,0,0,14"/>
+            <Setter Property="Margin" Value="0,0,0,10"/>
             <Setter Property="Focusable" Value="False"/>
             <Setter Property="IsTabStop" Value="False"/>
             <Setter Property="IsExpanded" Value="True"/>
@@ -417,7 +417,7 @@
                 <Setter.Value>
                     <ControlTemplate TargetType="Expander">
                         <Border x:Name="CardBorder" CornerRadius="3" Background="{StaticResource BrushCard}" BorderBrush="{TemplateBinding BorderBrush}"
-                                BorderThickness="1" Padding="18,14,18,6">
+                                BorderThickness="1" Padding="14,9,14,2">
                             <StackPanel>
                                 <ToggleButton x:Name="HeaderToggle" Template="{StaticResource CardHeaderToggleTemplate}"
                                               FocusVisualStyle="{x:Null}" ToolTip="Click to collapse or open this section"
@@ -426,7 +426,7 @@
                                                       TextElement.Foreground="{StaticResource BrushAccentHover}"/>
                                 </ToggleButton>
                                 <StackPanel x:Name="ExpandSite">
-                                    <Border BorderBrush="{StaticResource BrushLine}" BorderThickness="0,0,0,1" Margin="0,8,0,14"/>
+                                    <Border BorderBrush="{StaticResource BrushLine}" BorderThickness="0,0,0,1" Margin="0,6,0,8"/>
                                     <ContentPresenter ContentSource="Content"/>
                                 </StackPanel>
                             </StackPanel>
@@ -434,7 +434,7 @@
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsExpanded" Value="False">
                                 <Setter TargetName="ExpandSite" Property="Visibility" Value="Collapsed"/>
-                                <Setter TargetName="CardBorder" Property="Padding" Value="18,14,18,14"/>
+                                <Setter TargetName="CardBorder" Property="Padding" Value="14,9,14,9"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -468,8 +468,8 @@
         <!-- website .note / p: muted, not italic -->
         <Style x:Key="Desc" TargetType="TextBox" BasedOn="{StaticResource SelectableText}">
             <Setter Property="Foreground" Value="{StaticResource BrushMuted}"/>
-            <Setter Property="FontSize" Value="12.5"/>
-            <Setter Property="Margin" Value="0,0,0,12"/>
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="Margin" Value="0,0,0,8"/>
         </Style>
 
         <!-- "by AUTZ IronWorks · From planets to profit": a link to the website, muted until hovered -->
@@ -489,7 +489,7 @@
         <Style x:Key="FieldLabel" TargetType="TextBox" BasedOn="{StaticResource SelectableText}">
             <Setter Property="Foreground" Value="{StaticResource BrushMuted}"/>
             <Setter Property="FontWeight" Value="SemiBold"/>
-            <Setter Property="Margin" Value="0,4,0,6"/>
+            <Setter Property="Margin" Value="0,2,0,3"/>
         </Style>
     </Application.Resources>
 </Application>

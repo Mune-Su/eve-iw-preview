@@ -53,9 +53,9 @@ public partial class ColourField : UserControl
             TryParse(hex, out var colour);
             var chip = new Border
             {
-                Width = 22,
-                Height = 22,
-                Margin = new Thickness(0, 0, 6, 6),
+                Width = 20,
+                Height = 20,
+                Margin = new Thickness(0, 0, 5, 0),
                 CornerRadius = new CornerRadius(0),
                 Background = new SolidColorBrush(colour),
                 BorderBrush = new SolidColorBrush(Color.FromRgb(111, 111, 125)),

@@ -17,13 +17,11 @@ public partial class SettingsWindow : Window
 {
     // order matches the left-hand menu
     private const int PageGeneral_ = 0;
-    private const int PageAppearance_ = 1;
-    private const int PageThumbs_ = 2;
-    private const int PageCharacters_ = 3;
-    private const int PageHotkeys_ = 4;
-    private const int PageClients_ = 5;
-    private const int PageAlerts_ = 6;
-    private const int PageMemory_ = 7;
+    private const int PageThumbs_ = 1;          // appearance and behaviour of the thumbnails, together
+    private const int PageGroups_ = 2;          // the character groups and Find Running Clients
+    private const int PageHotkeys_ = 3;
+    private const int PageAlerts_ = 4;          // notifications and log monitoring
+    private const int PageMemory_ = 5;
 
     private const int MaxSlotRows = 20;
     private const int MaxThumbRows = 60;
@@ -78,7 +76,7 @@ public partial class SettingsWindow : Window
     private string _activeProfile;
     private string _shownProfile;
     private string? _currentCharacter;
-    private int _charFailPage = PageAppearance_;           // the page holding the per-character field that failed to validate
+    private int _charFailPage = PageThumbs_;           // the page holding the per-character field that failed to validate
     private bool _loading;
     private bool _quiet;                       // validate without showing messages or jumping pages
     private bool _closing;
@@ -155,14 +153,12 @@ public partial class SettingsWindow : Window
 
     private void BuildNav()
     {
-        _pages.Add(new PageDef("General", PageGeneral, new Control[] { CardStartup, CardTray, CardScanning }));
-        _pages.Add(new PageDef("Appearance", PageAppearance, new Control[] { CardSize, CardLabel, CardLabelBg, CardActiveBorder, CardCharacter }));
-        _pages.Add(new PageDef("Thumbnails", PageThumbs, new Control[] { CardPositions, CardInteraction, CardHiding }));
-        _pages.Add(new PageDef("Characters", PageCharacters, new Control[] { CardRoster, CardScan, CardCharActions }));
-        _pages.Add(new PageDef("Hotkeys", PageHotkeys, new Control[] { CardCycling, CardClientOrder, CardHotkeyOptions, CardSlotKeys, CardSkipped, CardProfileKeys }));
-        _pages.Add(new PageDef("Clients", PageClients, new Control[] { CardAutoMin, CardNeverMin }));
-        _pages.Add(new PageDef("Alerts", PageNotifications, new Control[] { CardNotifyMain, CardNotifyHow, CardLogMain, CardLogFolders, CardLogEvents, CardLogSystem }));
-        _pages.Add(new PageDef("Memory", PageMemory, new Control[] { CardMemoryNow, CardMemoryTop, CardMemoryAuto, CardMemoryKeep }));
+        _pages.Add(new PageDef("General", PageGeneral, new Control[] { CardStartup, CardClients }));
+        _pages.Add(new PageDef("Thumbnails", PageThumbs, new Control[] { CardSize, CardLabel, CardActiveBorder, CardCharacter, CardPositions, CardInteraction }));
+        _pages.Add(new PageDef("Grouping", PageGroups, new Control[] { CardRoster, CardScan }));
+        _pages.Add(new PageDef("Hotkeys", PageHotkeys, new Control[] { CardCycling, CardClientOrder, CardHotkeyOptions, CardSlotKeys, CardCharActions, CardSkipped, CardProfileKeys }));
+        _pages.Add(new PageDef("Alerts", PageAlerts, new Control[] { CardNotifyMain, CardLogMain, CardLogEvents }));
+        _pages.Add(new PageDef("Memory", PageMemory, new Control[] { CardMemoryNow, CardMemoryAuto, CardMemoryTop, CardMemoryKeep }));
         _pages.Add(new PageDef("About", PageAbout, new Control[] { CardAbout, CardWhatsNew, CardFiles, CardDiagnostics }));
 
         for (int i = 0; i < _pages.Count; i++)
@@ -218,7 +214,7 @@ public partial class SettingsWindow : Window
     private void SelectPage(int index)
     {
         if (index < 0 || index >= _pages.Count) return;
-        bool leavingThumbs = _pageIndex == PageCharacters_ && index != PageCharacters_;     // the character list is on this page
+        bool leavingThumbs = _pageIndex == PageGroups_ && index != PageGroups_;     // the character list is on this page
         _pageIndex = index;
 
         for (int i = 0; i < _pages.Count; i++)
@@ -942,7 +938,7 @@ public partial class SettingsWindow : Window
         var remove = new Button
         {
             Content = "✕",
-            Padding = new Thickness(11, 6, 11, 6),
+            Padding = new Thickness(10, 3, 10, 3),
             Margin = new Thickness(8, 0, 0, 0),
             ToolTip = "Take this character out of the group"
         };
@@ -978,7 +974,7 @@ public partial class SettingsWindow : Window
             if (name.Length == 0) continue;
             if (name.Length > 60 || name.StartsWith('['))
             {
-                if (validate) return Fail(PageCharacters_, "“" + name + "” isn't a valid character name.");
+                if (validate) return Fail(PageGroups_, "“" + name + "” isn't a valid character name.");
                 continue;
             }
             if (names.Contains(name, StringComparer.OrdinalIgnoreCase)) continue;
@@ -1194,7 +1190,7 @@ public partial class SettingsWindow : Window
     {
         if (_loading) return;
 
-        // the Appearance page and the Characters page each have a picker; they always show the same character
+        // the Thumbnails page and the Hotkeys page each have a character picker; they always show the same character
         var box = sender as ComboBox ?? CharBox;
         var other = ReferenceEquals(box, CharBox) ? CharBox2 : CharBox;
 
@@ -1232,7 +1228,7 @@ public partial class SettingsWindow : Window
     {
         if (_currentCharacter is null) return true;
         string who = _currentCharacter + ": ";
-        _charFailPage = PageAppearance_;
+        _charFailPage = PageThumbs_;
 
         if (!int.TryParse(string.IsNullOrWhiteSpace(CharWidthBox.Text) ? "0" : CharWidthBox.Text.Trim(), out int width) ||
             (width != 0 && (width < 80 || width > 1600)))
@@ -1265,7 +1261,7 @@ public partial class SettingsWindow : Window
         }
         if (!CharHotkeyBox.IsValid)
         {
-            _charFailPage = PageCharacters_;
+            _charFailPage = PageHotkeys_;
             Warn(who + "that hotkey isn't supported. Click the box and press the keys again.");
             return false;
         }
@@ -2166,9 +2162,9 @@ public partial class SettingsWindow : Window
     {
         // Appearance, Thumbnails, General
         if (!InRange(WidthBox.Text, 120, 1200, out int width))
-            return Fail(PageAppearance_, "Thumbnail width must be 120 to 1200.");
+            return Fail(PageThumbs_, "Thumbnail width must be 120 to 1200.");
         if (!InRange(HeightBox.Text, 0, 1200, out int height) || (height != 0 && height < 45))
-            return Fail(PageAppearance_, "Thumbnail height must be 0 (automatic) or 45 to 1200.");
+            return Fail(PageThumbs_, "Thumbnail height must be 0 (automatic) or 45 to 1200.");
         if (!InRange(SnapDistBox.Text, 1, 100, out int snap))
             return Fail(PageThumbs_, "Snap distance must be 1 to 100 pixels.");
         if (!InRange(RefreshBox.Text, 500, 10000, out int refresh))
@@ -2176,19 +2172,19 @@ public partial class SettingsWindow : Window
 
         // Appearance
         if (!InRange(FontSizeBox.Text, 6, 72, out int fontSize))
-            return Fail(PageAppearance_, "Font size must be 6 to 72.");
+            return Fail(PageThumbs_, "Font size must be 6 to 72.");
         if (!InRange(OffsetXBox.Text, -300, 300, out int offsetX) || !InRange(OffsetYBox.Text, -300, 300, out int offsetY))
-            return Fail(PageAppearance_, "Text offsets must be between -300 and 300 pixels.");
+            return Fail(PageThumbs_, "Text offsets must be between -300 and 300 pixels.");
         if (!InRange(ActiveWidthBox.Text, 1, 20, out int activeWidth) || !InRange(InactiveWidthBox.Text, 1, 20, out int inactiveWidth))
-            return Fail(PageAppearance_, "Border widths must be 1 to 20 pixels.");
+            return Fail(PageThumbs_, "Border widths must be 1 to 20 pixels.");
         if (!LabelColourBox.IsValid || !LabelBgBox.IsValid || !ColourBox.IsValid || !InactiveColourBox.IsValid)
-            return Fail(PageAppearance_, "One of the colours isn't valid. Use the Pick button, or type something like #F97316.");
+            return Fail(PageThumbs_, "One of the colours isn't valid. Use the Pick button, or type something like #F97316.");
 
         // Thumbnails / clients
         if (!InRange(HideDelayBox.Text, 0, 5000, out int hideDelay))
             return Fail(PageThumbs_, "The hide delay must be 0 to 5000 ms.");
         if (!InRange(AutoMinDelayBox.Text, 0, 600, out int minDelay))
-            return Fail(PageClients_, "The minimise delay must be 0 to 600 seconds.");
+            return Fail(PageGeneral_, "The minimise delay must be 0 to 600 seconds.");
 
         // Hotkeys
         if (!ForwardBox.IsValid || !BackBox.IsValid || _slotFields.Any(f => !f.IsValid))
@@ -2219,7 +2215,7 @@ public partial class SettingsWindow : Window
         if (!InRange(NotifySecondsBox.Text, 1, 120, out int flashSeconds))
             return Fail(PageAlerts_, "The flash time must be 1 to 120 seconds.");
         if (!NotifyColourBox.IsValid)
-            return Fail(PageAlerts_, "The flash colour isn't valid. Use the Pick button, or type something like #F87171.");
+            return Fail(PageThumbs_, "The flash colour isn't valid. Use the Pick button, or type something like #F87171.");
 
         // Log monitoring
         if (!InRange(LogPollBox.Text, 250, 10000, out int logPoll))
