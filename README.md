@@ -6,6 +6,11 @@ A lightweight Windows utility for permanent live previews of your running EVE On
 
 **Run it:** double-click `EVE-IW-Preview.exe` in this folder (needs the .NET 8 Desktop Runtime, already installed if you have the .NET SDK). It runs in the **system tray only** (no taskbar button): right-click the tray icon for the menu, double-click it for Configuration.
 
+## v0.15.0
+
+- **Settings menus tidied up.** Pages are now: General (Startup, Tray Icon, Scanning), **Appearance** (every colour, size and opacity option: Size And Opacity, Text Label, Text Background, Borders, Per-Character Overrides), **Thumbnails** (Positions, Interaction, Hiding), **Characters** (groups, Find Running Clients, per-character hotkey and switching), Hotkeys, Clients, **Alerts** (Notifications + Log Monitoring), Memory, About.
+- Thumbnail size moved from General to Appearance; Positions and Interaction moved from General to Thumbnails; per-character label, colour and size moved from Characters to Appearance; the character list and scan moved from Thumbnails to Characters. No settings were removed or changed.
+
 ## v0.14.2
 
 - **Check boxes:** only the box itself is clickable (not the text, not the empty space across the window).

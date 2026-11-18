@@ -7,6 +7,15 @@ internal static class Changelog
 {
     public static readonly ChangelogEntry[] Entries =
     {
+        new("0.15.0", "Tidier Settings menus", new[]
+        {
+            "Appearance now holds every colour, size and opacity option in one place: Size and Opacity (thumbnail width, height and opacity), Text Label (font, size, colour, opacity, position), Text Background, Borders (active and inactive together) and Per-Character Overrides (each character's own label, colour, size, opacity and thumbnail size). The thumbnail size options moved here from General, and the per-character look options moved here from Characters.",
+            "Thumbnails is now about how thumbnails behave: Positions, Interaction (clicking, locking, snapping, always on top) and Hiding.",
+            "Characters is now about who gets a thumbnail: the character groups, Find Running Clients, and each character's jump-to hotkey and switch behaviour.",
+            "General is down to the app itself: Startup, Tray Icon and Scanning.",
+            "Notifications and Log Monitoring are now one page called Alerts. Hotkeys, Clients, Memory and About are unchanged.",
+            "The two character pickers (Appearance and Characters) always show the same character, and a bad value takes you to the page that holds it. Nothing was removed and your saved settings are unchanged."
+        }),
         new("0.14.2", "Check box and opacity tweaks", new[]
         {
             "Check boxes: only the box itself is clickable now. The text beside it, and the empty space across the window, no longer tick or untick it.",

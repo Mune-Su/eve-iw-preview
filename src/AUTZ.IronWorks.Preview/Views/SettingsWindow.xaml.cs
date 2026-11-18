@@ -22,9 +22,8 @@ public partial class SettingsWindow : Window
     private const int PageCharacters_ = 3;
     private const int PageHotkeys_ = 4;
     private const int PageClients_ = 5;
-    private const int PageNotifications_ = 6;
-    private const int PageLogs_ = 7;
-    private const int PageMemory_ = 8;
+    private const int PageAlerts_ = 6;
+    private const int PageMemory_ = 7;
 
     private const int MaxSlotRows = 20;
     private const int MaxThumbRows = 60;
@@ -79,6 +78,7 @@ public partial class SettingsWindow : Window
     private string _activeProfile;
     private string _shownProfile;
     private string? _currentCharacter;
+    private int _charFailPage = PageAppearance_;           // the page holding the per-character field that failed to validate
     private bool _loading;
     private bool _quiet;                       // validate without showing messages or jumping pages
     private bool _closing;
@@ -155,14 +155,13 @@ public partial class SettingsWindow : Window
 
     private void BuildNav()
     {
-        _pages.Add(new PageDef("General", PageGeneral, new Control[] { CardPositions, CardSize, CardInteraction, CardStartup, CardTray, CardScanning }));
-        _pages.Add(new PageDef("Appearance", PageAppearance, new Control[] { CardOpacity, CardLabel, CardLabelBg, CardActiveBorder, CardInactiveBorder }));
-        _pages.Add(new PageDef("Thumbnails", PageThumbs, new Control[] { CardRoster, CardScan, CardHiding }));
-        _pages.Add(new PageDef("Characters", PageCharacters, new Control[] { CardCharacter, CardCharSize, CardCharHotkey, CardCharActions }));
+        _pages.Add(new PageDef("General", PageGeneral, new Control[] { CardStartup, CardTray, CardScanning }));
+        _pages.Add(new PageDef("Appearance", PageAppearance, new Control[] { CardSize, CardLabel, CardLabelBg, CardActiveBorder, CardCharacter }));
+        _pages.Add(new PageDef("Thumbnails", PageThumbs, new Control[] { CardPositions, CardInteraction, CardHiding }));
+        _pages.Add(new PageDef("Characters", PageCharacters, new Control[] { CardRoster, CardScan, CardCharActions }));
         _pages.Add(new PageDef("Hotkeys", PageHotkeys, new Control[] { CardCycling, CardClientOrder, CardHotkeyOptions, CardSlotKeys, CardSkipped, CardProfileKeys }));
         _pages.Add(new PageDef("Clients", PageClients, new Control[] { CardAutoMin, CardNeverMin }));
-        _pages.Add(new PageDef("Notifications", PageNotifications, new Control[] { CardNotifyMain, CardNotifyHow }));
-        _pages.Add(new PageDef("Log Monitoring", PageLogs, new Control[] { CardLogMain, CardLogFolders, CardLogEvents, CardLogSystem }));
+        _pages.Add(new PageDef("Alerts", PageNotifications, new Control[] { CardNotifyMain, CardNotifyHow, CardLogMain, CardLogFolders, CardLogEvents, CardLogSystem }));
         _pages.Add(new PageDef("Memory", PageMemory, new Control[] { CardMemoryNow, CardMemoryTop, CardMemoryAuto, CardMemoryKeep }));
         _pages.Add(new PageDef("About", PageAbout, new Control[] { CardAbout, CardWhatsNew, CardFiles, CardDiagnostics }));
 
@@ -219,7 +218,7 @@ public partial class SettingsWindow : Window
     private void SelectPage(int index)
     {
         if (index < 0 || index >= _pages.Count) return;
-        bool leavingThumbs = _pageIndex == PageThumbs_ && index != PageThumbs_;
+        bool leavingThumbs = _pageIndex == PageCharacters_ && index != PageCharacters_;     // the character list is on this page
         _pageIndex = index;
 
         for (int i = 0; i < _pages.Count; i++)
@@ -645,14 +644,21 @@ public partial class SettingsWindow : Window
         NoSkipText.Visibility = any ? Visibility.Collapsed : Visibility.Visible;
         NoMinText.Visibility = any ? Visibility.Collapsed : Visibility.Visible;
         NoCharText.Visibility = any ? Visibility.Collapsed : Visibility.Visible;
+        NoCharText2.Visibility = any ? Visibility.Collapsed : Visibility.Visible;
 
         _loading = true;
         _currentCharacter = null;
         CharBox.Items.Clear();
-        foreach (string name in _characters) CharBox.Items.Add(name);
+        CharBox2.Items.Clear();
+        foreach (string name in _characters)
+        {
+            CharBox.Items.Add(name);
+            CharBox2.Items.Add(name);
+        }
         _loading = false;
 
         CharBox.IsEnabled = any;
+        CharBox2.IsEnabled = any;
         SetCharacterFieldsEnabled(any);
         if (any)
         {
@@ -972,7 +978,7 @@ public partial class SettingsWindow : Window
             if (name.Length == 0) continue;
             if (name.Length > 60 || name.StartsWith('['))
             {
-                if (validate) return Fail(PageThumbs_, "“" + name + "” isn't a valid character name.");
+                if (validate) return Fail(PageCharacters_, "“" + name + "” isn't a valid character name.");
                 continue;
             }
             if (names.Contains(name, StringComparer.OrdinalIgnoreCase)) continue;
@@ -1007,7 +1013,7 @@ public partial class SettingsWindow : Window
 
     private string ThumbSignature() => string.Join("|", _work.AllGroupCharacters());
 
-    /// <summary>Leaving the Thumbnails page: if the names changed, the other lists (skip, never minimise, characters, order) follow.</summary>
+    /// <summary>Leaving the Characters page: if the names changed, the other lists (skip, never minimise, characters, order) follow.</summary>
     private void RefreshAfterThumbEdit()
     {
         string before = ThumbSignature();
@@ -1188,16 +1194,24 @@ public partial class SettingsWindow : Window
     {
         if (_loading) return;
 
-        // keep what was typed for the previous character; if it's invalid, stay on it
+        // the Appearance page and the Characters page each have a picker; they always show the same character
+        var box = sender as ComboBox ?? CharBox;
+        var other = ReferenceEquals(box, CharBox) ? CharBox2 : CharBox;
+
+        // keep what was typed for the previous character; if it's invalid, stay on it (and go to the page with the bad field)
         if (_currentCharacter is not null && !CommitCharacter())
         {
             _loading = true;
-            CharBox.SelectedItem = _currentCharacter;
+            box.SelectedItem = _currentCharacter;
             _loading = false;
+            if (!_quiet) SelectPage(_charFailPage);
             return;
         }
 
-        _currentCharacter = CharBox.SelectedItem as string;
+        _currentCharacter = box.SelectedItem as string;
+        _loading = true;
+        other.SelectedItem = _currentCharacter;
+        _loading = false;
         if (_currentCharacter is null) return;
         var c = _work.TryGetCharacter(_currentCharacter) ?? new CharacterSettings();
         LabelBox.Text = c.Label;
@@ -1218,6 +1232,7 @@ public partial class SettingsWindow : Window
     {
         if (_currentCharacter is null) return true;
         string who = _currentCharacter + ": ";
+        _charFailPage = PageAppearance_;
 
         if (!int.TryParse(string.IsNullOrWhiteSpace(CharWidthBox.Text) ? "0" : CharWidthBox.Text.Trim(), out int width) ||
             (width != 0 && (width < 80 || width > 1600)))
@@ -1250,6 +1265,7 @@ public partial class SettingsWindow : Window
         }
         if (!CharHotkeyBox.IsValid)
         {
+            _charFailPage = PageCharacters_;
             Warn(who + "that hotkey isn't supported. Click the box and press the keys again.");
             return false;
         }
@@ -2148,13 +2164,13 @@ public partial class SettingsWindow : Window
     /// <summary>Checks every field (jumping to the page with a bad value) and writes them into the working copy.</summary>
     private bool TryApply()
     {
-        // General
+        // Appearance, Thumbnails, General
         if (!InRange(WidthBox.Text, 120, 1200, out int width))
-            return Fail(PageGeneral_, "Thumbnail width must be 120 to 1200.");
+            return Fail(PageAppearance_, "Thumbnail width must be 120 to 1200.");
         if (!InRange(HeightBox.Text, 0, 1200, out int height) || (height != 0 && height < 45))
-            return Fail(PageGeneral_, "Thumbnail height must be 0 (automatic) or 45 to 1200.");
+            return Fail(PageAppearance_, "Thumbnail height must be 0 (automatic) or 45 to 1200.");
         if (!InRange(SnapDistBox.Text, 1, 100, out int snap))
-            return Fail(PageGeneral_, "Snap distance must be 1 to 100 pixels.");
+            return Fail(PageThumbs_, "Snap distance must be 1 to 100 pixels.");
         if (!InRange(RefreshBox.Text, 500, 10000, out int refresh))
             return Fail(PageGeneral_, "Scan interval must be 500 to 10000 ms.");
 
@@ -2199,22 +2215,26 @@ public partial class SettingsWindow : Window
             return Fail(PageMemory_, limitError);
         // Notifications
         if (!InRange(NotifyCooldownBox.Text, 0, 3600, out int cooldown))
-            return Fail(PageNotifications_, "The cooldown must be 0 to 3600 seconds.");
+            return Fail(PageAlerts_, "The cooldown must be 0 to 3600 seconds.");
         if (!InRange(NotifySecondsBox.Text, 1, 120, out int flashSeconds))
-            return Fail(PageNotifications_, "The flash time must be 1 to 120 seconds.");
+            return Fail(PageAlerts_, "The flash time must be 1 to 120 seconds.");
         if (!NotifyColourBox.IsValid)
-            return Fail(PageNotifications_, "The flash colour isn't valid. Use the Pick button, or type something like #F87171.");
+            return Fail(PageAlerts_, "The flash colour isn't valid. Use the Pick button, or type something like #F87171.");
 
         // Log monitoring
         if (!InRange(LogPollBox.Text, 250, 10000, out int logPoll))
-            return Fail(PageLogs_, "The check interval must be 250 to 10000 ms.");
+            return Fail(PageAlerts_, "The check interval must be 250 to 10000 ms.");
         if (!InRange(LogMiningSecondsBox.Text, 10, 86400, out int miningSeconds))
-            return Fail(PageLogs_, "The mining quiet time must be 10 seconds or more.");
+            return Fail(PageAlerts_, "The mining quiet time must be 10 seconds or more.");
 
         // Characters
         if (!CommitCharacter())
         {
-            if (!_quiet) SelectPage(PageCharacters_);
+            if (!_quiet)
+            {
+                SelectPage(_charFailPage);
+                ExpandCardsOnPage(_charFailPage);
+            }
             return false;
         }
 
