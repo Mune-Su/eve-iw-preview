@@ -6,6 +6,10 @@ A lightweight Windows utility for permanent live previews of your running EVE On
 
 **Run it:** double-click `EVE-IW-Preview.exe` in this folder (needs the .NET 8 Desktop Runtime, already installed if you have the .NET SDK). It runs in the **system tray only** (no taskbar button): right-click the tray icon for the menu, double-click it for Configuration.
 
+## v0.18.3
+
+- **Save current order** (Grouping > Client Order And Positions): open your clients in the order you want, press the button, and that order is stored for the Saved option.
+
 ## v0.18.2
 
 - **Thumbnails work while Configuration is open.** The Configuration window is a normal window instead of a modal dialog, so thumbnails can be clicked and moved while it is open.

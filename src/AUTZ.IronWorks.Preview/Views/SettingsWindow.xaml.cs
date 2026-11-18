@@ -727,6 +727,7 @@ public partial class SettingsWindow : Window
         OrderChecks.Children.Clear();
         OrderListPanel.Visibility = _work.ClientOrderMode == AppSettings.OrderManual ? Visibility.Visible : Visibility.Collapsed;
         OrderSavedPanel.Visibility = _work.ClientOrderMode == AppSettings.OrderSaved ? Visibility.Visible : Visibility.Collapsed;
+        UpdateCapturePanel();
         if (_work.ClientOrderMode == AppSettings.OrderSaved) UpdateSavedOrderPanel();
         if (_work.ClientOrderMode != AppSettings.OrderManual) return;
 
@@ -805,6 +806,50 @@ public partial class SettingsWindow : Window
         OrderResetNote.Text = !isActive
             ? "Switch to this profile first: Reset order works on the profile that is running."
             : "Reset is waiting: the saved order will be cleared the next time no EVE clients are open, then built again in the order they open.";
+    }
+
+    /// <summary>"Save current order" (Automatic and Saved mode): what is stored right now, and whether the button can be used.</summary>
+    private void UpdateCapturePanel()
+    {
+        if (OrderCapturePanel is null || _work is null) return;
+        OrderCapturePanel.Visibility = _work.ClientOrderMode == AppSettings.OrderManual ? Visibility.Collapsed : Visibility.Visible;
+        bool isActive = _shownProfile.Equals(_activeProfile, StringComparison.OrdinalIgnoreCase);
+        var stored = isActive ? _manager.Settings.ClientOrder : _work.ClientOrder;
+        SaveOrderBtn.IsEnabled = isActive;
+        SaveOrderNote.Text = !isActive
+            ? "Switch to this profile first: Save current order works on the profile that is running."
+            : stored.Count == 0
+                ? "Nothing is stored yet."
+                : "Stored right now:  " + string.Join(",  ", stored.Select((n, i) => $"{i + 1}. {n}"));
+    }
+
+    private void SaveCurrentOrder_Click(object sender, RoutedEventArgs e)
+    {
+        var saved = _manager.SaveCurrentClientOrder();
+        if (saved.Count == 0)
+        {
+            SetStatus("No logged-in EVE clients are open, so there is no order to save. Log your characters in, then try again.", false);
+            return;
+        }
+        // keep this window's copy in step (and the "nothing unsaved" check), so the order that was just saved isn't overwritten or flagged
+        _work.ClientOrder = new List<string>(saved);
+        if (_baseline.TryGetValue(_shownProfile, out var json))
+        {
+            try
+            {
+                var baseline = JsonSerializer.Deserialize<AppSettings>(json);
+                if (baseline is not null)
+                {
+                    baseline.ClientOrder = new List<string>(saved);
+                    _baseline[_shownProfile] = ToJson(baseline);
+                }
+            }
+            catch { }
+        }
+        RebuildOrderList();
+        SetStatus(_work.ClientOrderMode == AppSettings.OrderSaved
+            ? $"Saved the order of {saved.Count} client(s)."
+            : $"Saved the order of {saved.Count} client(s). Choose Saved above and press Apply or Save to use it.", true);
     }
 
     private void ResetOrder_Click(object sender, RoutedEventArgs e)

@@ -387,6 +387,29 @@ public sealed class PreviewManager : IDisposable
 
     public bool OrderResetPending => _settings.ClientOrderResetPending;
 
+    /// <summary>
+    /// "Save current order": stores the logged-in clients, in the order they are in right now, as the saved order. In Automatic
+    /// that is the order they were opened, so you can open the clients in the order you want and keep it. It is written straight
+    /// away. Returns the saved list (empty = no logged-in client is open, and nothing was changed).
+    /// </summary>
+    public IReadOnlyList<string> SaveCurrentClientOrder()
+    {
+        var names = new List<string>();
+        foreach (var client in _clients)
+        {
+            if (client.IsLoginScreen || names.Contains(client.CharacterName, StringComparer.OrdinalIgnoreCase)) continue;
+            names.Add(client.CharacterName);
+        }
+        if (names.Count == 0) return names;
+        Persist(s =>
+        {
+            s.ClientOrder = new List<string>(names);
+            s.ClientOrderResetPending = false;               // a pending "Reset order" would only wipe what was just saved
+        });
+        Log.Debug("ORDER", $"saved the current client order ({names.Count} clients)");
+        return names;
+    }
+
     /// <summary>"Reset order": the saved order is cleared the next time no EVE client is open (at once if none is open now).</summary>
     public void ArmClientOrderReset()
     {

@@ -7,6 +7,11 @@ internal static class Changelog
 {
     public static readonly ChangelogEntry[] Entries =
     {
+        new("0.18.3", "Save the client order", new[]
+        {
+            "New: a Save current order button (Grouping > Client Order And Positions, shown for Automatic and Saved). Open your clients in the order you want, press it, and that order is stored for the Saved option. It is saved straight away, and the card shows what is stored. Then choose Saved and press Apply or Save to use it.",
+            "It stores the logged-in clients in the order they are in now (clients still on the login screen have no name yet, so log them in first). It replaces what was stored before, and cancels a pending Reset order."
+        }),
         new("0.18.2", "Thumbnails work while Configuration is open", new[]
         {
             "Fixed: clicking a thumbnail did nothing while the Configuration window was open. The window was a modal dialog, and Windows disables every other window of the app while a modal dialog is open, thumbnails included. It is a normal window now, so thumbnails can be clicked to switch (and moved with Shift + right-drag) while you change settings. The Configuration window is still one-at-a-time, and it stays in the taskbar if EVE covers it.",
