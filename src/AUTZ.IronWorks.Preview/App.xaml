@@ -207,7 +207,7 @@
                                 <Path x:Name="Mark" Data="M0,4 L3.5,7.5 L9,0" Stretch="Fill" Margin="3"
                                       Stroke="{StaticResource BrushOnAccent}" StrokeThickness="2" Visibility="Collapsed"/>
                             </Border>
-                            <ContentPresenter Grid.Column="1" VerticalAlignment="Center" IsHitTestVisible="False"/>
+                            <ContentPresenter Grid.Column="1" VerticalAlignment="Center"/>
                         </Grid>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsChecked" Value="True">

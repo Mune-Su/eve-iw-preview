@@ -7,6 +7,17 @@ internal static class Changelog
 {
     public static readonly ChangelogEntry[] Entries =
     {
+        new("0.17.2", "Check box text can be selected", new[]
+        {
+            "Fixed: the text beside a check box can be highlighted and copied again. Clicking the text selects it and does not tick the box; only the box itself ticks it. This covers every check box in Settings, including the character lists.",
+            "The radio buttons (for example the EVE client choices on the Memory page) are unchanged."
+        }),
+        new("0.17.1", "Hotkeys when EVE isn't in front", new[]
+        {
+            "Fixed: Next / Previous did nothing while no EVE client was in front if the client you used last was the only one it could switch to (for example one client open, or every other client left out of cycling). It now brings that client back. When you are in another program the last client you used is no longer skipped.",
+            "A press that switches nothing now says why in preview.log, and a press that is ignored because \"Hotkeys only work while an EVE client is the window in front\" is on says so too (at most once every few seconds).",
+            "The Hotkey Options text now says hotkeys work from any window while that option is unticked, and that they are paused while the Configuration window is open."
+        }),
         new("0.17.0", "Always start as administrator", new[]
         {
             "New: Restart as administrator now asks \"Always\" or \"Just this once\". Choose Always and the app is set to start as administrator every time after that, without a Windows prompt each time, so you only do it once.",

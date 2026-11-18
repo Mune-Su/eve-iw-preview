@@ -120,6 +120,28 @@ public sealed class HotkeyService : IDisposable
 
     private bool Allowed() => !Suspended && (Gate?.Invoke() ?? true);
 
+    private long _lastBlockedLog = -10000;
+
+    /// <summary>
+    /// A key that is one of our hotkeys was pressed while hotkeys are limited to "only while an EVE client is in front" and none
+    /// is: say so in preview.log (at most once every 5 seconds), because from the outside it just looks like the hotkey is broken.
+    /// </summary>
+    private void NoteBlocked(int vk)
+    {
+        try
+        {
+            if (_suspended || Log.Ms - _lastBlockedLog < 5000) return;
+            SyncModifiers();
+            if (Match(new HotkeyToken(HotkeyInputKind.Key, vk)) is null) return;
+            _lastBlockedLog = Log.Ms;
+            Log.Write("A hotkey was pressed but ignored: \"Hotkeys only work while an EVE client is the window in front\" is on and no EVE client is in front. Untick it under Settings > Hotkeys > Hotkey Options to use the hotkeys from any window.");
+        }
+        catch
+        {
+            // diagnostics only: never let this get in the way of a key press
+        }
+    }
+
     // ---------- Windows hotkeys (v0.9.7) ----------
     // Windows only lets a program bring another window to the front if that program received the last input.
     // A key swallowed by the low-level hook never reaches this app, so every switch was "refused" and had to be
@@ -250,7 +272,11 @@ public sealed class HotkeyService : IDisposable
             }
 
             _armed = null;
-            if (!Allowed()) return false;
+            if (!Allowed())
+            {
+                NoteBlocked(vk);
+                return false;
+            }
             SyncModifiers();
             var binding = Match(new HotkeyToken(HotkeyInputKind.Key, vk));
             if (binding is null) return false;

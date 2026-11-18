@@ -740,7 +740,7 @@ public partial class SettingsWindow : Window
 
             var box = new CheckBox
             {
-                Content = $"{i + 1}.  {name}" + (_running.Contains(name) ? "   (logged in)" : ""),
+                Content = Ui.SelectableLabel($"{i + 1}.  {name}" + (_running.Contains(name) ? "   (logged in)" : "")),
                 IsChecked = true,
                 Margin = new Thickness(0),
                 VerticalAlignment = VerticalAlignment.Center,
@@ -771,7 +771,7 @@ public partial class SettingsWindow : Window
             string chosen = name;
             var box = new CheckBox
             {
-                Content = name + (_running.Contains(name) ? "   (logged in)" : "") + "   (not in the order)",
+                Content = Ui.SelectableLabel(name + (_running.Contains(name) ? "   (logged in)" : "") + "   (not in the order)"),
                 IsChecked = false,
                 Margin = new Thickness(0, 0, 0, 6),
                 ToolTip = "Tick to add this character to the end of the order"
@@ -853,7 +853,7 @@ public partial class SettingsWindow : Window
             var existing = _work.TryGetCharacter(name);
             var box = new CheckBox
             {
-                Content = _running.Contains(name) ? name + "   (logged in)" : name,
+                Content = Ui.SelectableLabel(_running.Contains(name) ? name + "   (logged in)" : name),
                 IsChecked = existing is not null && get(existing)
             };
             box.Click += (_, _) => set(_work.GetOrAddCharacter(chosen), box.IsChecked == true);
@@ -1109,7 +1109,7 @@ public partial class SettingsWindow : Window
             bool already = _shownThumbGroup?.Characters.Contains(name, StringComparer.OrdinalIgnoreCase) ?? false;
             var box = new CheckBox
             {
-                Content = already ? name + "   (already in the group)" : name,
+                Content = Ui.SelectableLabel(already ? name + "   (already in the group)" : name),
                 IsChecked = !already,
                 IsEnabled = !already,
                 Margin = new Thickness(0, 0, 0, 8)

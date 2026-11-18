@@ -6,6 +6,14 @@ A lightweight Windows utility for permanent live previews of your running EVE On
 
 **Run it:** double-click `EVE-IW-Preview.exe` in this folder (needs the .NET 8 Desktop Runtime, already installed if you have the .NET SDK). It runs in the **system tray only** (no taskbar button): right-click the tray icon for the menu, double-click it for Configuration.
 
+## v0.17.2
+
+- **Check box text can be selected and copied again.** Clicking the text selects it; only the box itself ticks. (Radio buttons unchanged.)
+
+## v0.17.1
+
+- **Hotkeys when EVE isn't in front:** Next / Previous no longer do nothing when the only client they could switch to is the one you used last. A press that switches nothing, or that is ignored because "Hotkeys only work while an EVE client is the window in front" is ticked, now says so in `preview.log`.
+
 ## v0.17.0
 
 - **Always start as administrator.** Restart as administrator (Memory) asks "Always" or "Just this once". Always creates a scheduled task (run with highest privileges, no trigger) the first time; after that every normal start hands over to the task, so the app runs as administrator without a Windows prompt, including at Windows start-up. Turn it off under Settings > General > Startup And Tray Icon (while running as administrator). If the task can't start, the app starts normally.

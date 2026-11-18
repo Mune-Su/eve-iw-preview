@@ -5,6 +5,17 @@ namespace AUTZ.IronWorks.Preview.Core;
 /// <summary>Small colour helpers shared by the manager and the overlay windows.</summary>
 internal static class Ui
 {
+    /// <summary>
+    /// The label of a check box built in code: read-only text that can be selected and copied. Clicking the text selects it
+    /// and does not tick the box, so only the box itself ticks.
+    /// </summary>
+    public static System.Windows.Controls.TextBox SelectableLabel(string text) => new()
+    {
+        Text = text,
+        Style = (System.Windows.Style)System.Windows.Application.Current.FindResource("SelectableText"),
+        HorizontalAlignment = System.Windows.HorizontalAlignment.Left
+    };
+
     public static bool TryColour(string? text, out Color colour)
     {
         colour = Colors.White;

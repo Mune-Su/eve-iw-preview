@@ -1704,17 +1704,26 @@ public sealed class PreviewManager : IDisposable
     {
         var all = CurrentClients();
         int count = all.Count;
-        if (count == 0) return;
+        if (count == 0)
+        {
+            LogNoSwitch("no EVE client is open");
+            return;
+        }
 
         // v0.9.6: work out where you are from the switch in progress (if any), not from a foreground window that
         // Windows hasn't updated yet. Reading the stale window made a press pick the same client again.
         nint current = CurrentClientHandle(out string from);
         int start = IndexOf(all, current);
+        // v0.17.1: "current" is only really in front when it comes from the focus or a switch in progress. When you are in
+        // another program it is just the last client you used, and that client must not be skipped: with one client (or one
+        // client left that can be cycled to) the press used to do nothing at all while EVE wasn't in front.
+        bool currentInFront = from == "focus" || from == "switch in progress";
 
         int step = direction > 0 ? 1 : -1;
         int position = start >= 0 ? start : (direction > 0 ? -1 : 0);
         string way = direction > 0 ? "next" : "previous";
         bool failed = false;
+        bool switched = false;
 
         for (int tried = 0; tried < count; tried++)
         {
@@ -1725,7 +1734,7 @@ public sealed class PreviewManager : IDisposable
                 Log.Debug("SWITCH", $"  skip #{position + 1} '{client.CharacterName}' (excluded from cycling)");
                 continue;
             }
-            if (client.Handle == current) continue;
+            if (client.Handle == current && currentInFront) continue;
             Log.Debug("SWITCH", $"  try #{position + 1} '{client.CharacterName}'");
 
             bool ok = SwitchTo(client, out string how);
@@ -1734,6 +1743,7 @@ public sealed class PreviewManager : IDisposable
                 // a successful press is only recorded in the detailed log: writing a file on every press (and holding the key
                 // makes 30 a second) is exactly the kind of work a tray app shouldn't do
                 Log.Debug("INFO", $"Cycle {way}: from {(start >= 0 ? $"#{start + 1} ({from})" : "nothing")} -> #{position + 1} '{client.CharacterName}' ok ({how})");
+                switched = true;
                 return;
             }
 
@@ -1746,6 +1756,17 @@ public sealed class PreviewManager : IDisposable
         }
 
         if (failed) Log.Debug("INFO", $"Cycle {way}: no switch");
+        else if (!switched) LogNoSwitch("every client is excluded from cycling, or the only one open is already in front");
+    }
+
+    private long _lastNoSwitchLog = -10000;
+
+    /// <summary>A press that switched nothing says why in preview.log (at most once every 3 seconds, so holding the key can't flood it).</summary>
+    private void LogNoSwitch(string reason)
+    {
+        if (Log.Ms - _lastNoSwitchLog < 3000) return;
+        _lastNoSwitchLog = Log.Ms;
+        Log.Write("Cycle hotkey pressed but nothing was switched: " + reason + ".");
     }
 
     /// <summary>Brings a client to the front and applies its "when I switch to it" action.</summary>
