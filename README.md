@@ -6,6 +6,10 @@ A lightweight Windows utility for permanent live previews of your running EVE On
 
 **Run it:** double-click `EVE-IW-Preview.exe` in this folder (needs the .NET 8 Desktop Runtime, already installed if you have the .NET SDK). It runs in the **system tray only** (no taskbar button): right-click the tray icon for the menu, double-click it for Configuration.
 
+## v0.14.1
+
+- **Label text: colour, size and opacity.** New **Text Opacity** slider (Settings > Appearance > Text Label), and a **Label Size** and **Label Opacity** for each character on the Characters page, next to its existing label colour (0 = use the default). The box behind the text keeps its own opacity.
+
 ## v0.14.0
 
 - **Memory cleaner upgrades.** New **Restart Windows Explorer** button (Memory page) and tray item. The tray menu loses Refresh Clients and Reset All Positions (Reset all positions is still in Settings > General). The Trim button is now **Trim Programs**.

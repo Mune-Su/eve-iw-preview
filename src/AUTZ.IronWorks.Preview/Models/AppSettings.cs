@@ -11,6 +11,10 @@ public sealed class CharacterSettings
     public int Height { get; set; }
     public string Label { get; set; } = "";
     public string LabelColourHex { get; set; } = "";
+    /// <summary>Text size of this character's label. 0 = use the default size.</summary>
+    public int LabelSize { get; set; }
+    /// <summary>How solid this character's label text is (10-100). 0 = use the default.</summary>
+    public int LabelOpacityPercent { get; set; }
     public string Hotkey { get; set; } = "";
 
     /// <summary>True = no thumbnail is shown for this character.</summary>
@@ -85,6 +89,8 @@ public sealed class AppSettings
     public string DefaultLabelColourHex { get; set; } = "#FFFFFF";
     public string LabelFontName { get; set; } = "Segoe UI";
     public int LabelFontSize { get; set; } = 13;
+    /// <summary>How solid the label text is (10-100). 100 = fully solid. (The box behind it has its own opacity.)</summary>
+    public int LabelOpacityPercent { get; set; } = 100;
     public bool LabelBold { get; set; } = true;
     public string LabelBackgroundHex { get; set; } = "#0C0C0E";
     public int LabelBackgroundOpacityPercent { get; set; } = 67;

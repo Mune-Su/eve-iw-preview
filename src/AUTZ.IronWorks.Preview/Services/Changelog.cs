@@ -7,6 +7,12 @@ internal static class Changelog
 {
     public static readonly ChangelogEntry[] Entries =
     {
+        new("0.14.1", "Label text: colour, size and opacity", new[]
+        {
+            "New: Text Opacity (Settings > Appearance > Text Label). It sets how solid the text on the thumbnails is, from 10 to 100 percent. The box behind the text keeps its own opacity under Text Background.",
+            "New: each character can have its own label size and label opacity on the Characters page, next to the label colour that was already there. Leave a value at 0 to use the default. The preview on that page shows the colour, size and opacity the thumbnail will get.",
+            "The default text colour and size are still in Settings > Appearance > Text Label."
+        }),
         new("0.14.0", "Memory cleaner upgrades", new[]
         {
             "New: Restart Windows Explorer, a button on the Memory page and an item in the tray menu. It asks first, then closes Explorer (the taskbar, the desktop and any File Explorer windows) and starts it again. Your programs keep running.",

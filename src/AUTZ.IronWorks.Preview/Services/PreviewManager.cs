@@ -582,12 +582,16 @@ public sealed class PreviewManager : IDisposable
         if (!login && _settings.ShowSystemName && _systems.TryGetValue(window.Client.CharacterName, out var system))
             text += "  ·  " + system;
 
-        Brush foreground = Ui.BrushFrom(c?.LabelColourHex, _settings.DefaultLabelColourHex, Brushes.White);
+        // colour, size and opacity: this character's own value if it has one, otherwise the default from Settings > Appearance
+        string colourHex = !string.IsNullOrWhiteSpace(c?.LabelColourHex) && Ui.TryColour(c!.LabelColourHex, out _) ? c.LabelColourHex : _settings.DefaultLabelColourHex;
+        int textOpacity = c is not null && c.LabelOpacityPercent > 0 ? c.LabelOpacityPercent : _settings.LabelOpacityPercent;
+        int textSize = c is not null && c.LabelSize > 0 ? c.LabelSize : _settings.LabelFontSize;
+        Brush foreground = Ui.BrushWithOpacity(colourHex, Math.Clamp(textOpacity, 10, 100), Brushes.White);
         Brush background = Ui.BrushWithOpacity(_settings.LabelBackgroundHex, _settings.LabelBackgroundOpacityPercent, Brushes.Transparent);
 
         window.SetLabel(new LabelSpec(
             text, foreground, _settings.ShowLabels,
-            _settings.LabelFontName, Math.Clamp(_settings.LabelFontSize, 6, 72), _settings.LabelBold,
+            _settings.LabelFontName, Math.Clamp(textSize, 6, 72), _settings.LabelBold,
             background, _settings.LabelPosition, _settings.LabelOffsetX, _settings.LabelOffsetY));
 
         window.SetExcluded(!login && c is not null && c.ExcludeFromCycling);     // the red X is always shown for skipped clients

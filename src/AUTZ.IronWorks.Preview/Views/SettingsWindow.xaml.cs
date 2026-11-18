@@ -115,6 +115,7 @@ public partial class SettingsWindow : Window
             UpdatePreview();
         };
         CharColourBox.HexChanged += UpdatePreview;
+        FontSizeBox.TextChanged += (_, _) => UpdatePreview();
 
         PreviewMouseWheel += OnPreviewMouseWheel;
 
@@ -343,6 +344,7 @@ public partial class SettingsWindow : Window
         FontSizeBox.Text = s.LabelFontSize.ToString();
         BoldBox.IsChecked = s.LabelBold;
         LabelColourBox.Hex = s.DefaultLabelColourHex;
+        LabelOpacitySlider.Value = Math.Clamp(s.LabelOpacityPercent, 10, 100);
         LabelBgBox.Hex = s.LabelBackgroundHex;
         LabelBgOpacitySlider.Value = Math.Clamp(s.LabelBackgroundOpacityPercent, 0, 100);
         LabelPositionBox.SelectedItem = Positions.Contains(s.LabelPosition) ? s.LabelPosition : "TopLeft";
@@ -434,11 +436,19 @@ public partial class SettingsWindow : Window
     private void UpdateSliderLabels()
     {
         if (OpacityLabel is null || OpacitySlider is null || BgOpacityLabel is null || LabelBgOpacitySlider is null) return;
+        if (LabelOpacityLabel is not null && LabelOpacitySlider is not null)
+            LabelOpacityLabel.Text = "Text Opacity: " + (int)Math.Round(LabelOpacitySlider.Value) + "%";
         OpacityLabel.Text = "Thumbnail Opacity: " + (int)Math.Round(OpacitySlider.Value) + "%";
         BgOpacityLabel.Text = "Background Opacity: " + (int)Math.Round(LabelBgOpacitySlider.Value) + "%";
     }
 
     private void OpacitySlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e) => UpdateSliderLabels();
+    private void LabelOpacitySlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
+    {
+        UpdateSliderLabels();
+        UpdatePreview();
+    }
+    private void CharLabelStyle_TextChanged(object sender, TextChangedEventArgs e) => UpdatePreview();
     private void BgOpacitySlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e) => UpdateSliderLabels();
 
     // ---------- client hotkey groups ----------
@@ -652,6 +662,8 @@ public partial class SettingsWindow : Window
         {
             LabelBox.Text = "";
             CharColourBox.Hex = "";
+            CharLabelSizeBox.Text = "";
+            CharLabelOpacityBox.Text = "";
             CharWidthBox.Text = "";
             CharHeightBox.Text = "";
             CharHotkeyBox.Text = "";
@@ -1142,6 +1154,8 @@ public partial class SettingsWindow : Window
     {
         LabelBox.IsEnabled = enabled;
         CharColourBox.IsEnabled = enabled;
+        CharLabelSizeBox.IsEnabled = enabled;
+        CharLabelOpacityBox.IsEnabled = enabled;
         CharWidthBox.IsEnabled = enabled;
         CharHeightBox.IsEnabled = enabled;
         CharHotkeyBox.IsEnabled = enabled;
@@ -1152,12 +1166,20 @@ public partial class SettingsWindow : Window
     /// <summary>Shows the label the way it will look: its text in its colour.</summary>
     private void UpdatePreview()
     {
-        if (LabelPreview is null || LabelBox is null || CharColourBox is null || LabelColourBox is null) return;
+        if (LabelPreview is null || LabelBox is null || CharColourBox is null || LabelColourBox is null || CharLabelSizeBox is null || CharLabelOpacityBox is null || LabelOpacitySlider is null || FontSizeBox is null) return;
         string text = LabelBox.Text.Trim();
         if (text.Length == 0) text = _currentCharacter ?? "Character name";
         LabelPreview.Text = text;
         string hex = CharColourBox.Hex.Length > 0 ? CharColourBox.Hex : LabelColourBox.Hex;
-        LabelPreview.Foreground = ColourField.TryParse(hex, out var colour) ? new SolidColorBrush(colour) : Brushes.White;
+        // the size and opacity this character will really get: its own value if it has one, otherwise the default
+        int ownOpacity = int.TryParse(CharLabelOpacityBox.Text.Trim(), out int o) && o >= 10 && o <= 100 ? o : 0;
+        int opacity = ownOpacity > 0 ? ownOpacity : (int)Math.Round(LabelOpacitySlider.Value);
+        int ownSize = int.TryParse(CharLabelSizeBox.Text.Trim(), out int z) && z >= 6 && z <= 72 ? z : 0;
+        int size = ownSize > 0 ? ownSize : (int.TryParse(FontSizeBox.Text.Trim(), out int d) && d >= 6 && d <= 72 ? d : 13);
+        LabelPreview.FontSize = Math.Min(size, 40);                // the preview box stays a sensible size for very large text
+        LabelPreview.Foreground = ColourField.TryParse(hex, out var colour)
+            ? Ui.BrushWithOpacity(hex, opacity, Brushes.White)
+            : Brushes.White;
     }
 
     private void LabelBox_TextChanged(object sender, TextChangedEventArgs e) => UpdatePreview();
@@ -1180,6 +1202,8 @@ public partial class SettingsWindow : Window
         var c = _work.TryGetCharacter(_currentCharacter) ?? new CharacterSettings();
         LabelBox.Text = c.Label;
         CharColourBox.Hex = c.LabelColourHex;
+        CharLabelSizeBox.Text = c.LabelSize.ToString();
+        CharLabelOpacityBox.Text = c.LabelOpacityPercent.ToString();
         CharWidthBox.Text = c.Width.ToString();
         CharHeightBox.Text = c.Height.ToString();
         CharHotkeyBox.Text = c.Hotkey;
@@ -1207,6 +1231,18 @@ public partial class SettingsWindow : Window
             Warn(who + "height must be 0 (automatic) or 45 to 1200.");
             return false;
         }
+        if (!int.TryParse(string.IsNullOrWhiteSpace(CharLabelSizeBox.Text) ? "0" : CharLabelSizeBox.Text.Trim(), out int labelSize) ||
+            (labelSize != 0 && (labelSize < 6 || labelSize > 72)))
+        {
+            Warn(who + "label size must be 0 (default) or 6 to 72.");
+            return false;
+        }
+        if (!int.TryParse(string.IsNullOrWhiteSpace(CharLabelOpacityBox.Text) ? "0" : CharLabelOpacityBox.Text.Trim(), out int labelOpacity) ||
+            (labelOpacity != 0 && (labelOpacity < 10 || labelOpacity > 100)))
+        {
+            Warn(who + "label opacity must be 0 (default) or 10 to 100.");
+            return false;
+        }
         if (!CharColourBox.IsValid)
         {
             Warn(who + "that isn't a valid colour. Use the Pick button, or type something like #F97316, or clear it.");
@@ -1223,6 +1259,8 @@ public partial class SettingsWindow : Window
         c.Height = height;
         c.Label = LabelBox.Text.Trim();
         c.LabelColourHex = CharColourBox.Hex;
+        c.LabelSize = labelSize;
+        c.LabelOpacityPercent = labelOpacity;
         c.Hotkey = CharHotkeyBox.Text.Trim();
         c.ActivateAction = CharActionBox.SelectedIndex is >= 0 and < 3 ? ActionValues[CharActionBox.SelectedIndex] : "None";
         c.MinimiseOnLeave = CharMinLeaveBox.IsChecked == true;
@@ -2200,6 +2238,7 @@ public partial class SettingsWindow : Window
         _work.LabelFontSize = fontSize;
         _work.LabelBold = BoldBox.IsChecked == true;
         _work.DefaultLabelColourHex = LabelColourBox.Hex.Length > 0 ? LabelColourBox.Hex : "#FFFFFF";
+        _work.LabelOpacityPercent = (int)Math.Round(LabelOpacitySlider.Value);
         _work.LabelBackgroundHex = LabelBgBox.Hex.Length > 0 ? LabelBgBox.Hex : "#0C0C0E";
         _work.LabelBackgroundOpacityPercent = (int)Math.Round(LabelBgOpacitySlider.Value);
         _work.LabelPosition = LabelPositionBox.SelectedItem as string ?? "TopLeft";
@@ -2258,7 +2297,7 @@ public partial class SettingsWindow : Window
         foreach (string key in _work.Characters.Keys.ToList())
         {
             var c = _work.Characters[key];
-            bool empty = c.Width == 0 && c.Height == 0 && c.Label.Length == 0 && c.LabelColourHex.Length == 0 &&
+            bool empty = c.Width == 0 && c.Height == 0 && c.Label.Length == 0 && c.LabelColourHex.Length == 0 && c.LabelSize == 0 && c.LabelOpacityPercent == 0 &&
                          c.Hotkey.Length == 0 && c.Left is null && c.Top is null &&
                          !c.Hidden && !c.ExcludeFromCycling && !c.NeverMinimise && !c.MinimiseOnLeave &&
                          c.ActivateAction == "None";
