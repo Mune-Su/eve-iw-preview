@@ -337,6 +337,8 @@ public sealed class AppState
     public string PreviousProfileHotkey { get; set; } = "";
     public Dictionary<string, string> ProfileHotkeys { get; set; } = new();
     public bool RunOnStartup { get; set; } = false;
+    /// <summary>Master switch for the client-switching half of the app. Memory cleaning continues when false.</summary>
+    public bool SwitcherEnabled { get; set; } = true;
     /// <summary>"Update" = when the version changes, "Always" = every start, "Never".</summary>
     public string WhatsNewMode { get; set; } = "Update";
     public string LastSeenVersion { get; set; } = "";

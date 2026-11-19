@@ -6,11 +6,22 @@ internal sealed record ChangelogEntry(string Version, string Title, string[] Ite
 internal static class Changelog
 {
     public static readonly ChangelogEntry[] Entries =  
-      {  
-          new("0.19.4", "Pause all client switching from the tray", new[]
+      {
+        new("0.19.7", "Fix switcher-disable publish error", new[]
+        {
+            "Fixed the build failure caused by calling Clear on the read-only client list.",
+            "Disabling the switcher now replaces the client snapshot with an empty read-only list while leaving the memory cleaner running."
+        }),
+        new("0.19.6", "Run as a memory cleaner without the switcher", new[]
+        {
+            "Disable Switcher turns off the complete switching side of the app while leaving the memory cleaner running.",
+            "The choice is remembered after restart. The tray command changes to Enable Switcher when switching is disabled.",
+            "No notification is shown when the switcher is enabled or disabled."
+        }),  
+          new("0.19.5", "Fully close thumbnails while switching is paused", new[]
           {
               "Hide All Thumbnails is now Pause Switching. It hides every thumbnail and disables client cycling, client-slot hotkeys, per-character jump hotkeys, profile hotkeys and tray profile switching until Resume Switching is selected.",
-              "The tray menu now groups Trim Programs, Clear System Cache and Restart Windows Explorer together below a separator after Pause Switching."
+              "Pause Switching now fully closes every thumbnail window, including its border and label. Pause/resume and Detailed Logging no longer show tray notifications."
           }),  
         new("0.19.3", "Import profiles from EVE-APM and EVE-Maj", new[]
         {

@@ -23,8 +23,8 @@ public sealed class NotifyIconService : IDisposable
         // the profiles: pick one to switch to it (the one in use is ticked)
         var profilesItem = new Forms.ToolStripMenuItem("Profiles");
 
-        var toggleItem = new Forms.ToolStripMenuItem("Pause Switching");  
-          toggleItem.Click += (_, _) => manager.ToggleSwitchingPaused();
+        var toggleItem = new Forms.ToolStripMenuItem("Disable Switcher");  
+          toggleItem.Click += (_, _) => manager.ToggleSwitcher();
           var trimItem = new Forms.ToolStripMenuItem("Trim Programs");
           trimItem.Click += async (_, _) =>
           {
@@ -90,8 +90,8 @@ public sealed class NotifyIconService : IDisposable
 
         menu.Opening += (_, _) =>
         {
-            toggleItem.Text = manager.SwitchingPaused ? "Resume Switching" : "Pause Switching";
-              profilesItem.Enabled = !manager.SwitchingPaused;
+            toggleItem.Text = manager.SwitcherEnabled ? "Disable Switcher" : "Enable Switcher";
+              profilesItem.Enabled = manager.SwitcherEnabled;
               cacheItem.Enabled = PreviewManager.IsAdministrator;
               debugItem.Checked = Log.Verbose;
             FillProfiles(profilesItem, manager);

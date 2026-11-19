@@ -83,8 +83,9 @@ public sealed class PreviewManager : IDisposable
     private string _lastClientList = "";    // detailed log: only log the client list when it changes
     private bool _blink;
 
-    public bool SwitchingPaused { get; private set; }
-      public bool ThumbnailsVisible => _visible;
+    public bool SwitcherEnabled => _state.SwitcherEnabled;
+    public bool SwitchingPaused => !_state.SwitcherEnabled;
+    public bool ThumbnailsVisible => _visible;
     public bool SettingsOpen => _settingsWindow is not null;
 
     private bool _recordingHotkey;                         // a hotkey box in the Configuration window has the keyboard
@@ -202,7 +203,9 @@ public sealed class PreviewManager : IDisposable
 
         StartupService.Refresh(_state.RunOnStartup);
         ApplySettings();
-        Refresh();
+        _visible = _state.SwitcherEnabled;
+        UpdateHotkeySuspension();
+        if (_state.SwitcherEnabled) Refresh();
         _scanTimer.Start();
         ConfigureMemoryTimer();
         SyncAdminTask();
@@ -232,6 +235,7 @@ public sealed class PreviewManager : IDisposable
     /// </summary>
     private void Scan()
     {
+        if (!_state.SwitcherEnabled) return;
         var raw = _eve.FindClients();
         _watcher.WatchProcesses(_eve.ClientProcessIds);       // title changes are only watched inside the EVE processes
 
@@ -1420,7 +1424,6 @@ public sealed class PreviewManager : IDisposable
             LogSettings("current settings");
             Refresh();
         }
-        Toast?.Invoke(AppInfo.Name, on ? "Detailed logging is on. Reproduce the problem, then open debug.log." : "Detailed logging is off.");
     }
 
     private void ConfigureLogs()
@@ -1491,7 +1494,9 @@ public sealed class PreviewManager : IDisposable
 
         _sessionOnly = true;
         ApplySettings();
-        Refresh();
+        _visible = _state.SwitcherEnabled;
+        UpdateHotkeySuspension();
+        if (_state.SwitcherEnabled) Refresh();
     }
 
     /// <summary>SAVE: write every edited profile to its file, make the shown profile the active one, and run it.</summary>
@@ -1533,7 +1538,9 @@ public sealed class PreviewManager : IDisposable
         _sessionOnly = false;
         ProfileStore.SaveState(_state);
         ApplySettings();
-        Refresh();
+        _visible = _state.SwitcherEnabled;
+        UpdateHotkeySuspension();
+        if (_state.SwitcherEnabled) Refresh();
     }
 
     /// <summary>Throw away anything that was only applied: go back to what is in the config files.</summary>
@@ -1573,7 +1580,9 @@ public sealed class PreviewManager : IDisposable
 
         _sessionOnly = false;
         ApplySettings();
-        Refresh();
+        _visible = _state.SwitcherEnabled;
+        UpdateHotkeySuspension();
+        if (_state.SwitcherEnabled) Refresh();
     }
 
     public void NotifyProfileRenamed(string oldName, string newName)
@@ -1650,7 +1659,9 @@ public sealed class PreviewManager : IDisposable
         ProfileStore.SaveState(_state);
 
         ApplySettings();
-        Refresh();
+        _visible = _state.SwitcherEnabled;
+        UpdateHotkeySuspension();
+        if (_state.SwitcherEnabled) Refresh();
 
         // the Configuration window shows the same profile list: it follows the switch
         _settingsWindow?.FollowActiveProfile(name);
@@ -1976,15 +1987,31 @@ public sealed class PreviewManager : IDisposable
 
     // ---------- visibility ----------
 
-    public void ToggleSwitchingPaused()
+    public void ToggleSwitcher()
     {
-        SwitchingPaused = !SwitchingPaused;
-        _visible = !SwitchingPaused;
+        _state.SwitcherEnabled = !_state.SwitcherEnabled;
+        _visible = _state.SwitcherEnabled;
+        ProfileStore.SaveState(_state);
         UpdateHotkeySuspension();
         ClearPending();
-        ApplyVisibility();
-        Log.Debug("SWITCH", SwitchingPaused ? "client switching paused from the tray" : "client switching resumed from the tray");
-        Toast?.Invoke(AppInfo.Name, SwitchingPaused ? "Client switching is paused." : "Client switching is back on.");
+
+        if (!_state.SwitcherEnabled)
+        {
+            _refreshSoonTimer.Stop();
+            _hideTimer.Stop();
+            _minimiseTimer.Stop();
+            foreach (nint handle in _windows.Keys.ToList()) CloseWindow(handle, false);
+            // _clients is IReadOnlyList; closing thumbnail windows and disabling Scan is sufficient.
+            _clients = Array.Empty<EveClientWindow>();
+            _clientHandles.Clear();
+        }
+        else
+        {
+            _scanDirty = true;
+            Refresh();
+        }
+
+        Log.Debug("SWITCH", _state.SwitcherEnabled ? "switcher enabled from the tray" : "switcher disabled from the tray");
     }
 
     public void Dispose()

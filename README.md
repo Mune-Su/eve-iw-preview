@@ -6,7 +6,13 @@ A lightweight Windows utility for permanent live previews of your running EVE On
 
 **Run it:** double-click `EVE-IW-Preview.exe` in this folder (needs the .NET 8 Desktop Runtime, already installed if you have the .NET SDK). It runs in the **system tray only** (no taskbar button): right-click the tray icon for the menu, double-click it for Configuration.
 
-## v0.19.4
+## v0.19.7
+- **Build fix:** corrected the read-only client-list reset used by Disable Switcher.
+
+## v0.19.6
+- **Independent switcher:** Disable Switcher turns off client scanning, thumbnails and switching while memory cleaning continues. The setting persists after restart.
+
+## v0.19.5
 - **Pause Switching:** replaces Hide All Thumbnails and disables every client-switching path while thumbnails are hidden. Choose Resume Switching to restore them.
 - **Tray memory tools:** Trim Programs, Clear System Cache and Restart Windows Explorer are grouped together below a separator.
 
