@@ -7,6 +7,13 @@ internal static class Changelog
 {
     public static readonly ChangelogEntry[] Entries =
     {
+        new("0.19.3", "Import profiles from EVE-APM and EVE-Maj", new[]
+        {
+            "Configuration > Import now accepts EVE-APM .ini profiles and EVE-Maj .json profiles, as well as native EVE-IW profiles.",
+            "Supported thumbnail appearance, character groups, saved positions, snapping, hiding, auto-minimise, log folders and hotkeys are converted into a new EVE-IW profile.",
+            "A summary is shown before import. The source file and existing EVE-IW profiles are never changed.",
+            "Settings with no genuine EVE-IW equivalent are safely ignored."
+        }),
         new("0.18.7", "Saved login slots by EVE account", new[]
         {
             "Save current order stores each open EVE account's private launcher signature against its numbered slot. In Saved mode, the login screen returns to that slot immediately, even when accounts are reopened in a different order.",

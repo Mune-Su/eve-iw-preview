@@ -1481,28 +1481,25 @@ public partial class SettingsWindow : Window
         var dialog = new Microsoft.Win32.OpenFileDialog
         {
             Title = "Import a profile",
-            Filter = "Profile files (*.json)|*.json"
+            Filter = "Supported profiles (*.json;*.ini)|*.json;*.ini|EVE-IW / EVE-Maj profiles (*.json)|*.json|EVE-APM profiles (*.ini)|*.ini"
         };
         if (dialog.ShowDialog(this) != true) return;
-
-        AppSettings? imported = null;
-        try
+        if (!ProfileImportService.TryImport(dialog.FileName, out var imported, out string error) || imported is null)
         {
-            string text = File.ReadAllText(dialog.FileName);
-            if (text.Contains("PreviewWidth", StringComparison.Ordinal))
-                imported = JsonSerializer.Deserialize<AppSettings>(text);
-        }
-        catch { }
-        if (imported is null)
-        {
-            Warn("That file isn't an " + AppInfo.Name + " profile.");
+            Warn(error.Length > 0 ? error : "That profile format isn't supported.");
             return;
         }
-
-        string? name = AskProfileName("Import profile", ProfileStore.CleanName(Path.GetFileNameWithoutExtension(dialog.FileName)));
+        string summary = $"{imported.Source} profile detected.\n\n" +
+                         $"Characters: {imported.Characters}\n" +
+                         $"Saved positions: {imported.Positions}\n" +
+                         $"Groups: {imported.Groups}\n\n" +
+                         "A new EVE-IW profile will be created. The original file and your existing profiles will not be changed.";
+        if (Dialogs.Ask(this, "Import profile", summary, "Import", "Cancel") != 0) return;
+        string? name = AskProfileName("Import profile", imported.SuggestedName);
         if (name is null) return;
-        ProfileStore.Save(name, imported);
+        ProfileStore.Save(name, imported.Settings);
         if (!SwitchShown(name)) RefreshProfileBox();
+        else SetStatus($"Imported {imported.Source} profile as “{name}”. Press Save to make it active.", true);
     }
 
     // ---------- general page buttons ----------
