@@ -69,7 +69,7 @@ public sealed class PreviewManager : IDisposable
     private Dictionary<nint, int> _slots = new();            // v0.11.1: client -> its numbered place (Saved / Manual order keep a closed client's place free)
     private SettingsWindow? _settingsWindow;
 
-    private bool _visible = true;          // the tray "hide / show all thumbnails" switch
+    private bool _visible = true;          // false while client switching is paused
     private bool _hiddenByFocus;           // hidden because EVE doesn't have focus
     private nint _activeClient;            // the EVE client that has focus right now (0 = none)
     private nint _lastActive;              // the EVE client that had focus most recently
@@ -83,7 +83,8 @@ public sealed class PreviewManager : IDisposable
     private string _lastClientList = "";    // detailed log: only log the client list when it changes
     private bool _blink;
 
-    public bool ThumbnailsVisible => _visible;
+    public bool SwitchingPaused { get; private set; }
+      public bool ThumbnailsVisible => _visible;
     public bool SettingsOpen => _settingsWindow is not null;
 
     private bool _recordingHotkey;                         // a hotkey box in the Configuration window has the keyboard
@@ -96,7 +97,7 @@ public sealed class PreviewManager : IDisposable
     private void UpdateHotkeySuspension()
     {
         bool configBlocks = _settingsWindow is not null && (!_settings.HotkeysInConfig || _recordingHotkey);
-        _hotkeys.Suspended = HotkeysSuspended || configBlocks;
+        _hotkeys.Suspended = SwitchingPaused || HotkeysSuspended || configBlocks;
     }
 
     /// <summary>Called by the Configuration window when a hotkey box starts or stops recording.</summary>
@@ -113,6 +114,7 @@ public sealed class PreviewManager : IDisposable
 
     /// <summary>Raised when something should be shown as a Windows notification (title, text).</summary>
     public event Action<string, string>? Toast;
+      public void ShowToast(string title, string text) => Toast?.Invoke(title, text);
 
     public PreviewManager(AppSettings settings, AppState state)
     {
@@ -1974,10 +1976,15 @@ public sealed class PreviewManager : IDisposable
 
     // ---------- visibility ----------
 
-    public void ToggleVisibility()
+    public void ToggleSwitchingPaused()
     {
-        _visible = !_visible;
+        SwitchingPaused = !SwitchingPaused;
+        _visible = !SwitchingPaused;
+        UpdateHotkeySuspension();
+        ClearPending();
         ApplyVisibility();
+        Log.Debug("SWITCH", SwitchingPaused ? "client switching paused from the tray" : "client switching resumed from the tray");
+        Toast?.Invoke(AppInfo.Name, SwitchingPaused ? "Client switching is paused." : "Client switching is back on.");
     }
 
     public void Dispose()

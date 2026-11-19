@@ -5,8 +5,13 @@ internal sealed record ChangelogEntry(string Version, string Title, string[] Ite
 /// <summary>What changed in each version. The newest entry comes first and is what the start-up pop-up shows.</summary>
 internal static class Changelog
 {
-    public static readonly ChangelogEntry[] Entries =
-    {
+    public static readonly ChangelogEntry[] Entries =  
+      {  
+          new("0.19.4", "Pause all client switching from the tray", new[]
+          {
+              "Hide All Thumbnails is now Pause Switching. It hides every thumbnail and disables client cycling, client-slot hotkeys, per-character jump hotkeys, profile hotkeys and tray profile switching until Resume Switching is selected.",
+              "The tray menu now groups Trim Programs, Clear System Cache and Restart Windows Explorer together below a separator after Pause Switching."
+          }),  
         new("0.19.3", "Import profiles from EVE-APM and EVE-Maj", new[]
         {
             "Configuration > Import now accepts EVE-APM .ini profiles and EVE-Maj .json profiles, as well as native EVE-IW profiles.",

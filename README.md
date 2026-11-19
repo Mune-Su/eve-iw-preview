@@ -6,6 +6,10 @@ A lightweight Windows utility for permanent live previews of your running EVE On
 
 **Run it:** double-click `EVE-IW-Preview.exe` in this folder (needs the .NET 8 Desktop Runtime, already installed if you have the .NET SDK). It runs in the **system tray only** (no taskbar button): right-click the tray icon for the menu, double-click it for Configuration.
 
+## v0.19.4
+- **Pause Switching:** replaces Hide All Thumbnails and disables every client-switching path while thumbnails are hidden. Choose Resume Switching to restore them.
+- **Tray memory tools:** Trim Programs, Clear System Cache and Restart Windows Explorer are grouped together below a separator.
+
 ## v0.19.3
 - **Profile importer:** Configuration > Import detects EVE-APM `.ini`, EVE-Maj `.json`, and native EVE-IW profiles. Supported appearance, groups, characters, positions, behaviour, log folders and hotkeys are copied into a new EVE-IW profile without changing the source file or existing profiles.
 

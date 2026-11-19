@@ -23,8 +23,30 @@ public sealed class NotifyIconService : IDisposable
         // the profiles: pick one to switch to it (the one in use is ticked)
         var profilesItem = new Forms.ToolStripMenuItem("Profiles");
 
-        var toggleItem = new Forms.ToolStripMenuItem("Hide All Thumbnails");
-        toggleItem.Click += (_, _) => manager.ToggleVisibility();
+        var toggleItem = new Forms.ToolStripMenuItem("Pause Switching");  
+          toggleItem.Click += (_, _) => manager.ToggleSwitchingPaused();
+          var trimItem = new Forms.ToolStripMenuItem("Trim Programs");
+          trimItem.Click += async (_, _) =>
+          {
+              trimItem.Enabled = false;
+              try
+              {
+                  var result = await manager.TrimNowAsync(manager.State.Memory);
+                  manager.ShowToast("Memory", result.Message);
+              }
+              finally { trimItem.Enabled = true; }
+          };
+          var cacheItem = new Forms.ToolStripMenuItem("Clear System Cache") { Enabled = PreviewManager.IsAdministrator };
+          cacheItem.Click += async (_, _) =>
+          {
+              cacheItem.Enabled = false;
+              try
+              {
+                  var result = await manager.ClearCacheNowAsync();
+                  manager.ShowToast("Memory", result.Message);
+              }
+              finally { cacheItem.Enabled = PreviewManager.IsAdministrator; }
+          };
 
         var explorerItem = new Forms.ToolStripMenuItem("Restart Windows Explorer");
         explorerItem.Click += async (_, _) =>
@@ -56,7 +78,10 @@ public sealed class NotifyIconService : IDisposable
         menu.Items.Add(profilesItem);
         menu.Items.Add(new Forms.ToolStripSeparator());
         menu.Items.Add(toggleItem);
-        menu.Items.Add(explorerItem);
+          menu.Items.Add(new Forms.ToolStripSeparator());
+          menu.Items.Add(trimItem);
+          menu.Items.Add(cacheItem);
+          menu.Items.Add(explorerItem);
         menu.Items.Add(new Forms.ToolStripSeparator());
         menu.Items.Add(debugItem);
         menu.Items.Add(openDebugItem);
@@ -65,8 +90,10 @@ public sealed class NotifyIconService : IDisposable
 
         menu.Opening += (_, _) =>
         {
-            toggleItem.Text = manager.ThumbnailsVisible ? "Hide All Thumbnails" : "Show All Thumbnails";
-            debugItem.Checked = Log.Verbose;
+            toggleItem.Text = manager.SwitchingPaused ? "Resume Switching" : "Pause Switching";
+              profilesItem.Enabled = !manager.SwitchingPaused;
+              cacheItem.Enabled = PreviewManager.IsAdministrator;
+              debugItem.Checked = Log.Verbose;
             FillProfiles(profilesItem, manager);
         };
 
