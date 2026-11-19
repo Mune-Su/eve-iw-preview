@@ -7,6 +7,12 @@ internal static class Changelog
 {
     public static readonly ChangelogEntry[] Entries =  
       {
+        new("0.19.8", "Enable or disable the memory cleaner independently", new[]
+        {
+            "Disable Memory Cleaner stops automatic memory cleaning and disables the manual Trim Programs and Clear System Cache commands while leaving the switcher running.",
+            "The tray command changes to Enable Memory Cleaner and the choice is remembered after restart.",
+            "No notification is shown when the memory cleaner is enabled or disabled."
+        }),
         new("0.19.7", "Fix switcher-disable publish error", new[]
         {
             "Fixed the build failure caused by calling Clear on the read-only client list.",

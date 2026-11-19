@@ -339,6 +339,8 @@ public sealed class AppState
     public bool RunOnStartup { get; set; } = false;
     /// <summary>Master switch for the client-switching half of the app. Memory cleaning continues when false.</summary>
     public bool SwitcherEnabled { get; set; } = true;
+    /// <summary>Master switch for automatic and manual memory-cleaner actions. The switcher continues when false.</summary>
+    public bool MemoryCleanerEnabled { get; set; } = true;
     /// <summary>"Update" = when the version changes, "Always" = every start, "Never".</summary>
     public string WhatsNewMode { get; set; } = "Update";
     public string LastSeenVersion { get; set; } = "";

@@ -25,6 +25,8 @@ public sealed class NotifyIconService : IDisposable
 
         var toggleItem = new Forms.ToolStripMenuItem("Disable Switcher");  
           toggleItem.Click += (_, _) => manager.ToggleSwitcher();
+          var memoryToggleItem = new Forms.ToolStripMenuItem("Disable Memory Cleaner");
+          memoryToggleItem.Click += (_, _) => manager.ToggleMemoryCleaner();
           var trimItem = new Forms.ToolStripMenuItem("Trim Programs");
           trimItem.Click += async (_, _) =>
           {
@@ -79,6 +81,7 @@ public sealed class NotifyIconService : IDisposable
         menu.Items.Add(new Forms.ToolStripSeparator());
         menu.Items.Add(toggleItem);
           menu.Items.Add(new Forms.ToolStripSeparator());
+          menu.Items.Add(memoryToggleItem);
           menu.Items.Add(trimItem);
           menu.Items.Add(cacheItem);
           menu.Items.Add(explorerItem);
@@ -92,7 +95,9 @@ public sealed class NotifyIconService : IDisposable
         {
             toggleItem.Text = manager.SwitcherEnabled ? "Disable Switcher" : "Enable Switcher";
               profilesItem.Enabled = manager.SwitcherEnabled;
-              cacheItem.Enabled = PreviewManager.IsAdministrator;
+              memoryToggleItem.Text = manager.MemoryCleanerEnabled ? "Disable Memory Cleaner" : "Enable Memory Cleaner";
+              trimItem.Enabled = manager.MemoryCleanerEnabled;
+              cacheItem.Enabled = manager.MemoryCleanerEnabled && PreviewManager.IsAdministrator;
               debugItem.Checked = Log.Verbose;
             FillProfiles(profilesItem, manager);
         };

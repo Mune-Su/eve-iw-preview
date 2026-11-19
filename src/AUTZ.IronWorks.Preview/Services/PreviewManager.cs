@@ -84,6 +84,7 @@ public sealed class PreviewManager : IDisposable
     private bool _blink;
 
     public bool SwitcherEnabled => _state.SwitcherEnabled;
+    public bool MemoryCleanerEnabled => _state.MemoryCleanerEnabled;
     public bool SwitchingPaused => !_state.SwitcherEnabled;
     public bool ThumbnailsVisible => _visible;
     public bool SettingsOpen => _settingsWindow is not null;
@@ -1003,7 +1004,7 @@ public sealed class PreviewManager : IDisposable
     {
         _memoryTimer.Stop();
         var m = _state.Memory;
-        if (!m.AnyAutomatic) return;
+        if (!_state.MemoryCleanerEnabled || !m.AnyAutomatic) return;
         _lastTrimAt = DateTime.UtcNow;                // times count from now
         _lastCacheAt = DateTime.UtcNow;
         _cacheNoAdminLogged = false;
@@ -1015,7 +1016,7 @@ public sealed class PreviewManager : IDisposable
 
     private async void MemoryTick()
     {
-        if (_memoryBusy) return;
+        if (_memoryBusy || !_state.MemoryCleanerEnabled) return;
         try
         {
             var m = _state.Memory;
@@ -1986,6 +1987,21 @@ public sealed class PreviewManager : IDisposable
     }
 
     // ---------- visibility ----------
+
+    public void ToggleMemoryCleaner()
+    {
+        _state.MemoryCleanerEnabled = !_state.MemoryCleanerEnabled;
+        ProfileStore.SaveState(_state);
+        if (_state.MemoryCleanerEnabled)
+        {
+            ConfigureMemoryTimer();
+        }
+        else
+        {
+            _memoryTimer.Stop();
+        }
+        Log.Debug("MEMORY", _state.MemoryCleanerEnabled ? "memory cleaner enabled from the tray" : "memory cleaner disabled from the tray");
+    }
 
     public void ToggleSwitcher()
     {
