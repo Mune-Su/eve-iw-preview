@@ -7,6 +7,11 @@ internal static class Changelog
 {
     public static readonly ChangelogEntry[] Entries =  
       {
+        new("0.19.10", "Group component controls in the tray", new[]
+        {
+            "Disable Switcher and Disable Memory Cleaner now appear together in the same tray-menu section.",
+            "The separator now sits below both component controls and above the manual memory actions."
+        }),
         new("0.19.9", "Component controls in Configuration", new[]
         {
             "The General page now has an App Components card with Enable or Disable Switcher and Enable or Disable Memory Cleaner controls.",

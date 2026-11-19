@@ -6,6 +6,9 @@ A lightweight Windows utility for permanent live previews of your running EVE On
 
 **Run it:** double-click `EVE-IW-Preview.exe` in this folder (needs the .NET 8 Desktop Runtime, already installed if you have the .NET SDK). It runs in the **system tray only** (no taskbar button): right-click the tray icon for the menu, double-click it for Configuration.
 
+## v0.19.10
+- **Tray grouping:** Switcher and Memory Cleaner enable/disable controls are now in the same menu section.
+
 ## v0.19.9
 - **Configuration controls:** the General page now includes the same enable/disable controls for the switcher and memory cleaner.
 

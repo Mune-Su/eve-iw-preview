@@ -80,8 +80,8 @@ public sealed class NotifyIconService : IDisposable
         menu.Items.Add(profilesItem);
         menu.Items.Add(new Forms.ToolStripSeparator());
         menu.Items.Add(toggleItem);
-          menu.Items.Add(new Forms.ToolStripSeparator());
           menu.Items.Add(memoryToggleItem);
+          menu.Items.Add(new Forms.ToolStripSeparator());
           menu.Items.Add(trimItem);
           menu.Items.Add(cacheItem);
           menu.Items.Add(explorerItem);
