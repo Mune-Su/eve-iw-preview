@@ -7,6 +7,11 @@ internal static class Changelog
 {
     public static readonly ChangelogEntry[] Entries =  
       {
+        new("0.19.9", "Component controls in Configuration", new[]
+        {
+            "The General page now has an App Components card with Enable or Disable Switcher and Enable or Disable Memory Cleaner controls.",
+            "The configuration controls use the same saved state as the tray menu, so both locations stay consistent."
+        }),
         new("0.19.8", "Enable or disable the memory cleaner independently", new[]
         {
             "Disable Memory Cleaner stops automatic memory cleaning and disables the manual Trim Programs and Clear System Cache commands while leaving the switcher running.",

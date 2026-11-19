@@ -137,6 +137,7 @@ public partial class SettingsWindow : Window
         PinTrayBox.IsChecked = _state.PinTrayIcon;
         AlwaysAdminBox.IsChecked = _state.AlwaysAdmin;
         UpdateAlwaysAdminControls();
+        UpdateComponentToggleButtons();
         WhatsNewCombo.SelectedIndex = _state.WhatsNewMode switch { "Always" => 1, "Never" => 2, _ => 0 };
 
         VersionText.Text = "v" + AppInfo.Version;
@@ -151,6 +152,27 @@ public partial class SettingsWindow : Window
         SelectPage(0);
     }
 
+    private void UpdateComponentToggleButtons()
+    {
+        SwitcherToggleBtn.Content = _manager.SwitcherEnabled ? "Disable Switcher" : "Enable Switcher";
+        MemoryCleanerToggleBtn.Content = _manager.MemoryCleanerEnabled ? "Disable Memory Cleaner" : "Enable Memory Cleaner";
+    }
+
+    private void SwitcherToggle_Click(object sender, RoutedEventArgs e)
+    {
+        _manager.ToggleSwitcher();
+        _state.SwitcherEnabled = _manager.SwitcherEnabled;
+        UpdateComponentToggleButtons();
+    }
+
+    private void MemoryCleanerToggle_Click(object sender, RoutedEventArgs e)
+    {
+        _manager.ToggleMemoryCleaner();
+        _state.MemoryCleanerEnabled = _manager.MemoryCleanerEnabled;
+        UpdateComponentToggleButtons();
+        UpdateMemoryTimers();
+    }
+
     private static string DataFolder => AppInfo.DataFolder;
 
     private static string LogPath => Path.Combine(DataFolder, "preview.log");
@@ -159,7 +181,7 @@ public partial class SettingsWindow : Window
 
     private void BuildNav()
     {
-        _pages.Add(new PageDef("General", PageGeneral, new Control[] { CardStartup, CardClients }));
+        _pages.Add(new PageDef("General", PageGeneral, new Control[] { CardComponents, CardStartup, CardClients }));
         _pages.Add(new PageDef("Thumbnails", PageThumbs, new Control[] { CardSize, CardLabel, CardActiveBorder, CardCharacter, CardInteraction }));
         _pages.Add(new PageDef("Grouping", PageGroups, new Control[] { CardRoster, CardScan, CardClientOrder }));
         _pages.Add(new PageDef("Hotkeys", PageHotkeys, new Control[] { CardCycling, CardHotkeyOptions, CardSlotKeys, CardCharActions, CardSkipped, CardProfileKeys }));
