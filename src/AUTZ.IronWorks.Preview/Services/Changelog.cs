@@ -7,6 +7,11 @@ internal static class Changelog
 {
     public static readonly ChangelogEntry[] Entries =  
       {
+        new("0.19.14", "GitHub production release", new[]
+        {
+            "Published through the automated GitHub release pipeline for production use.",
+            "Includes the complete named Events To Watch alert update and preserves all existing project files."
+        }),
         new("0.19.14-rc.1", "Release candidate", new[]
         {
             "First GitHub prerelease produced by the automated release pipeline.",
@@ -379,6 +384,7 @@ internal static class Changelog
         })
     };
 }
+
 
 
 
