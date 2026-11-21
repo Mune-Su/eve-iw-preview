@@ -1,0 +1,58 @@
+﻿name: Validate EVE-IW-Preview
+
+on:
+  push:
+    branches:
+      - release
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: windows-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up .NET 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+
+      - name: Confirm required source files
+        shell: pwsh
+        run: |
+          $requiredFiles = @(
+              ".\AUTZ.IronWorks.Preview.sln",
+              ".\src\AUTZ.IronWorks.Preview\AUTZ.IronWorks.Preview.csproj",
+              ".\src\AUTZ.IronWorks.Preview\Core\MemoryTrim.cs"
+          )
+
+          $missingFiles = @(
+              $requiredFiles |
+                  Where-Object { -not (Test-Path $_) }
+          )
+
+          if ($missingFiles.Count -gt 0) {
+              $missingFiles | ForEach-Object {
+                  Write-Host "Missing file: $_" -ForegroundColor Red
+              }
+
+              throw "Required source files are missing."
+          }
+
+      - name: Restore
+        shell: pwsh
+        run: dotnet restore ".\AUTZ.IronWorks.Preview.sln"
+
+      - name: Build
+        shell: pwsh
+        run: >
+          dotnet build
+          ".\AUTZ.IronWorks.Preview.sln"
+          --configuration Release
+          --no-restore
+          --nologo
