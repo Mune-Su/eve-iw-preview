@@ -1915,8 +1915,6 @@ public partial class SettingsWindow : Window
         (m.EveIdleTrim ? MemEveIdleRadio : m.SkipEveClients ? MemEveNeverRadio : MemEveAllRadio).IsChecked = true;
         MemEveIdleBox.Text = m.EveIdleMinutes.ToString();
         MemMinMbBox.Text = m.MinTrimMb.ToString();
-        MemCacheOnlyLowBox.IsChecked = m.CacheOnlyWhenLow;
-        MemCacheLowPercentBox.Text = m.CacheLowFreePercent.ToString();
         MemLimitsBox.IsChecked = m.UseProgramLimits;
         MemLimitsText.Text = (m.ProgramLimits ?? "").Replace("\r", "").Replace("\n", Environment.NewLine);
         MemExcludeBox.Text = m.ExcludedPrograms;
@@ -1929,8 +1927,6 @@ public partial class SettingsWindow : Window
         MemCacheMinutesBox.IsEnabled = admin;
         MemCacheAboveBox.IsEnabled = admin;
         MemCachePercentBox.IsEnabled = admin;
-        MemCacheOnlyLowBox.IsEnabled = admin;
-        MemCacheLowPercentBox.IsEnabled = admin;
         MemAdminNote.Visibility = admin ? Visibility.Collapsed : Visibility.Visible;
         MemAdminPanel.Visibility = admin ? Visibility.Collapsed : Visibility.Visible;
     }
@@ -1953,8 +1949,6 @@ public partial class SettingsWindow : Window
             EveIdleTrim = MemEveIdleRadio.IsChecked == true,
             EveIdleMinutes = ParseOr(MemEveIdleBox.Text, 1, 1440, old.EveIdleMinutes),
             MinTrimMb = ParseOr(MemMinMbBox.Text, 0, 4096, old.MinTrimMb),
-            CacheOnlyWhenLow = MemCacheOnlyLowBox.IsChecked == true,
-            CacheLowFreePercent = ParseOr(MemCacheLowPercentBox.Text, 5, 90, old.CacheLowFreePercent),
             UseProgramLimits = MemLimitsBox.IsChecked == true,
             ProgramLimits = string.Join("\n", MemLimitsText.Text.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)),
             ExcludedPrograms = MemExcludeBox.Text.Trim(),
@@ -2361,8 +2355,6 @@ public partial class SettingsWindow : Window
             return Fail(PageMemory_, "The smallest program to trim must be 0 to 4096 MB.");
         if (!InRange(MemEveIdleBox.Text, 1, 1440, out _))
             return Fail(PageMemory_, "The idle time for EVE clients must be 1 to 1440 minutes.");
-        if (!InRange(MemCacheLowPercentBox.Text, 5, 90, out _))
-            return Fail(PageMemory_, "The free-memory level for clearing the cache must be 5 to 90 percent.");
         if (!MemoryCleaner.TryParseLimits(MemLimitsText.Text, out _, out string limitError))
             return Fail(PageMemory_, limitError);
         // Notifications
@@ -2485,5 +2477,3 @@ public partial class SettingsWindow : Window
         return true;
     }
 }
-
-

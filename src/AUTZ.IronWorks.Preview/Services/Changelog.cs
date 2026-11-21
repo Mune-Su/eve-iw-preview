@@ -1,4 +1,4 @@
-﻿namespace AUTZ.IronWorks.Preview.Services;
+namespace AUTZ.IronWorks.Preview.Services;
 
 internal sealed record ChangelogEntry(string Version, string Title, string[] Items);
 
@@ -7,6 +7,11 @@ internal static class Changelog
 {
     public static readonly ChangelogEntry[] Entries =  
       {
+        new("0.19.15", "Simplified automatic cache cleaning", new[]
+        {
+            "Removed the 'only while free memory is below' option from Memory settings.",
+            "Scheduled system-cache cleaning now runs according to its enabled interval without that extra condition."
+        }),
         new("0.19.14", "GitHub production release", new[]
         {
             "Published through the automated GitHub release pipeline for production use.",
@@ -384,7 +389,3 @@ internal static class Changelog
         })
     };
 }
-
-
-
-

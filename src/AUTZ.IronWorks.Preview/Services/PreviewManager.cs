@@ -1036,9 +1036,7 @@ public sealed class PreviewManager : IDisposable
             var status = SampleMemory();
             int freePercent = status.IsValid ? 100 - status.LoadPercent : 100;
             bool trim = m.TrimEveryMinutes && now - _lastTrimAt >= TimeSpan.FromMinutes(Math.Max(1, m.TrimMinutes));
-            // smart standby clear: on a schedule it only runs while free memory is low (the usage limit below is separate)
-            bool cache = m.ClearCacheEvery && now - _lastCacheAt >= TimeSpan.FromMinutes(Math.Max(1, m.CacheMinutes)) &&
-                         (!m.CacheOnlyWhenLow || freePercent < m.CacheLowFreePercent);
+            bool cache = m.ClearCacheEvery && now - _lastCacheAt >= TimeSpan.FromMinutes(Math.Max(1, m.CacheMinutes));
             if (!trim && m.TrimAboveUsage && status.LoadPercent >= m.TrimUsagePercent && now - _lastTrimAt >= ThresholdCooldown) trim = true;
             if (!cache && m.ClearCacheAboveUsage && status.LoadPercent >= m.CacheUsagePercent && now - _lastCacheAt >= ThresholdCooldown) cache = true;
             Dictionary<string, int> limits = new();
@@ -2069,5 +2067,3 @@ public sealed class PreviewManager : IDisposable
         _meta.Clear();
     }
 }
-
-

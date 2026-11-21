@@ -317,9 +317,6 @@ public sealed class MemoryCleanerSettings
     public int EveIdleMinutes { get; set; } = 10;
     /// <summary>Programs using less than this many megabytes are not trimmed (0 = trim everything).</summary>
     public int MinTrimMb { get; set; } = 30;
-    /// <summary>True = clearing the system cache on a schedule only happens while free memory is below CacheLowFreePercent.</summary>
-    public bool CacheOnlyWhenLow { get; set; } = true;
-    public int CacheLowFreePercent { get; set; } = 20;
     /// <summary>True = a program that goes over its own limit (ProgramLimits) is trimmed.</summary>
     public bool UseProgramLimits { get; set; } = false;
     /// <summary>One "name=megabytes" per line, for example chrome=1500.</summary>
@@ -368,5 +365,3 @@ public sealed class AppState
     public AppState Clone() =>
         JsonSerializer.Deserialize<AppState>(JsonSerializer.Serialize(this)) ?? new AppState();
 }
-
-
