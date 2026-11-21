@@ -210,3 +210,4 @@ internal static class ClientDiagnostics
         return ReadProcessMemory(process, address, buffer, count, out nint read) && read == count ? buffer : null;
     }
 }
+

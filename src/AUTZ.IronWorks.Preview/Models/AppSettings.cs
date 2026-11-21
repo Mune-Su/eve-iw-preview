@@ -362,3 +362,4 @@ public sealed class AppState
     public AppState Clone() =>
         JsonSerializer.Deserialize<AppState>(JsonSerializer.Serialize(this)) ?? new AppState();
 }
+

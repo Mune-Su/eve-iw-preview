@@ -26,3 +26,4 @@
         <WrapPanel x:Name="Presets" Margin="0,5,0,0"/>
     </StackPanel>
 </UserControl>
+

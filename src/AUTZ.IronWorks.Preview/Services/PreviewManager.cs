@@ -236,12 +236,19 @@ public sealed class PreviewManager : IDisposable
     /// </summary>
     private void Scan()
     {
-        if (!_state.SwitcherEnabled) return;
+        if (!_state.SwitcherEnabled)
+        {
+            Log.Trace("SCAN", "skipped: switcher disabled");
+            return;
+        }
+        Log.Trace("SCAN", $"begin: dirty={_scanDirty}; previous={_lastScan.Count}; interval={_scanTimer.Interval.TotalMilliseconds:0}ms");
         var raw = _eve.FindClients();
+        Log.Trace("SCAN", $"windows enumerated: {raw.Count} EVE client(s)");
         _watcher.WatchProcesses(_eve.ClientProcessIds);       // title changes are only watched inside the EVE processes
 
         if (!_scanDirty && SameClients(raw, _lastScan))
         {
+            Log.Trace("SCAN", "unchanged: layout retained");
             FollowForeground();
             UpdateScanInterval();
             return;
@@ -1422,6 +1429,7 @@ public sealed class PreviewManager : IDisposable
         if (on)
         {
             _lastClientList = "";
+            Log.Trace("APP", $"full operational trace enabled; profile='{_state.ActiveProfile}'; switcher={_state.SwitcherEnabled}; memoryCleaner={_state.MemoryCleanerEnabled}; windows={_windows.Count}; clients={_clients.Count}");
             LogSettings("current settings");
             Refresh();
         }
@@ -2049,3 +2057,4 @@ public sealed class PreviewManager : IDisposable
         _meta.Clear();
     }
 }
+

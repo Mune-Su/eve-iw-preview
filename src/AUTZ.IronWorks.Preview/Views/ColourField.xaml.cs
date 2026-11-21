@@ -154,3 +154,4 @@ internal sealed class Win32Owner : System.Windows.Forms.IWin32Window
     public Win32Owner(nint handle) => Handle = handle;
     public nint Handle { get; }
 }
+

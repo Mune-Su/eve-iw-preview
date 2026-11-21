@@ -258,6 +258,7 @@ public sealed class HotkeyService : IDisposable
         bool down = msg == 0x100 || msg == 0x104;
         bool up = msg == 0x101 || msg == 0x105;
         if (!down && !up) return false;
+        Log.Trace("KEYINPUT", $"keyboard {(down ? "down" : "up")} vk=0x{vk:X2}; suspended={_suspended}; allowed={Allowed()}; passThrough={PassThrough}");
 
         if (down)
         {
@@ -328,6 +329,7 @@ public sealed class HotkeyService : IDisposable
         int delta = 0;
         int high = (int)(((uint)mouseData >> 16) & 0xFFFF);
 
+        Log.Trace("MOUSEINPUT", $"mouse msg=0x{msg:X}; data=0x{mouseData:X8}; suspended={_suspended}; allowed={Allowed()}; passThrough={PassThrough}");
         switch (msg)
         {
             case 0x201: code = 1; down = true; break;
@@ -463,3 +465,4 @@ public sealed class HotkeyService : IDisposable
         _mouseHook = 0;
     }
 }
+

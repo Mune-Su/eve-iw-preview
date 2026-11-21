@@ -6,6 +6,9 @@ A lightweight Windows utility for permanent live previews of your running EVE On
 
 **Run it:** double-click `EVE-IW-Preview.exe` in this folder (needs the .NET 8 Desktop Runtime, already installed if you have the .NET SDK). It runs in the **system tray only** (no taskbar button): right-click the tray icon for the menu, double-click it for Configuration.
 
+## v0.19.11
+- **Full Detailed Logging:** while enabled, the debug log records the full operational trace: every scan, focus/title event, handled hotkey input, EVE log-monitor line, memory decision, settings action, lifecycle event and exception. Privacy scrubbing and background writing remain in place.
+
 ## v0.19.10
 - **Tray grouping:** Switcher and Memory Cleaner enable/disable controls are now in the same menu section.
 
@@ -269,3 +272,4 @@ The AUTZ IronWorks emblem is built in: `src\AUTZ.IronWorks.Preview\Assets\app.ic
 
 ## Update workflow
 `update-preview.ps1` replaces the repo with the newest `EVE-IW-Preview-v*.zip` (or `AUTZ-IronWorks-Preview-v*.zip`, the name used before the rename), finds the repo and the versions folder by itself, keeps Git history, LICENSE and the Assets folder (icon + logo), builds, publishes the exe to the repo root, and stages the changes. It does not commit or push. If the app is open it is left running; Windows lets the running exe be renamed, so the new exe takes its place and is used the next time you open the app. Always launch the exe in the repo root (not one from a `bin` folder).
+

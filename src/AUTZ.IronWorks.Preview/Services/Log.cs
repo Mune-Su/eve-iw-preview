@@ -175,6 +175,19 @@ internal static class Log
     /// <summary>Milliseconds since the app started: handy for timing a sequence of steps.</summary>
     public static long Ms => Clock.ElapsedMilliseconds;
 
+    /// <summary>High-volume operational trace. Completely inert while Detailed Logging is off.</summary>
+    public static void Trace(string area, string text)
+    {
+      if (!_verbose) return;
+      Queue.Enqueue((_activePath, Stamp(area, text)));
+      Signal.Set();
+    }
+
+    public static void TraceException(string source, Exception exception)
+    {
+      if (_verbose) Trace("EXCEPT", source + ": " + exception);
+    }
+
     private static string Stamp(string area, string text) =>
         $"{DateTime.Now:HH:mm:ss.fff}  +{Clock.ElapsedMilliseconds,9}ms  t{Environment.CurrentManagedThreadId,-3} {area,-8} {text}";
 
@@ -463,3 +476,4 @@ internal ref struct DebugLine
 
     internal string Text => _text?.ToString() ?? "";
 }
+

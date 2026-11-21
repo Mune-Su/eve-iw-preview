@@ -18,6 +18,13 @@ public partial class App : System.Windows.Application
     {
         base.OnStartup(e);
 
+        AppDomain.CurrentDomain.UnhandledException += (_, args) =>
+        {
+            if (args.ExceptionObject is Exception ex) Log.TraceException("AppDomain unhandled exception", ex);
+            else Log.Trace("EXCEPT", "AppDomain unhandled exception: " + args.ExceptionObject);
+        };
+        TaskScheduler.UnobservedTaskException += (_, args) => Log.TraceException("Unobserved task exception", args.Exception);
+
         // a bug in one handler should never take the whole app (and every thumbnail) down: log it and carry on
         DispatcherUnhandledException += (_, args) =>
         {
@@ -63,6 +70,7 @@ public partial class App : System.Windows.Application
 
         Log.PerSessionFiles = state.DebugLogMode == "PerSession";
         Log.Verbose = state.DebugLogging;
+        Log.Trace("APP", $"startup: args={string.Join(" ", e.Args.Select(Log.ArgCode))}; admin={MemoryCleaner.IsAdministrator}; switcher={state.SwitcherEnabled}; memoryCleaner={state.MemoryCleanerEnabled}");
         _manager = new PreviewManager(settings, state);
 
         // No main window and no taskbar button: the app lives in the system tray (right-click the icon).
@@ -119,6 +127,7 @@ public partial class App : System.Windows.Application
 
     protected override void OnExit(ExitEventArgs e)
     {
+        Log.Trace("APP", $"shutdown: exitCode={e.ApplicationExitCode}");
         _tray?.Dispose();
         _manager?.Dispose();
         if (_ownsMutex && _mutex is not null)
@@ -129,3 +138,4 @@ public partial class App : System.Windows.Application
         base.OnExit(e);
     }
 }
+

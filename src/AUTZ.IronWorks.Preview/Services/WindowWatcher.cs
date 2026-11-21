@@ -74,3 +74,4 @@ internal sealed class WindowWatcher : IDisposable
         _foregroundHook = 0;
     }
 }
+

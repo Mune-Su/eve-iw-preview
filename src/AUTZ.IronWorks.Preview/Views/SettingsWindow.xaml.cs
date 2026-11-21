@@ -2473,3 +2473,4 @@ public partial class SettingsWindow : Window
         return true;
     }
 }
+

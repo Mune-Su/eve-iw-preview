@@ -204,3 +204,4 @@ public static class ProfileImportService
     private static string Colour(string text, string fallback) => Colour(text, fallback, out _);
     private static string Colour(string text, string fallback, out int alpha) { alpha = 100; text = text.Trim(); if (Regex.IsMatch(text, @"^0x[0-9A-Fa-f]{8}$")) { alpha = (int)Math.Round(Convert.ToInt32(text.Substring(2, 2), 16) * 100 / 255d); return "#" + text[4..].ToUpperInvariant(); } if (Regex.IsMatch(text, @"^#[0-9A-Fa-f]{8}$")) { alpha = (int)Math.Round(Convert.ToInt32(text.Substring(1, 2), 16) * 100 / 255d); return "#" + text[3..].ToUpperInvariant(); } return Regex.IsMatch(text, @"^#[0-9A-Fa-f]{6}$") ? text.ToUpperInvariant() : fallback; }
 }
+

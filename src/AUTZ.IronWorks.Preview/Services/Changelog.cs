@@ -7,6 +7,13 @@ internal static class Changelog
 {
     public static readonly ChangelogEntry[] Entries =  
       {
+        new("0.19.11", "Full detailed logging", new[]
+        {
+            "Detailed Logging now records the complete operational trace while it is enabled, rather than only selected switching events.",
+            "The trace includes every client scan, Windows focus and title event, raw hotkey input handled by the app, log-monitor file discovery and every new EVE game/chat log line read, memory-cleaner decisions, settings changes, start-up, shutdown and exceptions.",
+            "Privacy scrubbing still applies to every line. Character and profile names, personal paths, email addresses, other-window titles and EVE log filenames remain protected.",
+            "Full tracing is still written on the background log thread and stops immediately when Detailed Logging is turned off."
+        }),
         new("0.19.10", "Group component controls in the tray", new[]
         {
             "Disable Switcher and Disable Memory Cleaner now appear together in the same tray-menu section.",
@@ -362,3 +369,4 @@ internal static class Changelog
         })
     };
 }
+

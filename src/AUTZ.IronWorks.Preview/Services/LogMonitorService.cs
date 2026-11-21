@@ -142,9 +142,9 @@ public sealed class LogMonitorService : IDisposable
         foreach (string path in RecentFiles(folder, since, chat))
         {
             if (_tails.ContainsKey(path)) continue;
-            if (_tails.Count > 80) return;
+            if (_tails.Count > 80) { Log.Trace("LOGMON", "file limit reached (80); remaining files skipped"); return; }
             var tail = OpenTail(new FileInfo(path), chat);
-            if (tail is not null) _tails[path] = tail;
+            if (tail is not null) { _tails[path] = tail; Log.Trace("LOGMON", $"watching {(chat ? "chat" : "game")} log '{path}' for '{tail.Listener}', starting at byte {tail.Position}"); }
         }
 
         // drop files that haven't been written to for a long while
@@ -274,6 +274,7 @@ public sealed class LogMonitorService : IDisposable
 
     private void HandleLine(Tail tail, string line, LogConfig config)
     {
+        Log.Trace("EVELOG", $"{(tail.IsChat ? "chat" : "game")} '{tail.Listener}': {line}");
         if (tail.IsChat)
         {
             var system = SystemRx.Match(line);
@@ -336,3 +337,4 @@ public sealed class LogMonitorService : IDisposable
         }
     }
 }
+
