@@ -1,4 +1,4 @@
-namespace AUTZ.IronWorks.Preview.Services;
+﻿namespace AUTZ.IronWorks.Preview.Services;
 
 internal sealed record ChangelogEntry(string Version, string Title, string[] Items);
 
@@ -7,6 +7,11 @@ internal static class Changelog
 {
     public static readonly ChangelogEntry[] Entries =  
       {
+        new("0.19.14-rc.1", "Release candidate", new[]
+        {
+            "First GitHub prerelease produced by the automated release pipeline.",
+            "Includes the complete v0.19.13 project and named Events To Watch alert changes."
+        }),
         new("0.19.13", "Complete update package", new[]
         {
             "Reissued the named event alerts update as a complete project package.",
@@ -291,7 +296,7 @@ internal static class Changelog
         }),
         new("0.9.3", "Website link", new[]
         {
-            "\"by AUTZ IronWorks · From planets to profit\" in the Settings sidebar and on the About page is now a link to the AUTZ IronWorks website.",
+            "\"by AUTZ IronWorks Â· From planets to profit\" in the Settings sidebar and on the About page is now a link to the AUTZ IronWorks website.",
             "The tray menu item is now just \"Configuration\".",
             "The update script also finds a versions folder inside Documents\\IronWorks, and it no longer keeps a second copy of itself in the versions folder (run it from the repo)."
         }),
@@ -374,5 +379,6 @@ internal static class Changelog
         })
     };
 }
+
 
 
