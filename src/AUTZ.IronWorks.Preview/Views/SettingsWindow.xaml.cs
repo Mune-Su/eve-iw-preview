@@ -433,7 +433,13 @@ public partial class SettingsWindow : Window
         GameFolderBox.Text = s.GameLogFolder;
         ChatFolderBox.Text = s.ChatLogFolder;
         LogAttackBox.IsChecked = s.LogWatchAttack;
+        LogCrystalBox.IsChecked = s.LogWatchCrystalBroke;
+        LogFleetFollowBox.IsChecked = s.LogWatchFleetFollow;
+        LogCompressionBox.IsChecked = s.LogWatchMiningCompression;
+        LogConversationBox.IsChecked = s.LogWatchConversationInvite;
+        LogDecloakBox.IsChecked = s.LogWatchDecloak;
         LogMiningBox.IsChecked = s.LogWatchMiningIdle;
+        LogRegroupBox.IsChecked = s.LogWatchFleetRegroup;
         LogMiningSecondsBox.Text = s.LogMiningIdleSeconds.ToString();
         LogKeywordsBox.Text = (s.LogKeywords ?? "").Replace("\r", "").Replace("\n", Environment.NewLine);
         LogSystemBox.IsChecked = s.ShowSystemName;
@@ -2454,7 +2460,13 @@ public partial class SettingsWindow : Window
         _work.GameLogFolder = GameFolderBox.Text.Trim();
         _work.ChatLogFolder = ChatFolderBox.Text.Trim();
         _work.LogWatchAttack = LogAttackBox.IsChecked == true;
+        _work.LogWatchCrystalBroke = LogCrystalBox.IsChecked == true;
+        _work.LogWatchFleetFollow = LogFleetFollowBox.IsChecked == true;
+        _work.LogWatchMiningCompression = LogCompressionBox.IsChecked == true;
+        _work.LogWatchConversationInvite = LogConversationBox.IsChecked == true;
+        _work.LogWatchDecloak = LogDecloakBox.IsChecked == true;
         _work.LogWatchMiningIdle = LogMiningBox.IsChecked == true;
+        _work.LogWatchFleetRegroup = LogRegroupBox.IsChecked == true;
         _work.LogMiningIdleSeconds = miningSeconds;
         _work.LogKeywords = string.Join("\n", LogKeywordsBox.Text
             .Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries));
@@ -2473,4 +2485,5 @@ public partial class SettingsWindow : Window
         return true;
     }
 }
+
 

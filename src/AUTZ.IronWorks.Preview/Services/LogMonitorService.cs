@@ -14,6 +14,12 @@ public sealed record LogConfig(
     int PollMs,
     bool Attack,
     bool MiningIdle,
+    bool CrystalBroke,
+    bool FleetFollow,
+    bool MiningCompression,
+    bool ConversationInvite,
+    bool Decloak,
+    bool FleetRegroup,
     int MiningIdleSeconds,
     string[] Keywords,
     bool SystemName);
@@ -49,7 +55,7 @@ public sealed class LogMonitorService : IDisposable
     private readonly Dictionary<string, DateTime> _lastMining = new(StringComparer.OrdinalIgnoreCase);
     private readonly HashSet<string> _miningFired = new(StringComparer.OrdinalIgnoreCase);
     private Timer? _timer;
-    private LogConfig _config = new(false, "", "", 1000, true, false, 60, Array.Empty<string>(), false);
+    private LogConfig _config = new(false, "", "", 1000, true, false, false, false, false, false, false, false, 60, Array.Empty<string>(), false);
     private bool _initialScanDone;
     private DateTime _lastScan = DateTime.MinValue;
 
@@ -300,6 +306,13 @@ public sealed class LogMonitorService : IDisposable
             Post(new LogEvent(tail.Listener, "attack", text));
         }
 
+        if (config.CrystalBroke && ContainsAny(text, "mining crystal has been destroyed", "mining crystal broke", "crystal has shattered")) Post(new LogEvent(tail.Listener, "crystal", text));
+        if (config.FleetFollow && ContainsAny(text, "fleet warp", "warp to member", "follow fleet warp")) Post(new LogEvent(tail.Listener, "fleet-follow", text));
+        if (config.MiningCompression && ContainsAny(text, "compression", "compressed")) Post(new LogEvent(tail.Listener, "compression", text));
+        if (config.ConversationInvite && ContainsAny(text, "conversation request", "conversation invitation", "invites you to a conversation")) Post(new LogEvent(tail.Listener, "conversation", text));
+        if (config.Decloak && ContainsAny(text, "cloaking device deactivates", "cloak deactivates", "decloaked")) Post(new LogEvent(tail.Listener, "decloak", text));
+        if (config.FleetRegroup && ContainsAny(text, "regroup", "fleet regroup")) Post(new LogEvent(tail.Listener, "regroup", text));
+
         foreach (string keyword in config.Keywords)
         {
             if (keyword.Length > 0 && text.Contains(keyword, StringComparison.OrdinalIgnoreCase))
@@ -309,6 +322,9 @@ public sealed class LogMonitorService : IDisposable
             }
         }
     }
+
+    private static bool ContainsAny(string text, params string[] fragments) =>
+        fragments.Any(fragment => text.Contains(fragment, StringComparison.OrdinalIgnoreCase));
 
     private void CheckMiningIdle(LogConfig config)
     {
@@ -337,4 +353,5 @@ public sealed class LogMonitorService : IDisposable
         }
     }
 }
+
 

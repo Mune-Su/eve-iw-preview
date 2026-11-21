@@ -7,6 +7,11 @@ internal static class Changelog
 {
     public static readonly ChangelogEntry[] Entries =  
       {
+        new("0.19.13", "Complete update package", new[]
+        {
+            "Reissued the named event alerts update as a complete project package.",
+            "All existing project files are preserved, including Core/MemoryTrim.cs."
+        }),
         new("0.19.11", "Full detailed logging", new[]
         {
             "Detailed Logging now records the complete operational trace while it is enabled, rather than only selected switching events.",
@@ -369,4 +374,5 @@ internal static class Changelog
         })
     };
 }
+
 

@@ -1447,6 +1447,12 @@ public sealed class PreviewManager : IDisposable
             _settings.LogPollMilliseconds,
             _settings.LogWatchAttack,
             _settings.LogWatchMiningIdle,
+            _settings.LogWatchCrystalBroke,
+            _settings.LogWatchFleetFollow,
+            _settings.LogWatchMiningCompression,
+            _settings.LogWatchConversationInvite,
+            _settings.LogWatchDecloak,
+            _settings.LogWatchFleetRegroup,
             _settings.LogMiningIdleSeconds,
             keywords,
             _settings.ShowSystemName));
@@ -1946,6 +1952,12 @@ public sealed class PreviewManager : IDisposable
         {
             "attack" => $"{client.CharacterName} is under attack",
             "mining" => $"{client.CharacterName} has stopped mining",
+            "crystal" => $"{client.CharacterName}: mining crystal broke",
+            "fleet-follow" => $"{client.CharacterName}: fleet warp follow",
+            "compression" => $"{client.CharacterName}: mining compression",
+            "conversation" => $"{client.CharacterName}: conversation request",
+            "decloak" => $"{client.CharacterName}: decloaked",
+            "regroup" => $"{client.CharacterName}: fleet regroup",
             _ => $"{client.CharacterName}: {detail}"
         };
 
@@ -2057,4 +2069,5 @@ public sealed class PreviewManager : IDisposable
         _meta.Clear();
     }
 }
+
 

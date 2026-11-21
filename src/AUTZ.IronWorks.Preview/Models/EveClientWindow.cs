@@ -7,3 +7,4 @@ public sealed record EveClientWindow(nint Handle, string Title, string Character
     public bool IsLoginScreen => Title.Equals("EVE", StringComparison.OrdinalIgnoreCase);
 }
 
+

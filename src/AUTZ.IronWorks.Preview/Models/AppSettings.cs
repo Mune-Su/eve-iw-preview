@@ -187,6 +187,12 @@ public sealed class AppSettings
     public int LogPollMilliseconds { get; set; } = 1000;
     public bool LogWatchAttack { get; set; } = true;
     public bool LogWatchMiningIdle { get; set; } = false;
+    public bool LogWatchCrystalBroke { get; set; } = false;
+    public bool LogWatchFleetFollow { get; set; } = false;
+    public bool LogWatchMiningCompression { get; set; } = false;
+    public bool LogWatchConversationInvite { get; set; } = false;
+    public bool LogWatchDecloak { get; set; } = false;
+    public bool LogWatchFleetRegroup { get; set; } = false;
     public int LogMiningIdleSeconds { get; set; } = 60;
     /// <summary>One phrase per line. A game-log line containing one of them raises an alert.</summary>
     public string LogKeywords { get; set; } = "warp scramble\nwarp disrupt";
@@ -362,4 +368,5 @@ public sealed class AppState
     public AppState Clone() =>
         JsonSerializer.Deserialize<AppState>(JsonSerializer.Serialize(this)) ?? new AppState();
 }
+
 
