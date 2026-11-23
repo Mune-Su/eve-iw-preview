@@ -444,6 +444,23 @@
 
         <!-- text you can select and copy: a read-only text box with no border or background, so it looks like plain text.
              (A TextBlock can't be selected in WPF.) Tag lets the settings window pass the mouse wheel on to the page. -->
+        <!-- hover notes: same dark look as the rest of the app -->
+        <Style TargetType="ToolTip">
+            <Setter Property="Background" Value="{StaticResource BrushCard}"/>
+            <Setter Property="Foreground" Value="{StaticResource BrushText}"/>
+            <Setter Property="BorderBrush" Value="{StaticResource BrushLine}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Padding" Value="8,4"/>
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="MaxWidth" Value="360"/>
+            <Setter Property="ContentTemplate">
+                <Setter.Value>
+                    <DataTemplate>
+                        <TextBlock Text="{Binding}" TextWrapping="Wrap"/>
+                    </DataTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
         <Style x:Key="SelectableText" TargetType="TextBox">
             <Setter Property="IsReadOnly" Value="True"/>
             <Setter Property="IsTabStop" Value="False"/>
@@ -501,5 +518,3 @@
         </Style>
     </Application.Resources>
 </Application>
-
-

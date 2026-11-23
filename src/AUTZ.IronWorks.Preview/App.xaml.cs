@@ -35,14 +35,24 @@ public partial class App : System.Windows.Application
         WaitForPreviousInstance(e.Args);               // "Restart as administrator": let the old copy finish closing first
         // "Always start as administrator": a normal start hands over to the scheduled task (no Windows prompt) and closes itself.
         // A copy the task started, or one that was just restarted as administrator, never hands over again.
+        // The task is only used when it starts this exe: a task left pointing at an old copy (for example the portable exe that was
+        // deleted when the installer arrived) "starts" fine but runs nothing, so the app looked like it never opened.
         if (ProfileStore.LoadState().AlwaysAdmin && !MemoryCleaner.IsAdministrator && !HasArg(e.Args, AdminTaskService.TaskArgument) && !HasArg(e.Args, "--after-pid"))
         {
-            if (AdminTaskService.RunNow(out string why))
+            if (!AdminTaskService.PointsAtThisExe(out string taskExe))
+            {
+                Log.Write("Always start as administrator: the scheduled task " + (taskExe.Length == 0 ? "is missing" : "points at a different copy of the app") +
+                          ", so the app starts normally. Restart as administrator once to fix it.");
+            }
+            else if (AdminTaskService.RunNow(out string why))
             {
                 Shutdown();
                 return;
             }
-            Log.Write("Always start as administrator: the scheduled task couldn't be started (" + why + "), so the app starts normally.");
+            else
+            {
+                Log.Write("Always start as administrator: the scheduled task couldn't be started (" + why + "), so the app starts normally.");
+            }
         }
 
         _mutex = new Mutex(true, "AUTZ.IronWorks.Preview.SingleInstance", out bool created);
@@ -138,5 +148,3 @@ public partial class App : System.Windows.Application
         base.OnExit(e);
     }
 }
-
-

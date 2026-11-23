@@ -147,7 +147,7 @@ public sealed class HotkeyService : IDisposable
     // A key swallowed by the low-level hook never reaches this app, so every switch was "refused" and had to be
     // forced, and forcing it doesn't always stick (the switch back to client #1 bounced every time). A hotkey
     // registered with Windows (RegisterHotKey) arrives as this app's own input, so the switch is allowed straight
-    // away, the same way EVE-O Preview does it. Used for a plain key with optional Ctrl/Alt/Shift/Win, while
+    // away. Used for a plain key with optional Ctrl/Alt/Shift/Win, while
     // "pass the key through" and "only while EVE is in front" are off; everything else stays on the hook.
 
     private const int WM_HOTKEY = 0x0312;
@@ -465,5 +465,3 @@ public sealed class HotkeyService : IDisposable
         _mouseHook = 0;
     }
 }
-
-

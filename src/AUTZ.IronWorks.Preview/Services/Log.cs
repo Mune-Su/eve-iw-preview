@@ -11,7 +11,7 @@ namespace AUTZ.IronWorks.Preview.Services;
 /// <summary>
 /// Two logs in %LOCALAPPDATA%\EVE-IronWorks-Preview:
 ///  - preview.log : the normal diagnostics log (errors, one line per hotkey switch). Always on, kept small.
-///  - debug.log   : the ADMIN log. Only written while "Detailed logging" is on (Settings > About > Diagnostics, or
+///  - debug.log   : the ADMIN log. Only written while "Detailed logging" is on (Settings > Diagnostics > Logs, or
 ///                  the tray menu). One continuous file, or (Diagnostics setting) a new debug-DATE_TIME.log every
 ///                  time detailed logging is turned on. It records every step the app takes: hotkeys, each focus attempt and which method
 ///                  worked, every minimise / restore / maximise it sends to a client, thumbnails shown / hidden /
@@ -487,5 +487,3 @@ internal ref struct DebugLine
 
     internal string Text => _text?.ToString() ?? "";
 }
-
-

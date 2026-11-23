@@ -7,6 +7,21 @@ internal static class Changelog
 {
     public static readonly ChangelogEntry[] Entries =  
       {
+        new("0.19.18", "Alerts, sounds, layouts and performance", new[]
+        {
+            "Fixed: the app didn't open from the Start menu when 'Always start as administrator' was on.",
+            "Fixed: a File Explorer window for a folder called EVE showed up as a thumbnail.",
+            "Alerts match EVE's real game-log text. New: warp scrambled / disrupted, warp bubble, cloak failed and fleet invite.",
+            "Each alert has its own sound, volume and Test button. New built-in sounds, and you can add your own (.wav, .mp3, .m4a, .wma, .aac).",
+            "Disable Switcher can now turn the switcher off for one client at a time.",
+            "New hotkeys: Pause / Resume Hotkeys (so you can type), and Next / Previous Desktop.",
+            "Saved layouts: save the client order and thumbnail positions, then swap between them.",
+            "New thumbnails can stack down the left edge or along the top.",
+            "New Performance page: High Performance power plan, client priority and efficiency mode. All off by default.",
+            "Import reads more profile types.",
+            "About and Diagnostics are now separate pages. Hover notes on drop-down options. Shorter notes everywhere.",
+            "Detailed logging now records settings changes, tray clicks, thumbnail moves, alerts and more."
+        }),
         new("0.19.17", "Proper installer", new[]
         {
             "EVE-IW-Preview now installs properly: a per-user Setup adds it to Start and to Programs and Features with its version number, includes an uninstaller, and upgrades in place. Your settings and profiles are kept.",
@@ -78,9 +93,9 @@ internal static class Changelog
               "Hide All Thumbnails is now Pause Switching. It hides every thumbnail and disables client cycling, client-slot hotkeys, per-character jump hotkeys, profile hotkeys and tray profile switching until Resume Switching is selected.",
               "Pause Switching now fully closes every thumbnail window, including its border and label. Pause/resume and Detailed Logging no longer show tray notifications."
           }),  
-        new("0.19.3", "Import profiles from EVE-APM and EVE-Maj", new[]
+        new("0.19.3", "Import profiles from other preview apps", new[]
         {
-            "Configuration > Import now accepts EVE-APM .ini profiles and EVE-Maj .json profiles, as well as native EVE-IW profiles.",
+            "Configuration > Import now reads .ini and .json profiles from other preview apps, as well as EVE-IW profiles.",
             "Supported thumbnail appearance, character groups, saved positions, snapping, hiding, auto-minimise, log folders and hotkeys are converted into a new EVE-IW profile.",
             "A summary is shown before import. The source file and existing EVE-IW profiles are never changed.",
             "Settings with no genuine EVE-IW equivalent are safely ignored."
@@ -115,7 +130,7 @@ internal static class Changelog
         new("0.18.2", "Thumbnails work while Configuration is open", new[]
         {
             "Fixed: clicking a thumbnail did nothing while the Configuration window was open. The window was a modal dialog, and Windows disables every other window of the app while a modal dialog is open, thumbnails included. It is a normal window now, so thumbnails can be clicked to switch (and moved with Shift + right-drag) while you change settings. The Configuration window is still one-at-a-time, and it stays in the taskbar if EVE covers it.",
-            "A click that is ignored because clicking is switched off for that kind of thumbnail now says so in the detailed log (Settings > About > Diagnostics)."
+            "A click that is ignored because clicking is switched off for that kind of thumbnail now says so in the detailed log (Settings > Diagnostics > Logs)."
         }),
         new("0.18.1", "Resize corner only with Shift", new[]
         {
@@ -276,7 +291,7 @@ internal static class Changelog
             "Next / Previous, the numbered thumbnail positions and the client hotkeys all follow the client order. The order is saved per profile.",
             "New: the tray menu has a Profiles menu. Pick a profile to switch to it; the one in use is ticked.",
             "New: the tray icon is kept on the taskbar instead of the hidden-icons arrow (Windows 11). Settings > General > Tray icon turns this off, and has a shortcut to Windows' own taskbar settings.",
-            "New: Settings > About > Diagnostics can write one continuous debug.log, or start a new debug-DATE_TIME.log every time detailed logging is turned on (the newest 20 are kept). Open debug log opens the newest."
+            "New: Settings > Diagnostics > Logs can write one continuous debug.log, or start a new debug-DATE_TIME.log every time detailed logging is turned on (the newest 20 are kept). Open debug log opens the newest."
         }),
         new("0.9.9", "Steady highlight while holding the hotkey", new[]
         {
@@ -285,7 +300,7 @@ internal static class Changelog
         }),
         new("0.9.8", "Fast held-key cycling", new[]
         {
-            "Holding the Next or Previous hotkey now repeats continuously at the Windows keyboard repeat rate, like EVE-APM, EVE-Maj and EVE-O Preview. Releasing the key stops it.",
+            "Holding the Next or Previous hotkey now repeats continuously at the Windows keyboard repeat rate. Releasing the key stops it.",
             "Removed the no-repeat flag from Windows-registered hotkeys. A normal tap still switches exactly once.",
             "An accepted direct switch now returns immediately instead of waiting up to 60 ms for the foreground event; the existing pending-switch tracking keeps the cycle order correct while Windows finishes each switch."
         }),
@@ -293,7 +308,7 @@ internal static class Changelog
         {
             "Fixed: switching from the last client back to the first with the Next hotkey kept bouncing back, so the hotkey looked stuck.",
             "Cause (found with the debug log): Windows only lets a program bring a window to the front if it received the last keypress. The hotkey key was swallowed before it reached the app, so Windows refused every switch and it had to be forced, which didn't always stick.",
-            "A hotkey that is a plain key (optionally with Ctrl, Alt, Shift or Win) is now registered with Windows, the same way EVE-O Preview does it, so every switch is allowed straight away. Mouse buttons, key chords, left/right-only modifiers and modifier-only hotkeys still use the old method, as do all hotkeys while \"pass the key through\" or \"only while EVE is in front\" is on.",
+            "A hotkey that is a plain key (optionally with Ctrl, Alt, Shift or Win) is now registered with Windows, so every switch is allowed straight away. Mouse buttons, key chords, left/right-only modifiers and modifier-only hotkeys still use the old method, as do all hotkeys while \"pass the key through\" or \"only while EVE is in front\" is on.",
             "Switching no longer freezes keyboard and mouse input for up to 0.2 seconds while it waits for Windows."
         }),
         new("0.9.6", "Hotkey switching lands on the right client", new[]
@@ -312,7 +327,7 @@ internal static class Changelog
         }),
         new("0.9.4", "Detailed (admin) logging", new[]
         {
-            "New: Detailed Logging. Turn it on from the tray menu or Settings > About > Diagnostics, reproduce a problem, then use Open Debug Log.",
+            "New: Detailed Logging. Turn it on from the tray menu or Settings > Diagnostics > Logs, reproduce a problem, then use Open Debug Log.",
             "debug.log records every step with millisecond timestamps: each hotkey press and how long it took to run, each focus attempt and which method Windows accepted (including when an Alt tap or the last-resort switch was needed), every minimise, restore and maximise sent to a client and why, thumbnails shown, hidden, created and closed and why, every focus change Windows reports, the client list when it changes, and the settings that affect switching.",
             "It is written by a background thread, so it doesn't slow switching down, and it rolls over to debug.old.log at about 4 MB. preview.log is unchanged."
         }),
@@ -376,7 +391,7 @@ internal static class Changelog
             "Log Monitoring (reads the EVE logs): alerts for incoming damage, mining that has gone quiet, and your own keywords, plus the solar system shown on each thumbnail.",
             "This what's-new window, and a way to open the full changelog from Settings > About."
         }),
-        new("0.7.0", "Settings in the EVE-Maj style", new[]
+        new("0.7.0", "New Settings window", new[]
         {
             "New Settings window with a profile bar, section cards, sliders and a search box.",
             "Pages: General, Appearance, Thumbnails, Characters, Hotkeys, Clients and About."

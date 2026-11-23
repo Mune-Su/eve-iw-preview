@@ -1,49 +1,114 @@
 using System.IO;
 using System.Media;
+using System.Windows.Media;
+using System.Windows.Threading;
 
 namespace AUTZ.IronWorks.Preview.Services;
 
-/// <summary>Sound and spoken alerts. (The border flash and the Windows notification are handled by the manager and tray icon.)</summary>
+/// <summary>Alert sounds and spoken alerts. (The border flash and the Windows notification are done by the manager and tray icon.)</summary>
 internal sealed class NotificationService
 {
-    private SoundPlayer? _player;
+    private readonly List<MediaPlayer> _playing = new();
+    private SoundPlayer? _fallback;
     private object? _voice;
 
-    public static readonly string[] SoundNames = { "Exclamation", "Asterisk", "Beep", "Hand", "Question", "Custom" };
-
-    public void PlaySound(string name, string file)
+    /// <summary>
+    /// Plays a sound at a volume (0 to 100). Stops after 10 seconds. If the sound can't be played, the default sound plays
+    /// instead and the reason goes in the log. legacyFile: a custom .wav path saved by an older version.
+    /// </summary>
+    public void Play(string id, int volume, string legacyFile = "")
     {
+        if (id == SoundLibrary.NoneId) return;
+
+        string? path;
+        string what;
+        if (id.Equals("Custom", StringComparison.OrdinalIgnoreCase) && File.Exists(legacyFile))
+        {
+            path = legacyFile;
+            what = "old custom sound";
+        }
+        else
+        {
+            id = SoundLibrary.Normalise(id);
+            path = SoundLibrary.PathOf(id);
+            what = id.StartsWith("custom:", StringComparison.OrdinalIgnoreCase) ? "custom sound" : id;
+        }
+
+        if (path is null)
+        {
+            Log.Write($"Alert sound not found ({what}). Played the default sound.");
+            PlayDefault();
+            return;
+        }
+
         try
         {
-            if (name.Equals("Custom", StringComparison.OrdinalIgnoreCase))
-            {
-                if (string.IsNullOrWhiteSpace(file) || !File.Exists(file))
-                {
-                    SystemSounds.Exclamation.Play();
-                    return;
-                }
-                _player?.Dispose();
-                _player = new SoundPlayer(file);
-                _player.Play();
-                return;
-            }
+            while (_playing.Count >= 6) Stop(_playing[0]);        // never pile up players
 
-            switch (name)
+            var player = new MediaPlayer { Volume = Math.Clamp(volume, 0, 100) / 100.0 };
+            var limit = new DispatcherTimer { Interval = TimeSpan.FromSeconds(SoundLibrary.MaxSeconds) };
+            bool done = false;
+            void Finish()
             {
-                case "Asterisk": SystemSounds.Asterisk.Play(); break;
-                case "Beep": SystemSounds.Beep.Play(); break;
-                case "Hand": SystemSounds.Hand.Play(); break;
-                case "Question": SystemSounds.Question.Play(); break;
-                default: SystemSounds.Exclamation.Play(); break;
+                if (done) return;
+                done = true;
+                limit.Stop();
+                Stop(player);
             }
+            player.MediaEnded += (_, _) => Finish();
+            player.MediaFailed += (_, e) =>
+            {
+                Finish();
+                Log.Write($"Alert sound couldn't play ({what}: {e.ErrorException?.Message}). Played the default sound.");
+                PlayDefault();
+            };
+            limit.Tick += (_, _) => Finish();
+            _playing.Add(player);
+            player.Open(new Uri(path));
+            player.Play();
+            limit.Start();
+            Log.Debug("ALERT", $"sound '{what}' at {Math.Clamp(volume, 0, 100)}%");
         }
         catch (Exception ex)
         {
-            Log.Write("Sound failed: " + ex.Message);
+            Log.Write($"Alert sound couldn't play ({what}: {ex.Message}). Played the default sound.");
+            PlayDefault();
         }
     }
 
-    /// <summary>Text-to-speech through Windows' built-in SAPI voice.</summary>
+    private void Stop(MediaPlayer player)
+    {
+        _playing.Remove(player);
+        try
+        {
+            player.Stop();
+            player.Close();
+        }
+        catch { }
+    }
+
+    /// <summary>The built-in chime, played straight from the exe (works even where the media player is missing).</summary>
+    private void PlayDefault()
+    {
+        try
+        {
+            var stream = SoundLibrary.OpenBuiltIn("Chime");
+            if (stream is null)
+            {
+                SystemSounds.Exclamation.Play();
+                return;
+            }
+            _fallback?.Dispose();
+            _fallback = new SoundPlayer(stream);
+            _fallback.Play();
+        }
+        catch
+        {
+            SystemSounds.Exclamation.Play();
+        }
+    }
+
+    /// <summary>Text-to-speech through Windows' built-in voice.</summary>
     public void Speak(string text)
     {
         try
@@ -54,7 +119,7 @@ internal sealed class NotificationService
                 if (type is null) return;
                 _voice = Activator.CreateInstance(type);
             }
-            // 1 = speak asynchronously, 2 = cancel anything still being spoken
+            // 1 = speak in the background, 2 = cancel anything still being spoken
             ((dynamic)_voice!).Speak(text, 3);
         }
         catch (Exception ex)
@@ -63,5 +128,3 @@ internal sealed class NotificationService
         }
     }
 }
-
-

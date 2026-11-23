@@ -43,6 +43,27 @@ public sealed class SlotHotkeyGroup
     public int Rows { get; set; } = 1;
 }
 
+/// <summary>One thumbnail's saved spot and size inside a saved layout.</summary>
+public sealed class LayoutBox
+{
+    public double? Left { get; set; }
+    public double? Top { get; set; }
+    public int Width { get; set; }
+    public int Height { get; set; }
+}
+
+/// <summary>A saved arrangement: the client order and where every thumbnail sits. Load one to swap arrangements.</summary>
+public sealed class SavedLayout
+{
+    public string Name { get; set; } = "Layout";
+    public string ClientOrderMode { get; set; } = AppSettings.OrderAutomatic;
+    public List<string> ClientOrder { get; set; } = new();
+    public Dictionary<string, int> SavedAccountSlots { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+    public string PositionMode { get; set; } = AppSettings.ModeCharacter;
+    /// <summary>Settings key (a character, or "[client 2]" / "[login 1]") -> its spot and size.</summary>
+    public Dictionary<string, LayoutBox> Boxes { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+}
+
 /// <summary>A named list of characters. The group in use decides which characters get a thumbnail.</summary>
 public sealed class ThumbnailGroup
 {
@@ -83,6 +104,10 @@ public sealed class AppSettings
     public int SnapDistance { get; set; } = 15;
     /// <summary>A character with no saved spot takes the position (and size) of the login screen it replaces.</summary>
     public bool NewCharactersInheritPosition { get; set; } = true;
+    /// <summary>Where thumbnails with no saved spot go: "Down" = down the left edge, "Across" = along the top.</summary>
+    public string StackDirection { get; set; } = "Down";
+    /// <summary>Saved arrangements of client order and thumbnail positions.</summary>
+    public List<SavedLayout> Layouts { get; set; } = new();
 
     // ----- appearance -----
     /// <summary>How solid the thumbnails are (10-100). 60 = a bit see-through.</summary>
@@ -173,9 +198,17 @@ public sealed class AppSettings
     public int NotifyBorderSeconds { get; set; } = 6;
     public bool NotifyToast { get; set; } = true;
     public bool NotifySound { get; set; } = true;
-    /// <summary>Beep, Asterisk, Exclamation, Hand, Question or Custom (a .wav file).</summary>
-    public string NotifySoundName { get; set; } = "Exclamation";
+    /// <summary>The main alert sound: "iw:Chime" (built in), "win:Exclamation" (Windows), "custom:file.mp3" (added by you).
+    /// Older profiles hold a plain Windows sound name, or "Custom" with NotifySoundFile.</summary>
+    public string NotifySoundName { get; set; } = "iw:Chime";
+    /// <summary>Older versions: the custom .wav path. Copied into the sounds folder when the profile is opened.</summary>
     public string NotifySoundFile { get; set; } = "";
+    /// <summary>Volume of the main alert sound, 0 to 100.</summary>
+    public int NotifyVolume { get; set; } = 80;
+    /// <summary>Alert kind -> its own sound. Missing or "" = the main sound.</summary>
+    public Dictionary<string, string> AlertSounds { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+    /// <summary>Alert kind -> its own volume (0 to 100). Missing = the main volume.</summary>
+    public Dictionary<string, int> AlertVolumes { get; set; } = new(StringComparer.OrdinalIgnoreCase);
     public bool NotifySpeak { get; set; } = false;
 
     // ----- log monitoring -----
@@ -193,6 +226,10 @@ public sealed class AppSettings
     public bool LogWatchConversationInvite { get; set; } = false;
     public bool LogWatchDecloak { get; set; } = false;
     public bool LogWatchFleetRegroup { get; set; } = false;
+    public bool LogWatchWarpScram { get; set; } = false;
+    public bool LogWatchWarpBubble { get; set; } = false;
+    public bool LogWatchCloakFailed { get; set; } = false;
+    public bool LogWatchFleetInvite { get; set; } = false;
     public int LogMiningIdleSeconds { get; set; } = 60;
     /// <summary>One phrase per line. A game-log line containing one of them raises an alert.</summary>
     public string LogKeywords { get; set; } = "warp scramble\nwarp disrupt";
@@ -332,6 +369,26 @@ public sealed class MemoryCleanerSettings
         JsonSerializer.Deserialize<MemoryCleanerSettings>(JsonSerializer.Serialize(this)) ?? new MemoryCleanerSettings();
 }
 
+/// <summary>Performance options (Settings > Performance). App-wide. Everything is off until switched on.</summary>
+public sealed class PerformanceSettings
+{
+    /// <summary>The tray switch: false turns every option below off at once, without changing them.</summary>
+    public bool Enabled { get; set; } = true;
+    public bool HighPerformancePlan { get; set; } = false;
+    public bool RaiseFrontClient { get; set; } = false;
+    public bool LowerBackgroundClients { get; set; } = false;
+    public bool EfficiencyBackground { get; set; } = false;
+    /// <summary>The power plan to go back to (set while High Performance is in use, cleared once it is put back).</summary>
+    public string RestorePowerPlan { get; set; } = "";
+    /// <summary>True while client priorities may have been changed (so a crash is cleaned up on the next start).</summary>
+    public bool PrioritiesChanged { get; set; } = false;
+
+    public bool AnyOn => Enabled && (HighPerformancePlan || RaiseFrontClient || LowerBackgroundClients || EfficiencyBackground);
+
+    public PerformanceSettings Clone() =>
+        JsonSerializer.Deserialize<PerformanceSettings>(JsonSerializer.Serialize(this)) ?? new PerformanceSettings();
+}
+
 /// <summary>App-wide state that isn't part of a profile: active profile, profile hotkeys, startup and what's-new options.</summary>
 public sealed class AppState
 {
@@ -361,6 +418,22 @@ public sealed class AppState
     public bool LogsScrubbed { get; set; } = false;
     /// <summary>The memory cleaner (Settings > Memory).</summary>
     public MemoryCleanerSettings Memory { get; set; } = new();
+
+    // ----- other hotkeys (app-wide) -----
+    /// <summary>Pauses every other hotkey so the keys type normally, and turns them back on. Works while paused.</summary>
+    public string SuspendHotkey { get; set; } = "";
+    /// <summary>Next / previous Windows virtual desktop (the same as Ctrl+Win+Right / Left).</summary>
+    public string NextDesktopHotkey { get; set; } = "";
+    public string PreviousDesktopHotkey { get; set; } = "";
+
+    // ----- switcher per client -----
+    /// <summary>Accounts (or characters) the switcher leaves alone: no thumbnail, no cycling, no hotkeys.</summary>
+    public List<string> DisabledClients { get; set; } = new();
+    /// <summary>Client key -> the name last seen for it, so the menu can list clients that are closed.</summary>
+    public Dictionary<string, string> ClientLabels { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>Performance options. All off until switched on.</summary>
+    public PerformanceSettings Performance { get; set; } = new();
 
     public AppState Clone() =>
         JsonSerializer.Deserialize<AppState>(JsonSerializer.Serialize(this)) ?? new AppState();

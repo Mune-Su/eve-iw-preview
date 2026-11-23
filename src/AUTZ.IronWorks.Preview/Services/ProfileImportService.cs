@@ -9,7 +9,7 @@ namespace AUTZ.IronWorks.Preview.Services;
 
 public sealed record ProfileImportResult(AppSettings Settings, string Source, string SuggestedName, int Characters, int Positions, int Groups);
 
-/// <summary>Reads native EVE-IW profiles and migration profiles made by EVE-APM Preview or EVE-Maj Preview.</summary>
+/// <summary>Reads EVE-IW profiles, and profiles made by other preview apps (.ini and .json), into a new EVE-IW profile.</summary>
 public static class ProfileImportService
 {
     public static bool TryImport(string path, out ProfileImportResult? result, out string error)
@@ -22,17 +22,24 @@ public static class ProfileImportService
             string name = ProfileStore.CleanName(Path.GetFileNameWithoutExtension(path));
             if (Path.GetExtension(path).Equals(".ini", StringComparison.OrdinalIgnoreCase))
             {
-                var settings = ImportApm(text, out int positions, out int groups);
-                result = Result(settings, "EVE-APM Preview", name, positions, groups);
+                var settings = ImportIni(text, out int positions, out int groups);
+                result = Result(settings, "Preview app (.ini)", name, positions, groups);
                 return true;
             }
             using var document = JsonDocument.Parse(text);
             JsonElement root = document.RootElement;
-            if (root.TryGetProperty("app", out var app) && app.ValueKind == JsonValueKind.String &&
-                app.GetString()!.Equals("eve-maj-preview", StringComparison.OrdinalIgnoreCase))
+            if (root.ValueKind == JsonValueKind.Object && root.TryGetProperty("thumbnail", out var thumb) && thumb.ValueKind == JsonValueKind.Object &&
+                (root.TryGetProperty("characters", out _) || root.TryGetProperty("hotkeyGroups", out _)))
             {
-                var settings = ImportMaj(root, out int positions, out int groups);
-                result = Result(settings, "EVE-Maj Preview", name, positions, groups);
+                var settings = ImportNested(root, out int positions, out int groups);
+                result = Result(settings, "Preview app (.json)", name, positions, groups);
+                return true;
+            }
+            if (root.ValueKind == JsonValueKind.Object &&
+                (root.TryGetProperty("FlatLayout", out _) || root.TryGetProperty("ClientHotkey", out _) || root.TryGetProperty("ThumbnailRefreshPeriod", out _)))
+            {
+                var settings = ImportFlat(root, out int positions, out int groups);
+                result = Result(settings, "Preview app (.json)", name, positions, groups);
                 return true;
             }
             if (root.TryGetProperty("PreviewWidth", out _))
@@ -43,7 +50,7 @@ public static class ProfileImportService
                     settings.Characters.Values.Count(c => c.Left.HasValue && c.Top.HasValue), settings.ThumbnailGroups.Count);
                 return true;
             }
-            error = "That JSON file isn't an EVE-IW Preview or EVE-Maj Preview profile.";
+            error = "That file isn't a profile this app can read.";
         }
         catch (Exception ex) { error = "The profile couldn't be read: " + ex.Message; }
         return false;
@@ -52,7 +59,7 @@ public static class ProfileImportService
     private static ProfileImportResult Result(AppSettings s, string source, string name, int positions, int groups) =>
         new(s, source, name, s.AllGroupCharacters().Distinct(StringComparer.OrdinalIgnoreCase).Count(), positions, groups);
 
-    private static AppSettings ImportApm(string text, out int positionCount, out int groupCount)
+    private static AppSettings ImportIni(string text, out int positionCount, out int groupCount)
     {
         var ini = ParseIni(text);
         string Get(string section, string key, string fallback = "") => ini.TryGetValue(section, out var values) && values.TryGetValue(key, out string? value) ? value : fallback;
@@ -93,7 +100,7 @@ public static class ProfileImportService
             ChatLogFolder = Get("chatlog", "directory"), GameLogFolder = Get("gamelog", "directory"),
             ThumbnailsClickable = true, LoginScreensClickable = true, ClickOptionsSplit = true
         };
-        ParseApmFont(Get("overlay", "characterNameFont", Get("overlay", "font")), s);
+        ParseIniFont(Get("overlay", "characterNameFont", Get("overlay", "font")), s);
         if (ini.TryGetValue("thumbnailPositions", out var positions))
         {
             foreach (var pair in positions)
@@ -115,7 +122,7 @@ public static class ProfileImportService
                     .Where(n => !n.Equals("EVE", StringComparison.OrdinalIgnoreCase)).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
                 if (names.Count == 0) continue;
                 groups.Add(new ThumbnailGroup { Name = groupName, Characters = names, ShowOthers = false });
-                if (parts.Length > 1) { string key = ApmHotkey(parts[1]); if (key.Length > 0) s.CycleForwardHotkey = key; }
+                if (parts.Length > 1) { string key = IniHotkey(parts[1]); if (key.Length > 0) s.CycleForwardHotkey = key; }
             }
         }
         if (groups.Count == 0) groups.Add(new ThumbnailGroup { Name = "Imported", Characters = s.Characters.Keys.Where(AppSettings.IsCharacterKey).ToList(), ShowOthers = true });
@@ -124,7 +131,7 @@ public static class ProfileImportService
         return s;
     }
 
-    private static AppSettings ImportMaj(JsonElement root, out int positionCount, out int groupCount)
+    private static AppSettings ImportNested(JsonElement root, out int positionCount, out int groupCount)
     {
         var s = new AppSettings { ClickOptionsSplit = true, ThumbnailsClickable = true, LoginScreensClickable = true };
         if (root.TryGetProperty("thumbnail", out var t))
@@ -171,12 +178,171 @@ public static class ProfileImportService
                 var members = row.TryGetProperty("characters", out var list) && list.ValueKind == JsonValueKind.Array
                     ? list.EnumerateArray().Select(x => x.GetString() ?? "").Where(x => x.Length > 0).Distinct(StringComparer.OrdinalIgnoreCase).ToList() : new List<string>();
                 groups.Add(new ThumbnailGroup { Name = groupName, Characters = members, ShowOthers = false });
-                string key = MajHotkey(GetString(row, "forwardKey")); if (groups.Count == 1 && key.Length > 0) s.CycleForwardHotkey = key;
+                string key = VkHotkey(GetString(row, "forwardKey")); if (groups.Count == 1 && key.Length > 0) s.CycleForwardHotkey = key;
             }
         }
         if (groups.Count == 0) groups.Add(new ThumbnailGroup { Name = "Imported", Characters = names.Distinct(StringComparer.OrdinalIgnoreCase).ToList(), ShowOthers = true });
         s.ThumbnailGroups = groups; s.ActiveThumbnailGroup = groups[0].Name; s.RosterInitialised = true; s.EnsureGroups(); groupCount = groups.Count;
         return s;
+    }
+
+    /// <summary>A .json profile that keeps window positions in "FlatLayout" and hotkeys in "ClientHotkey" (keys are "EVE - name").</summary>
+    private static AppSettings ImportFlat(JsonElement root, out int positionCount, out int groupCount)
+    {
+        var s = new AppSettings { ClickOptionsSplit = true, ThumbnailsClickable = true, LoginScreensClickable = true };
+        if (TrySize(root, "ThumbnailSize", out int width, out int height))
+        {
+            s.PreviewWidth = Math.Clamp(width, 120, 1200);
+            s.PreviewHeight = height <= 0 ? 0 : Math.Clamp(height, 45, 1200);
+        }
+        if (root.TryGetProperty("ThumbnailOpacity", out var opacity) && opacity.TryGetDouble(out double o))
+            s.ThumbnailOpacityPercent = Math.Clamp((int)Math.Round(o <= 1 ? o * 100 : o), 10, 100);
+        s.RefreshMilliseconds = Math.Clamp(GetInt(root, "ThumbnailRefreshPeriod", 1500), 500, 10000);
+        s.AlwaysOnTop = GetBool(root, "ShowThumbnailsAlwaysOnTop", true);
+        s.HideActiveThumbnail = GetBool(root, "HideActiveClientThumbnail", false);
+        s.HideWhenEveNotFocused = GetBool(root, "HideThumbnailsOnLostFocus", false);
+        s.AutoMinimiseInactive = GetBool(root, "MinimizeInactiveClients", false);
+        s.ShowLabels = GetBool(root, "ShowThumbnailOverlays", true);
+        s.HighlightActive = GetBool(root, "EnableActiveClientHighlight", false);
+        s.ActiveBorderWidth = Math.Clamp(GetInt(root, "ActiveClientHighlightThickness", 3), 1, 20);
+        s.ActiveBorderHex = NamedColour(GetString(root, "ActiveClientHighlightColor"), "#F97316");
+
+        var names = new List<string>();
+        if (root.TryGetProperty("FlatLayout", out var layout) && layout.ValueKind == JsonValueKind.Object)
+        {
+            foreach (var row in layout.EnumerateObject())
+            {
+                string character = StripEve(row.Name);
+                if (character.Length == 0 || !TryXY(row.Value, out double x, out double y)) continue;
+                names.Add(character);
+                var c = s.GetOrAddCharacter(character);
+                c.Left = x;
+                c.Top = y;
+            }
+        }
+        if (root.TryGetProperty("ClientHotkey", out var hotkeys) && hotkeys.ValueKind == JsonValueKind.Object)
+        {
+            foreach (var row in hotkeys.EnumerateObject())
+            {
+                string character = StripEve(row.Name);
+                string key = FlatHotkey(row.Value.ValueKind == JsonValueKind.String ? row.Value.GetString() ?? "" : "");
+                if (character.Length == 0 || key.Length == 0) continue;
+                names.Add(character);
+                s.GetOrAddCharacter(character).Hotkey = key;
+            }
+        }
+        if (root.TryGetProperty("DisableThumbnail", out var hidden) && hidden.ValueKind == JsonValueKind.Object)
+        {
+            foreach (var row in hidden.EnumerateObject())
+            {
+                string character = StripEve(row.Name);
+                if (character.Length > 0 && row.Value.ValueKind == JsonValueKind.True) s.GetOrAddCharacter(character).Hidden = true;
+            }
+        }
+        if (root.TryGetProperty("CycleGroup1ForwardHotkeys", out var forward) && forward.ValueKind == JsonValueKind.Array)
+        {
+            string key = forward.EnumerateArray().Select(k => FlatHotkey(k.GetString() ?? "")).FirstOrDefault(k => k.Length > 0) ?? "";
+            if (key.Length > 0) s.CycleForwardHotkey = key;
+        }
+        if (root.TryGetProperty("CycleGroup1BackwardHotkeys", out var back) && back.ValueKind == JsonValueKind.Array)
+        {
+            string key = back.EnumerateArray().Select(k => FlatHotkey(k.GetString() ?? "")).FirstOrDefault(k => k.Length > 0) ?? "";
+            if (key.Length > 0) s.CycleBackHotkey = key;
+        }
+        if (root.TryGetProperty("CycleGroup1ClientsOrder", out var order) && order.ValueKind == JsonValueKind.Object)
+        {
+            var ordered = order.EnumerateObject()
+                .Select(p => (Name: StripEve(p.Name), Rank: p.Value.TryGetInt32(out int r) ? r : int.MaxValue))
+                .Where(p => p.Name.Length > 0).OrderBy(p => p.Rank).Select(p => p.Name).ToList();
+            if (ordered.Count > 0)
+            {
+                s.ClientOrder = ordered.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+                s.ClientOrderMode = AppSettings.OrderManual;
+                names.AddRange(ordered);
+            }
+        }
+        positionCount = s.Characters.Values.Count(c => c.Left.HasValue && c.Top.HasValue);
+        var group = new ThumbnailGroup { Name = "Imported", Characters = names.Distinct(StringComparer.OrdinalIgnoreCase).ToList(), ShowOthers = true };
+        s.ThumbnailGroups = new List<ThumbnailGroup> { group };
+        s.ActiveThumbnailGroup = group.Name;
+        s.RosterInitialised = true;
+        s.EnsureGroups();
+        groupCount = 1;
+        return s;
+    }
+
+    private static string StripEve(string key) =>
+        (key.StartsWith("EVE - ", StringComparison.OrdinalIgnoreCase) ? key[6..] : key).Trim();
+
+    /// <summary>"100, 200" or {"X":100,"Y":200}.</summary>
+    private static bool TryXY(JsonElement value, out double x, out double y)
+    {
+        x = y = 0;
+        if (value.ValueKind == JsonValueKind.Object)
+        {
+            var px = GetDouble(value, "X") ?? GetDouble(value, "x");
+            var py = GetDouble(value, "Y") ?? GetDouble(value, "y");
+            if (px is null || py is null) return false;
+            x = px.Value;
+            y = py.Value;
+            return true;
+        }
+        if (value.ValueKind != JsonValueKind.String) return false;
+        var parts = (value.GetString() ?? "").Split(',', StringSplitOptions.TrimEntries);
+        return parts.Length == 2 &&
+               double.TryParse(parts[0], NumberStyles.Float, CultureInfo.InvariantCulture, out x) &&
+               double.TryParse(parts[1], NumberStyles.Float, CultureInfo.InvariantCulture, out y);
+    }
+
+    private static bool TrySize(JsonElement root, string name, out int width, out int height)
+    {
+        width = height = 0;
+        if (!root.TryGetProperty(name, out var value)) return false;
+        if (value.ValueKind == JsonValueKind.Object)
+        {
+            width = GetInt(value, "Width", 0);
+            height = GetInt(value, "Height", 0);
+            return width > 0;
+        }
+        if (!TryXY(value, out double w, out double h)) return false;
+        width = (int)w;
+        height = (int)h;
+        return width > 0;
+    }
+
+    /// <summary>"F1, Control" or "Control+F1" -> "Ctrl+F1". "" when it can't be read.</summary>
+    private static string FlatHotkey(string raw)
+    {
+        if (string.IsNullOrWhiteSpace(raw) || raw.Equals("None", StringComparison.OrdinalIgnoreCase)) return "";
+        var mods = new List<string>();
+        string key = "";
+        foreach (string part in raw.Split(new[] { ',', '+' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            switch (part.ToLowerInvariant())
+            {
+                case "control": case "ctrl": if (!mods.Contains("Ctrl")) mods.Add("Ctrl"); break;
+                case "alt": if (!mods.Contains("Alt")) mods.Add("Alt"); break;
+                case "shift": if (!mods.Contains("Shift")) mods.Add("Shift"); break;
+                default: key = part; break;
+            }
+        }
+        if (key.Length == 0) return "";
+        string text = string.Join("+", mods.Append(key));
+        return HotkeyParser.TryParse(text, out _) ? text : "";
+    }
+
+    private static string NamedColour(string text, string fallback)
+    {
+        if (string.IsNullOrWhiteSpace(text)) return fallback;
+        string hex = Colour(text, "");
+        if (hex.Length > 0) return hex;
+        try
+        {
+            if (System.Windows.Media.ColorConverter.ConvertFromString(text.Trim()) is System.Windows.Media.Color c)
+                return $"#{c.R:X2}{c.G:X2}{c.B:X2}";
+        }
+        catch { }
+        return fallback;
     }
 
     private static Dictionary<string, Dictionary<string, string>> ParseIni(string text)
@@ -192,11 +358,11 @@ public static class ProfileImportService
     }
     private static string TrimQuotes(string s) => s.Length >= 2 && s[0] == '"' && s[^1] == '"' ? s[1..^1] : s;
     private static bool TryPoint(string value, out double x, out double y) { x = y = 0; var m = Regex.Match(value, @"@Point\(\s*(-?\d+(?:\.\d+)?)\s+(-?\d+(?:\.\d+)?)\s*\)"); return m.Success && double.TryParse(m.Groups[1].Value, CultureInfo.InvariantCulture, out x) && double.TryParse(m.Groups[2].Value, CultureInfo.InvariantCulture, out y); }
-    private static void ParseApmFont(string text, AppSettings s) { var p = TrimQuotes(text).Split(','); if (p.Length > 0 && p[0].Trim().Length > 0) s.LabelFontName = p[0].Trim(); if (p.Length > 1 && int.TryParse(p[1], out int z)) s.LabelFontSize = Math.Clamp(z, 6, 72); if (p.Length > 4 && int.TryParse(p[4], out int w)) s.LabelBold = w >= 600; }
+    private static void ParseIniFont(string text, AppSettings s) { var p = TrimQuotes(text).Split(','); if (p.Length > 0 && p[0].Trim().Length > 0) s.LabelFontName = p[0].Trim(); if (p.Length > 1 && int.TryParse(p[1], out int z)) s.LabelFontSize = Math.Clamp(z, 6, 72); if (p.Length > 4 && int.TryParse(p[4], out int w)) s.LabelBold = w >= 600; }
     private static string Position(int n) => n switch { 1 => "TopRight", 2 => "BottomLeft", 3 => "BottomRight", 4 => "TopCenter", 5 => "BottomCenter", 6 => "LeftCenter", 7 => "RightCenter", 8 => "Center", _ => "TopLeft" };
     private static string BorderStyle(int n) => n switch { 1 => "Dashed", 2 => "Dotted", 3 => "DashDot", _ => "Solid" };
-    private static string ApmHotkey(string raw) { var n = raw.Split(',', StringSplitOptions.TrimEntries); int at = n.Length > 1 && (n[0] == "0" || n[0] == "1") ? 1 : 0; return at < n.Length && int.TryParse(n[at], out int vk) ? MajHotkey("0x" + vk.ToString("X")) : ""; }
-    private static string MajHotkey(string raw) { if (!raw.StartsWith("0x", StringComparison.OrdinalIgnoreCase) || !int.TryParse(raw[2..], NumberStyles.HexNumber, CultureInfo.InvariantCulture, out int vk)) return raw; return vk switch { 0xC0 => "`", >= 0x30 and <= 0x39 => ((char)vk).ToString(), >= 0x41 and <= 0x5A => ((char)vk).ToString(), 0x25 => "Left", 0x26 => "Up", 0x27 => "Right", 0x28 => "Down", _ => "" }; }
+    private static string IniHotkey(string raw) { var n = raw.Split(',', StringSplitOptions.TrimEntries); int at = n.Length > 1 && (n[0] == "0" || n[0] == "1") ? 1 : 0; return at < n.Length && int.TryParse(n[at], out int vk) ? VkHotkey("0x" + vk.ToString("X")) : ""; }
+    private static string VkHotkey(string raw) { if (!raw.StartsWith("0x", StringComparison.OrdinalIgnoreCase) || !int.TryParse(raw[2..], NumberStyles.HexNumber, CultureInfo.InvariantCulture, out int vk)) return raw; return vk switch { 0xC0 => "`", >= 0x30 and <= 0x39 => ((char)vk).ToString(), >= 0x41 and <= 0x5A => ((char)vk).ToString(), 0x25 => "Left", 0x26 => "Up", 0x27 => "Right", 0x28 => "Down", _ => "" }; }
     private static bool GetBool(JsonElement e, string n, bool f) => e.TryGetProperty(n, out var v) && (v.ValueKind == JsonValueKind.True || v.ValueKind == JsonValueKind.False) ? v.GetBoolean() : f;
     private static int GetInt(JsonElement e, string n, int f) => e.TryGetProperty(n, out var v) && v.TryGetInt32(out int x) ? x : f;
     private static double? GetDouble(JsonElement e, string n) => e.TryGetProperty(n, out var v) && v.TryGetDouble(out double x) ? x : null;
@@ -204,5 +370,3 @@ public static class ProfileImportService
     private static string Colour(string text, string fallback) => Colour(text, fallback, out _);
     private static string Colour(string text, string fallback, out int alpha) { alpha = 100; text = text.Trim(); if (Regex.IsMatch(text, @"^0x[0-9A-Fa-f]{8}$")) { alpha = (int)Math.Round(Convert.ToInt32(text.Substring(2, 2), 16) * 100 / 255d); return "#" + text[4..].ToUpperInvariant(); } if (Regex.IsMatch(text, @"^#[0-9A-Fa-f]{8}$")) { alpha = (int)Math.Round(Convert.ToInt32(text.Substring(1, 2), 16) * 100 / 255d); return "#" + text[3..].ToUpperInvariant(); } return Regex.IsMatch(text, @"^#[0-9A-Fa-f]{6}$") ? text.ToUpperInvariant() : fallback; }
 }
-
-

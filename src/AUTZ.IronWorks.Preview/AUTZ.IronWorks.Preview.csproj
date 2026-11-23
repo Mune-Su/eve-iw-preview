@@ -8,7 +8,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <AssemblyName>EVE-IW-Preview</AssemblyName>
     <RootNamespace>AUTZ.IronWorks.Preview</RootNamespace>
-    <Version>0.19.17</Version>
+    <Version>0.19.18</Version>
     <Product>EVE-IronWorks-Preview</Product>
     <Company>AUTZ IronWorks</Company>
     <Authors>AUTZ IronWorks</Authors>
@@ -27,6 +27,11 @@
   <ItemGroup>
     <Resource Include="Assets\app.ico" />
     <Resource Include="Assets\logo.png" />
+  </ItemGroup>
+
+  <!-- Alert sounds that ship inside the exe. They are copied to the settings folder the first time they are played. -->
+  <ItemGroup>
+    <EmbeddedResource Include="Assets\Sounds\*.wav" LogicalName="IWSound.%(Filename).wav" />
   </ItemGroup>
 
   <!-- WPF + WinForms in one project: stop WinForms/Drawing being global usings,

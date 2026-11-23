@@ -22,6 +22,7 @@ public partial class SettingsWindow : Window
     private const int PageHotkeys_ = 3;
     private const int PageAlerts_ = 4;          // notifications and log monitoring
     private const int PageMemory_ = 5;
+    private const int PagePerformance_ = 6;
 
     private const int MaxSlotRows = 20;
     private const int MaxThumbRows = 60;
@@ -36,6 +37,30 @@ public partial class SettingsWindow : Window
     private static readonly string[] ActionTexts = { "Do nothing", "Maximise it", "Restore it (un-maximise)" };
     private static readonly string[] ActionValues = { "None", "Maximise", "Restore" };
     private static readonly string[] WhatsNewTexts = { "When the app has been updated", "Every time it starts", "Never" };
+    private static readonly string[] StackTexts = { "Down the left edge", "Along the top" };
+
+    // hover notes for drop-down options
+    private static readonly Dictionary<string, string> OptionTips = new()
+    {
+        ["TopLeft"] = "Top left corner.", ["TopCenter"] = "Top, in the middle.", ["TopRight"] = "Top right corner.",
+        ["LeftCenter"] = "Left side, in the middle.", ["Center"] = "Centre of the thumbnail.", ["RightCenter"] = "Right side, in the middle.",
+        ["BottomLeft"] = "Bottom left corner.", ["BottomCenter"] = "Bottom, in the middle.", ["BottomRight"] = "Bottom right corner.",
+        ["Solid"] = "A plain line.", ["Dashed"] = "Long dashes.", ["Dotted"] = "Small dots.", ["DashDot"] = "Dash, dot, dash.",
+        ["Double"] = "Two thin lines.", ["CornerBrackets"] = "Only the four corners.",
+        ["Do nothing"] = "Leave the window as it is.", ["Maximise it"] = "Make it fill the screen.", ["Restore it (un-maximise)"] = "Turn off full-screen maximise.",
+        ["When the app has been updated"] = "Only after an update.", ["Every time it starts"] = "Every start.", ["Never"] = "Never show it.",
+        ["Down the left edge"] = "New thumbnails stack downwards on the left.", ["Along the top"] = "New thumbnails line up across the top."
+    };
+
+    /// <summary>One row under Events To Watch: the alert, its tick box (none for keywords), its sound and volume.</summary>
+    private sealed class AlertRow
+    {
+        public string Kind = "";
+        public CheckBox? Enabled;
+        public ComboBox Sound = null!;
+        public Slider Volume = null!;
+    }
+    private readonly List<AlertRow> _alertRows = new();
 
     private sealed record PageDef(string Title, ScrollViewer Page, Control[] Cards);
 
@@ -106,8 +131,11 @@ public partial class SettingsWindow : Window
         ActiveStyleBox.ItemsSource = BorderStyles;
         InactiveStyleBox.ItemsSource = BorderStyles;
         CharActionBox.ItemsSource = ActionTexts;
-        NotifySoundCombo.ItemsSource = NotificationService.SoundNames;
         WhatsNewCombo.ItemsSource = WhatsNewTexts;
+        StackDirectionBox.ItemsSource = StackTexts;
+        NotifyVolumeSlider.ValueChanged += (_, _) => NotifyVolumeText.Text = $"{(int)NotifyVolumeSlider.Value}%";
+        foreach (var box in new[] { LabelPositionBox, ActiveStyleBox, InactiveStyleBox, CharActionBox, WhatsNewCombo, StackDirectionBox, NotifySoundCombo })
+            AddOptionTips(box);
 
         // the per-character colour falls back to the default colour, so keep them in step
         LabelColourBox.HexChanged += () =>
@@ -131,6 +159,11 @@ public partial class SettingsWindow : Window
         foreach (var pair in _state.ProfileHotkeys) _profileHotkeys[pair.Key] = pair.Value;
         NextProfileBox.Text = _state.NextProfileHotkey;
         PrevProfileBox.Text = _state.PreviousProfileHotkey;
+        SuspendKeyBox.Text = _state.SuspendHotkey;
+        NextDesktopBox.Text = _state.NextDesktopHotkey;
+        PrevDesktopBox.Text = _state.PreviousDesktopHotkey;
+        LoadPerformance();
+        BuildSwitcherClientRows();
         RunOnStartupBox.IsChecked = _state.RunOnStartup;
         DebugLogBox.IsChecked = _state.DebugLogging;
         (_state.DebugLogMode == "PerSession" ? DebugSessionRadio : DebugContinuousRadio).IsChecked = true;
@@ -163,6 +196,7 @@ public partial class SettingsWindow : Window
         _manager.ToggleSwitcher();
         _state.SwitcherEnabled = _manager.SwitcherEnabled;
         UpdateComponentToggleButtons();
+        BuildSwitcherClientRows();
     }
 
     private void MemoryCleanerToggle_Click(object sender, RoutedEventArgs e)
@@ -184,10 +218,13 @@ public partial class SettingsWindow : Window
         _pages.Add(new PageDef("General", PageGeneral, new Control[] { CardComponents, CardStartup, CardClients }));
         _pages.Add(new PageDef("Thumbnails", PageThumbs, new Control[] { CardSize, CardLabel, CardActiveBorder, CardCharacter, CardInteraction }));
         _pages.Add(new PageDef("Grouping", PageGroups, new Control[] { CardRoster, CardScan, CardClientOrder }));
-        _pages.Add(new PageDef("Hotkeys", PageHotkeys, new Control[] { CardCycling, CardHotkeyOptions, CardSlotKeys, CardCharActions, CardSkipped, CardProfileKeys }));
+        _pages.Add(new PageDef("Hotkeys", PageHotkeys, new Control[] { CardCycling, CardHotkeyOptions, CardSlotKeys, CardCharActions, CardSkipped, CardProfileKeys, CardOtherKeys }));
         _pages.Add(new PageDef("Alerts", PageAlerts, new Control[] { CardNotifyMain, CardLogMain, CardLogEvents }));
         _pages.Add(new PageDef("Memory", PageMemory, new Control[] { CardMemoryNow, CardMemoryAuto, CardMemoryTop, CardMemoryKeep }));
-        _pages.Add(new PageDef("About", PageAbout, new Control[] { CardAbout, CardWhatsNew, CardFiles, CardDiagnostics }));
+        _pages.Add(new PageDef("Performance", PagePerformance, new Control[] { CardPerformance }));
+        _pages.Add(new PageDef("About", PageAbout, new Control[] { CardAbout, CardWhatsNew }));
+        _pages.Add(new PageDef("Diagnostics", PageDiagnostics, new Control[] { CardFiles, CardDiagnostics }));
+        if (AdminAccess.IsOwner) _pages.Add(new PageDef("Admin", PageAdmin, new Control[] { CardAdmin, CardAdminTools }));
 
         for (int i = 0; i < _pages.Count; i++)
         {
@@ -338,6 +375,8 @@ public partial class SettingsWindow : Window
         // General
         (s.PositionMode == AppSettings.ModeClient ? ModeClientRadio : ModeCharacterRadio).IsChecked = true;
         InheritBox.IsChecked = s.NewCharactersInheritPosition;
+        StackDirectionBox.SelectedIndex = s.StackDirection == "Across" ? 1 : 0;
+        RefreshLayoutBox();
         SameSizeBox.IsChecked = s.SameSizeForAll;
         WidthBox.Text = s.PreviewWidth.ToString();
         HeightBox.Text = s.PreviewHeight.ToString();
@@ -423,8 +462,10 @@ public partial class SettingsWindow : Window
         NotifySecondsBox.Text = s.NotifyBorderSeconds.ToString();
         NotifyToastBox.IsChecked = s.NotifyToast;
         NotifySoundBox.IsChecked = s.NotifySound;
-        NotifySoundCombo.SelectedItem = NotificationService.SoundNames.Contains(s.NotifySoundName) ? s.NotifySoundName : "Exclamation";
-        NotifySoundFileBox.Text = s.NotifySoundFile;
+        MoveOldCustomSound(s);
+        FillSoundCombo(NotifySoundCombo, false, s.NotifySoundName);
+        NotifyVolumeSlider.Value = Math.Clamp(s.NotifyVolume, 0, 100);
+        NotifyVolumeText.Text = $"{(int)NotifyVolumeSlider.Value}%";
         NotifySpeakBox.IsChecked = s.NotifySpeak;
 
         // Log monitoring
@@ -432,14 +473,7 @@ public partial class SettingsWindow : Window
         LogPollBox.Text = s.LogPollMilliseconds.ToString();
         GameFolderBox.Text = s.GameLogFolder;
         ChatFolderBox.Text = s.ChatLogFolder;
-        LogAttackBox.IsChecked = s.LogWatchAttack;
-        LogCrystalBox.IsChecked = s.LogWatchCrystalBroke;
-        LogFleetFollowBox.IsChecked = s.LogWatchFleetFollow;
-        LogCompressionBox.IsChecked = s.LogWatchMiningCompression;
-        LogConversationBox.IsChecked = s.LogWatchConversationInvite;
-        LogDecloakBox.IsChecked = s.LogWatchDecloak;
-        LogMiningBox.IsChecked = s.LogWatchMiningIdle;
-        LogRegroupBox.IsChecked = s.LogWatchFleetRegroup;
+        BuildAlertRows(s);
         LogMiningSecondsBox.Text = s.LogMiningIdleSeconds.ToString();
         LogKeywordsBox.Text = (s.LogKeywords ?? "").Replace("\r", "").Replace("\n", Environment.NewLine);
         LogSystemBox.IsChecked = s.ShowSystemName;
@@ -1509,7 +1543,7 @@ public partial class SettingsWindow : Window
         var dialog = new Microsoft.Win32.OpenFileDialog
         {
             Title = "Import a profile",
-            Filter = "Supported profiles (*.json;*.ini)|*.json;*.ini|EVE-IW / EVE-Maj profiles (*.json)|*.json|EVE-APM profiles (*.ini)|*.ini"
+            Filter = "Profiles (*.json;*.ini)|*.json;*.ini"
         };
         if (dialog.ShowDialog(this) != true) return;
         if (!ProfileImportService.TryImport(dialog.FileName, out var imported, out string error) || imported is null)
@@ -1517,17 +1551,17 @@ public partial class SettingsWindow : Window
             Warn(error.Length > 0 ? error : "That profile format isn't supported.");
             return;
         }
-        string summary = $"{imported.Source} profile detected.\n\n" +
+        string summary = $"Found: {imported.Source} profile.\n\n" +
                          $"Characters: {imported.Characters}\n" +
                          $"Saved positions: {imported.Positions}\n" +
                          $"Groups: {imported.Groups}\n\n" +
-                         "A new EVE-IW profile will be created. The original file and your existing profiles will not be changed.";
+                         "This makes a new profile. Nothing else changes.";
         if (Dialogs.Ask(this, "Import profile", summary, "Import", "Cancel") != 0) return;
         string? name = AskProfileName("Import profile", imported.SuggestedName);
         if (name is null) return;
         ProfileStore.Save(name, imported.Settings);
         if (!SwitchShown(name)) RefreshProfileBox();
-        else SetStatus($"Imported {imported.Source} profile as “{name}”. Press Save to make it active.", true);
+        else SetStatus($"Imported as “{name}”. Press Save to use it.", true);
     }
 
     // ---------- general page buttons ----------
@@ -1557,14 +1591,6 @@ public partial class SettingsWindow : Window
         if (!TryApply()) return;
         _manager.TestNotification(_work.Clone());
         SetStatus("Test alert sent.", false);
-    }
-
-    private void BrowseSound_Click(object sender, RoutedEventArgs e)
-    {
-        var dialog = new Microsoft.Win32.OpenFileDialog { Title = "Choose a sound", Filter = "Wave sounds (*.wav)|*.wav" };
-        if (dialog.ShowDialog(this) != true) return;
-        NotifySoundFileBox.Text = dialog.FileName;
-        NotifySoundCombo.SelectedItem = "Custom";
     }
 
     private string? BrowseFolder(string current)
@@ -1623,7 +1649,7 @@ public partial class SettingsWindow : Window
         string? latest = Log.LatestDebugPath();
         if (latest is null)
         {
-            Dialogs.Info(this, "There's no debug log yet. Tick Detailed logging, press Apply or Save, then use the app.");
+            Dialogs.Info(this, "No debug log yet. Tick Detailed logging, press Apply, then use the app.");
             return;
         }
         OpenPath(this, latest);
@@ -1639,7 +1665,7 @@ public partial class SettingsWindow : Window
     {
         if (!File.Exists(LogPath))
         {
-            Dialogs.Info(this, "There's no log yet. It is only written when something goes wrong (for example a switch fails). Turn on Detailed logging under Diagnostics for a full trace.");
+            Dialogs.Info(this, "No log yet. It's only written when something goes wrong. Turn on Detailed logging for a full trace.");
             return;
         }
         OpenPath(this, LogPath);
@@ -1759,6 +1785,8 @@ public partial class SettingsWindow : Window
 
     private string StateSnapshot() => string.Join("|",
         _state.NextProfileHotkey, _state.PreviousProfileHotkey, _state.RunOnStartup, _state.WhatsNewMode, _state.DebugLogging, _state.DebugLogMode, _state.PinTrayIcon, _state.AlwaysAdmin,
+        _state.SuspendHotkey, _state.NextDesktopHotkey, _state.PreviousDesktopHotkey,
+        _state.Performance.Enabled, _state.Performance.HighPerformancePlan, _state.Performance.RaiseFrontClient, _state.Performance.LowerBackgroundClients, _state.Performance.EfficiencyBackground,
         JsonSerializer.Serialize(_state.Memory),
         string.Join(",", _profileHotkeys.OrderBy(p => p.Key, StringComparer.OrdinalIgnoreCase)
             .Where(p => p.Value.Length > 0).Select(p => p.Key + "=" + p.Value)));
@@ -1779,6 +1807,14 @@ public partial class SettingsWindow : Window
         _state.AlwaysAdmin = AlwaysAdminBox.IsChecked == true;
         _state.Memory = ReadMemorySettings();
         _state.WhatsNewMode = WhatsNewCombo.SelectedIndex switch { 1 => "Always", 2 => "Never", _ => "Update" };
+        _state.SuspendHotkey = SuspendKeyBox.Text.Trim();
+        _state.NextDesktopHotkey = NextDesktopBox.Text.Trim();
+        _state.PreviousDesktopHotkey = PrevDesktopBox.Text.Trim();
+        _state.Performance.Enabled = PerfEnabledBox.IsChecked == true;
+        _state.Performance.HighPerformancePlan = PerfPlanBox.IsChecked == true;
+        _state.Performance.RaiseFrontClient = PerfRaiseBox.IsChecked == true;
+        _state.Performance.LowerBackgroundClients = PerfLowerBox.IsChecked == true;
+        _state.Performance.EfficiencyBackground = PerfEcoBox.IsChecked == true;
     }
 
     private bool IsDirty()
@@ -1975,6 +2011,8 @@ public partial class SettingsWindow : Window
             $"Average:  {Mb(st.AvgUsed)} ({st.AvgPercent}%)     Highest:  {Mb(st.MaxUsed)} ({st.MaxPercent}%)     Lowest:  {Mb(st.MinUsed)} ({st.MinPercent}%)";
         if (_manager.LastMemoryResult.Length > 0) MemResultText.Text = _manager.LastMemoryResult;
         MemSessionText.Text = _manager.SessionSummary;
+        MemAutoNote.Text = _manager.AutoCleanNote;
+        MemEveHint.Visibility = MemTrimAboveBox.IsChecked == true && MemEveNeverRadio.IsChecked == true ? Visibility.Visible : Visibility.Collapsed;
 
         _memPercent = s.LoadPercent;
         UpdateMemoryBar();
@@ -2254,8 +2292,8 @@ public partial class SettingsWindow : Window
         bool admin = PreviewManager.IsAdministrator;
         AlwaysAdminBox.IsEnabled = admin;
         AlwaysAdminNote.Text = admin
-            ? "Starts the app with administrator rights every time, without a Windows prompt (it uses a scheduled task, which Save sets up or removes). Run on Startup and double-clicking the exe both start it this way."
-            : "To turn this on, go to Memory and press Restart as administrator, then choose Always. It can only be changed while the app is running as administrator.";
+            ? "Starts as administrator every time, with no Windows prompt."
+            : "To turn this on: Memory > Restart as administrator > Always.";
     }
 
     /// <summary>The scheduled task couldn't be made after all: untick the box and say why.</summary>
@@ -2289,6 +2327,433 @@ public partial class SettingsWindow : Window
         _memTimer.Stop();
         _progTimer.Stop();
         base.OnClosed(e);
+    }
+
+    // ---------- drop-down hover notes ----------
+
+    /// <summary>Gives each option in a drop-down a hover note, and the drop-down itself the note of the option picked.</summary>
+    private static void AddOptionTips(ComboBox box)
+    {
+        static string? TipOf(object? item) =>
+            item is SoundChoice sound ? sound.Tip : OptionTips.TryGetValue(item?.ToString() ?? "", out var tip) ? tip : null;
+
+        box.DropDownOpened += (_, _) => box.Dispatcher.BeginInvoke(new Action(() =>
+        {
+            foreach (var item in box.Items)
+            {
+                if (box.ItemContainerGenerator.ContainerFromItem(item) is ComboBoxItem container && TipOf(item) is string tip)
+                    container.ToolTip = tip;
+            }
+        }), System.Windows.Threading.DispatcherPriority.Loaded);
+        box.SelectionChanged += (_, _) => box.ToolTip = TipOf(box.SelectedItem);
+    }
+
+    // ---------- alert sounds ----------
+
+    private static readonly (string Kind, string Text, string Tip)[] AlertKinds =
+    {
+        ("attack", "Taking damage", "Incoming damage (or a miss) in the combat log."),
+        ("warp-scram", "Warp scrambled / disrupted", "Someone is pointing you."),
+        ("warp-bubble", "In a warp bubble", "You're inside a warp disruption field."),
+        ("decloak", "Decloaked", "Your cloak dropped."),
+        ("cloak-failed", "Cloak failed", "Your cloak couldn't turn on."),
+        ("crystal", "Mining crystal broke", "A mining crystal was used up."),
+        ("mining", "Mining stopped", "No mining for the time set below."),
+        ("compression", "Compression done", "Ore was compressed."),
+        ("fleet-follow", "Warp follow", "You're following a fleet warp."),
+        ("regroup", "Fleet regroup", "Your fleet is regrouping."),
+        ("fleet-invite", "Fleet invite", "You were invited to a fleet."),
+        ("conversation", "Conversation request", "Someone wants to start a chat."),
+        ("keyword", "Keywords (list below)", "A game-log line matched one of your keywords.")
+    };
+
+    private static bool GetWatch(AppSettings s, string kind) => kind switch
+    {
+        "attack" => s.LogWatchAttack,
+        "warp-scram" => s.LogWatchWarpScram,
+        "warp-bubble" => s.LogWatchWarpBubble,
+        "decloak" => s.LogWatchDecloak,
+        "cloak-failed" => s.LogWatchCloakFailed,
+        "crystal" => s.LogWatchCrystalBroke,
+        "mining" => s.LogWatchMiningIdle,
+        "compression" => s.LogWatchMiningCompression,
+        "fleet-follow" => s.LogWatchFleetFollow,
+        "regroup" => s.LogWatchFleetRegroup,
+        "fleet-invite" => s.LogWatchFleetInvite,
+        "conversation" => s.LogWatchConversationInvite,
+        _ => true
+    };
+
+    private static void SetWatch(AppSettings s, string kind, bool on)
+    {
+        switch (kind)
+        {
+            case "attack": s.LogWatchAttack = on; break;
+            case "warp-scram": s.LogWatchWarpScram = on; break;
+            case "warp-bubble": s.LogWatchWarpBubble = on; break;
+            case "decloak": s.LogWatchDecloak = on; break;
+            case "cloak-failed": s.LogWatchCloakFailed = on; break;
+            case "crystal": s.LogWatchCrystalBroke = on; break;
+            case "mining": s.LogWatchMiningIdle = on; break;
+            case "compression": s.LogWatchMiningCompression = on; break;
+            case "fleet-follow": s.LogWatchFleetFollow = on; break;
+            case "regroup": s.LogWatchFleetRegroup = on; break;
+            case "fleet-invite": s.LogWatchFleetInvite = on; break;
+            case "conversation": s.LogWatchConversationInvite = on; break;
+        }
+    }
+
+    /// <summary>Fills a sound drop-down and picks the saved sound. sameAsMain: the list for one alert.</summary>
+    private static void FillSoundCombo(ComboBox box, bool sameAsMain, string selectedId)
+    {
+        var choices = SoundLibrary.Choices(sameAsMain);
+        string id = selectedId ?? "";
+        if (!(sameAsMain && id.Length == 0) && id != SoundLibrary.NoneId) id = SoundLibrary.Normalise(id);
+        box.ItemsSource = choices;
+        box.SelectedItem = choices.FirstOrDefault(c => c.Id.Equals(id, StringComparison.OrdinalIgnoreCase))
+                           ?? choices.First(c => c.Id == (sameAsMain ? "" : SoundLibrary.DefaultId));
+    }
+
+    /// <summary>An older profile's custom .wav is copied into the sounds folder, so it shows in the list like any added sound.</summary>
+    private static void MoveOldCustomSound(AppSettings s)
+    {
+        if (!s.NotifySoundName.Equals("Custom", StringComparison.OrdinalIgnoreCase)) return;
+        if (File.Exists(s.NotifySoundFile) && SoundLibrary.TryAdd(s.NotifySoundFile, out string id, out _))
+            s.NotifySoundName = id;
+        else
+            s.NotifySoundName = SoundLibrary.DefaultId;
+        s.NotifySoundFile = "";
+    }
+
+    private void BuildAlertRows(AppSettings s)
+    {
+        AlertRows.Children.Clear();
+        _alertRows.Clear();
+        foreach (var (kind, text, tip) in AlertKinds)
+        {
+            var row = new AlertRow { Kind = kind };
+            var grid = new Grid { Margin = new Thickness(0, 0, 0, 4) };
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(200) });
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+            FrameworkElement label;
+            if (kind == "keyword")
+            {
+                label = new TextBlock { Text = text, ToolTip = tip, Foreground = Theme.Text, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(27, 0, 0, 0) };
+            }
+            else
+            {
+                row.Enabled = new CheckBox { Content = text, ToolTip = tip, IsChecked = GetWatch(s, kind), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0) };
+                label = row.Enabled;
+            }
+
+            row.Sound = new ComboBox { Margin = new Thickness(8, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center };
+            FillSoundCombo(row.Sound, true, s.AlertSounds.TryGetValue(kind, out var id) ? id : "");
+            AddOptionTips(row.Sound);
+
+            row.Volume = new Slider
+            {
+                Minimum = 0, Maximum = 100, Width = 90, IsSnapToTickEnabled = true, TickFrequency = 5,
+                VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(10, 0, 0, 0), ToolTip = "Volume",
+                Value = Math.Clamp(s.AlertVolumes.TryGetValue(kind, out int volume) ? volume : s.NotifyVolume, 0, 100)
+            };
+            var volumeText = new TextBlock { Width = 38, Margin = new Thickness(6, 0, 0, 0), Foreground = Theme.Muted, VerticalAlignment = VerticalAlignment.Center, Text = $"{(int)row.Volume.Value}%" };
+            var slider = row.Volume;
+            slider.ValueChanged += (_, _) => volumeText.Text = $"{(int)slider.Value}%";
+            var volumePanel = new StackPanel { Orientation = Orientation.Horizontal };
+            volumePanel.Children.Add(row.Volume);
+            volumePanel.Children.Add(volumeText);
+
+            var test = new Button { Content = "Test", Padding = new Thickness(10, 4, 10, 4), Margin = new Thickness(6, 0, 0, 0), ToolTip = "Play this alert's sound" };
+            test.Click += (_, _) => TestRowSound(row);
+
+            Grid.SetColumn(row.Sound, 1);
+            Grid.SetColumn(volumePanel, 2);
+            Grid.SetColumn(test, 3);
+            grid.Children.Add(label);
+            grid.Children.Add(row.Sound);
+            grid.Children.Add(volumePanel);
+            grid.Children.Add(test);
+            AlertRows.Children.Add(grid);
+            _alertRows.Add(row);
+        }
+    }
+
+    private void ReadAlertRows(AppSettings s)
+    {
+        s.AlertSounds = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        s.AlertVolumes = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        int main = (int)Math.Round(NotifyVolumeSlider.Value);
+        foreach (var row in _alertRows)
+        {
+            if (row.Enabled is not null) SetWatch(s, row.Kind, row.Enabled.IsChecked == true);
+            string id = (row.Sound.SelectedItem as SoundChoice)?.Id ?? "";
+            if (id.Length > 0) s.AlertSounds[row.Kind] = id;
+            int volume = (int)Math.Round(row.Volume.Value);
+            if (volume != main) s.AlertVolumes[row.Kind] = volume;
+        }
+    }
+
+    private string MainSoundId() => (NotifySoundCombo.SelectedItem as SoundChoice)?.Id ?? SoundLibrary.DefaultId;
+
+    private void TestRowSound(AlertRow row)
+    {
+        string id = (row.Sound.SelectedItem as SoundChoice)?.Id ?? "";
+        _manager.TestSound(id.Length == 0 ? MainSoundId() : id, (int)Math.Round(row.Volume.Value));
+    }
+
+    private void TestMainSound_Click(object sender, RoutedEventArgs e) =>
+        _manager.TestSound(MainSoundId(), (int)Math.Round(NotifyVolumeSlider.Value));
+
+    private void AddSound_Click(object sender, RoutedEventArgs e)
+    {
+        var dialog = new Microsoft.Win32.OpenFileDialog
+        {
+            Title = "Add a sound",
+            Filter = "Sounds (*.wav;*.mp3;*.m4a;*.wma;*.aac)|*.wav;*.mp3;*.m4a;*.wma;*.aac|All files (*.*)|*.*"
+        };
+        if (dialog.ShowDialog(this) != true) return;
+        if (!SoundLibrary.TryAdd(dialog.FileName, out string id, out string error))
+        {
+            Dialogs.Info(this, error);
+            return;
+        }
+        var rows = _alertRows.Select(r => (r, (r.Sound.SelectedItem as SoundChoice)?.Id ?? "")).ToList();
+        FillSoundCombo(NotifySoundCombo, false, id);
+        foreach (var (row, chosen) in rows) FillSoundCombo(row.Sound, true, chosen);
+        SetStatus("Sound added and set as the main sound.", true);
+    }
+
+    // ---------- switcher per client ----------
+
+    private void BuildSwitcherClientRows()
+    {
+        SwitcherClientRows.Children.Clear();
+        var clients = _manager.SwitcherClientList();
+        if (clients.Count == 0)
+        {
+            SwitcherClientRows.Children.Add(new TextBlock { Text = "No clients open.", Foreground = Theme.Muted, Margin = new Thickness(0, 0, 0, 6) });
+            return;
+        }
+        foreach (var client in clients)
+        {
+            string key = client.Key;
+            var box = new CheckBox
+            {
+                Content = client.Text,
+                IsChecked = client.Disabled,
+                IsEnabled = key.Length > 0 && _manager.SwitcherEnabled,
+                ToolTip = client.Disabled ? "Off for this client." : "On for this client."
+            };
+            box.Click += (_, _) => _manager.SetClientDisabled(key, box.IsChecked == true);
+            SwitcherClientRows.Children.Add(box);
+        }
+    }
+
+    /// <summary>The tray (or a tick here) changed which clients the switcher leaves alone.</summary>
+    internal void FollowDisabledClients(List<string> disabled)
+    {
+        _state.DisabledClients = new List<string>(disabled);
+        Dispatcher.BeginInvoke(new Action(BuildSwitcherClientRows));
+    }
+
+    // ---------- performance ----------
+
+    private void LoadPerformance()
+    {
+        var p = _state.Performance;
+        PerfEnabledBox.IsChecked = p.Enabled;
+        PerfPlanBox.IsChecked = p.HighPerformancePlan;
+        PerfRaiseBox.IsChecked = p.RaiseFrontClient;
+        PerfLowerBox.IsChecked = p.LowerBackgroundClients;
+        PerfEcoBox.IsChecked = p.EfficiencyBackground;
+    }
+
+    /// <summary>The tray switched the performance options on or off.</summary>
+    internal void FollowPerformance(bool enabled)
+    {
+        bool clean = StateSnapshot() == _stateBaseline;
+        _state.Performance.Enabled = enabled;
+        PerfEnabledBox.IsChecked = enabled;
+        if (clean) _stateBaseline = StateSnapshot();
+    }
+
+    // ---------- saved layouts ----------
+
+    private void RefreshLayoutBox(string? select = null)
+    {
+        var names = _work.Layouts.Select(l => l.Name).ToList();
+        LayoutCombo.ItemsSource = names;
+        LayoutCombo.SelectedItem = select is not null && names.Contains(select) ? select : names.FirstOrDefault();
+    }
+
+    private SavedLayout? SelectedLayout() =>
+        LayoutCombo.SelectedItem is string name ? _work.Layouts.FirstOrDefault(l => l.Name.Equals(name, StringComparison.OrdinalIgnoreCase)) : null;
+
+    /// <summary>Layouts use the live thumbnails, so they only work on the profile in use.</summary>
+    private bool LayoutsAllowed()
+    {
+        if (_shownProfile.Equals(_manager.State.ActiveProfile, StringComparison.OrdinalIgnoreCase)) return true;
+        Warn("Layouts only work on the profile in use. Press Save first.");
+        return false;
+    }
+
+    /// <summary>Runs a layout change that is saved straight away, without making the window think there are unsaved changes.</summary>
+    private void SavedStraightAway(Action change)
+    {
+        bool clean = _baseline.TryGetValue(_shownProfile, out var before) && before == ToJson(_work);
+        change();
+        if (clean) _baseline[_shownProfile] = ToJson(_work);
+    }
+
+    private string? AskLayoutName(string title, string initial, string current = "")
+    {
+        string? raw = PromptWindow.Ask(this, title, "Layout name:", initial);
+        if (raw is null) return null;
+        string name = raw.Trim();
+        if (name.Length == 0 || name.Length > 40)
+        {
+            Warn("Use a name of 1 to 40 characters.");
+            return null;
+        }
+        if (_work.Layouts.Any(l => l.Name.Equals(name, StringComparison.OrdinalIgnoreCase) && !l.Name.Equals(current, StringComparison.OrdinalIgnoreCase)))
+        {
+            Warn("There's already a layout called \"" + name + "\".");
+            return null;
+        }
+        return name;
+    }
+
+    private void SaveLayout_Click(object sender, RoutedEventArgs e)
+    {
+        if (!LayoutsAllowed()) return;
+        string? name = AskLayoutName("Save layout", $"Layout {_work.Layouts.Count + 1}");
+        if (name is null) return;
+        SavedStraightAway(() =>
+        {
+            _work.Layouts.Add(_manager.CaptureLayout(name));
+            _manager.StoreLayouts(_work.Layouts);
+        });
+        RefreshLayoutBox(name);
+        SetStatus($"Layout “{name}” saved.", true);
+    }
+
+    private void UpdateLayout_Click(object sender, RoutedEventArgs e)
+    {
+        var layout = SelectedLayout();
+        if (layout is null || !LayoutsAllowed()) return;
+        if (Dialogs.Ask(this, "Update layout", $"Replace “{layout.Name}” with the current order and positions?", "Replace", "Cancel") != 0) return;
+        SavedStraightAway(() =>
+        {
+            int index = _work.Layouts.IndexOf(layout);
+            _work.Layouts[index] = _manager.CaptureLayout(layout.Name);
+            _manager.StoreLayouts(_work.Layouts);
+        });
+        RefreshLayoutBox(layout.Name);
+        SetStatus($"Layout “{layout.Name}” updated.", true);
+    }
+
+    private void DeleteLayout_Click(object sender, RoutedEventArgs e)
+    {
+        var layout = SelectedLayout();
+        if (layout is null) return;
+        if (Dialogs.Ask(this, "Delete layout", $"Delete “{layout.Name}”?", "Delete", "Cancel") != 0) return;
+        SavedStraightAway(() =>
+        {
+            _work.Layouts.Remove(layout);
+            if (_shownProfile.Equals(_manager.State.ActiveProfile, StringComparison.OrdinalIgnoreCase)) _manager.StoreLayouts(_work.Layouts);
+            else ProfileStore.Save(_shownProfile, _work.Clone());
+        });
+        RefreshLayoutBox();
+        SetStatus($"Layout “{layout.Name}” deleted.", true);
+    }
+
+    private void LoadLayout_Click(object sender, RoutedEventArgs e)
+    {
+        var layout = SelectedLayout();
+        if (layout is null || !LayoutsAllowed()) return;
+        SavedStraightAway(() =>
+        {
+            _manager.ApplyLayout(layout);
+            _work.ClientOrderMode = layout.ClientOrderMode;
+            _work.ClientOrder = new List<string>(layout.ClientOrder);
+            _work.SavedAccountSlots = new Dictionary<string, int>(layout.SavedAccountSlots, StringComparer.OrdinalIgnoreCase);
+            _work.PositionMode = layout.PositionMode;
+            _work.ClientOrderResetPending = false;
+            foreach (var pair in layout.Boxes)
+            {
+                var c = _work.GetOrAddCharacter(pair.Key);
+                c.Left = pair.Value.Left;
+                c.Top = pair.Value.Top;
+                c.Width = pair.Value.Width;
+                c.Height = pair.Value.Height;
+            }
+        });
+        _orderLoading = true;
+        try
+        {
+            (layout.ClientOrderMode == AppSettings.OrderManual ? OrderManualRadio :
+             layout.ClientOrderMode == AppSettings.OrderSaved ? OrderSavedRadio : OrderAutoRadio).IsChecked = true;
+            (layout.PositionMode == AppSettings.ModeClient ? ModeClientRadio : ModeCharacterRadio).IsChecked = true;
+        }
+        finally { _orderLoading = false; }
+        UpdateOrderNote();
+        RebuildOrderList();
+        UpdateSavedOrderPanel();
+        SetStatus($"Layout “{layout.Name}” loaded.", true);
+    }
+
+    // ---------- admin (only on the owner's PC) ----------
+
+    private const string ReleasesApi = "https://api.github.com/repos/Mune-Su/eve-iw-preview/releases?per_page=100";
+    private const string ReleasesPage = "https://github.com/Mune-Su/eve-iw-preview/releases";
+
+    private async void AdminDownloads_Click(object sender, RoutedEventArgs e)
+    {
+        AdminDownloadsBtn.IsEnabled = false;
+        AdminDownloadsText.Text = "Checking...";
+        try
+        {
+            using var http = new System.Net.Http.HttpClient { Timeout = TimeSpan.FromSeconds(15) };
+            http.DefaultRequestHeaders.UserAgent.ParseAdd("EVE-IW-Preview");
+            string json = await http.GetStringAsync(ReleasesApi);
+            using var doc = JsonDocument.Parse(json);
+            var text = new StringBuilder();
+            long setups = 0;
+            foreach (var release in doc.RootElement.EnumerateArray())
+            {
+                string tag = release.TryGetProperty("tag_name", out var t) ? t.GetString() ?? "" : "";
+                if (!release.TryGetProperty("assets", out var assets)) continue;
+                foreach (var asset in assets.EnumerateArray())
+                {
+                    string name = asset.TryGetProperty("name", out var n) ? n.GetString() ?? "" : "";
+                    long count = asset.TryGetProperty("download_count", out var c) && c.TryGetInt64(out long v) ? v : 0;
+                    if (name.EndsWith(".exe", StringComparison.OrdinalIgnoreCase)) setups += count;
+                    text.AppendLine($"{tag,-16}{name,-32}{count,8:N0}");
+                }
+            }
+            AdminDownloadsText.Text = text.Length == 0
+                ? "No release files yet."
+                : text + Environment.NewLine + $"Setup downloads, all releases: {setups:N0}";
+        }
+        catch (Exception ex)
+        {
+            AdminDownloadsText.Text = "Couldn't check: " + ex.Message;
+        }
+        finally
+        {
+            AdminDownloadsBtn.IsEnabled = true;
+        }
+    }
+
+    private void AdminReleases_Click(object sender, RoutedEventArgs e) => OpenPath(this, ReleasesPage);
+
+    private void AdminSounds_Click(object sender, RoutedEventArgs e)
+    {
+        try { Directory.CreateDirectory(SoundLibrary.Folder); } catch { }
+        OpenPath(this, SoundLibrary.Folder);
     }
 
     // ---------- validation ----------
@@ -2340,7 +2805,9 @@ public partial class SettingsWindow : Window
         if (!ForwardBox.IsValid || !BackBox.IsValid || _slotFields.Any(f => !f.IsValid))
             return Fail(PageHotkeys_, "One of the hotkeys isn't supported. Click the box and press the keys again, or use ✕ to clear it.");
         if (!ProfileHotkeyBox.IsValid || !NextProfileBox.IsValid || !PrevProfileBox.IsValid)
-            return Fail(PageHotkeys_, "One of the profile hotkeys isn't supported. Click the box and press the keys again, or use ✕ to clear it.");
+            return Fail(PageHotkeys_, "A profile hotkey isn't supported. Press the keys again, or clear it with ✕.");
+        if (!SuspendKeyBox.IsValid || !NextDesktopBox.IsValid || !PrevDesktopBox.IsValid)
+            return Fail(PageHotkeys_, "One of the other hotkeys isn't supported. Press the keys again, or clear it with ✕.");
 
         // Thumbnail group: the characters typed in its lines
         if (!CommitThumbRows(true)) return false;
@@ -2385,6 +2852,7 @@ public partial class SettingsWindow : Window
         _work.PositionMode = ModeClientRadio.IsChecked == true ? AppSettings.ModeClient : AppSettings.ModeCharacter;
         _work.ClientOrderMode = ModeOfRadios(OrderManualRadio.IsChecked == true, OrderSavedRadio.IsChecked == true);
         _work.NewCharactersInheritPosition = InheritBox.IsChecked == true;
+        _work.StackDirection = StackDirectionBox.SelectedIndex == 1 ? "Across" : "Down";
         _work.SameSizeForAll = SameSizeBox.IsChecked == true;
         _work.PreviewWidth = width;
         _work.PreviewHeight = height;
@@ -2443,22 +2911,15 @@ public partial class SettingsWindow : Window
         _work.NotifyBorderSeconds = flashSeconds;
         _work.NotifyToast = NotifyToastBox.IsChecked == true;
         _work.NotifySound = NotifySoundBox.IsChecked == true;
-        _work.NotifySoundName = NotifySoundCombo.SelectedItem as string ?? "Exclamation";
-        _work.NotifySoundFile = NotifySoundFileBox.Text.Trim();
+        _work.NotifySoundName = (NotifySoundCombo.SelectedItem as SoundChoice)?.Id ?? SoundLibrary.DefaultId;
+        _work.NotifyVolume = (int)Math.Round(NotifyVolumeSlider.Value);
         _work.NotifySpeak = NotifySpeakBox.IsChecked == true;
 
         _work.LogMonitoringEnabled = LogEnabledBox.IsChecked == true;
         _work.LogPollMilliseconds = logPoll;
         _work.GameLogFolder = GameFolderBox.Text.Trim();
         _work.ChatLogFolder = ChatFolderBox.Text.Trim();
-        _work.LogWatchAttack = LogAttackBox.IsChecked == true;
-        _work.LogWatchCrystalBroke = LogCrystalBox.IsChecked == true;
-        _work.LogWatchFleetFollow = LogFleetFollowBox.IsChecked == true;
-        _work.LogWatchMiningCompression = LogCompressionBox.IsChecked == true;
-        _work.LogWatchConversationInvite = LogConversationBox.IsChecked == true;
-        _work.LogWatchDecloak = LogDecloakBox.IsChecked == true;
-        _work.LogWatchMiningIdle = LogMiningBox.IsChecked == true;
-        _work.LogWatchFleetRegroup = LogRegroupBox.IsChecked == true;
+        ReadAlertRows(_work);
         _work.LogMiningIdleSeconds = miningSeconds;
         _work.LogKeywords = string.Join("\n", LogKeywordsBox.Text
             .Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries));

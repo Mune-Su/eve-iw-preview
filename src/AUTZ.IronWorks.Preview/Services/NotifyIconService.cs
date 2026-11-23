@@ -18,18 +18,23 @@ public sealed class NotifyIconService : IDisposable
     {
         var settingsItem = new Forms.ToolStripMenuItem("Configuration");
         settingsItem.Font = new Font(settingsItem.Font, System.Drawing.FontStyle.Bold);
-        settingsItem.Click += (_, _) => manager.OpenSettings();
+        settingsItem.Click += (_, _) => { Log.Debug("TRAY", "clicked Configuration"); manager.OpenSettings(); };
 
         // the profiles: pick one to switch to it (the one in use is ticked)
         var profilesItem = new Forms.ToolStripMenuItem("Profiles");
 
-        var toggleItem = new Forms.ToolStripMenuItem("Disable Switcher");  
-          toggleItem.Click += (_, _) => manager.ToggleSwitcher();
+        // Disable Switcher: all clients at once, or one at a time (the list is built from the clients that are open)
+        var toggleItem = new Forms.ToolStripMenuItem("Disable Switcher");
+        var pauseItem = new Forms.ToolStripMenuItem("Pause Hotkeys");
+        pauseItem.Click += (_, _) => { Log.Debug("TRAY", "clicked Pause / Resume Hotkeys"); manager.ToggleHotkeysSuspended(); };
+        var perfItem = new Forms.ToolStripMenuItem("Disable Performance");
+        perfItem.Click += (_, _) => { Log.Debug("TRAY", "clicked Performance on / off"); manager.TogglePerformance(); };
           var memoryToggleItem = new Forms.ToolStripMenuItem("Disable Memory Cleaner");
-          memoryToggleItem.Click += (_, _) => manager.ToggleMemoryCleaner();
+          memoryToggleItem.Click += (_, _) => { Log.Debug("TRAY", "clicked Memory Cleaner on / off"); manager.ToggleMemoryCleaner(); };
           var trimItem = new Forms.ToolStripMenuItem("Trim Programs");
           trimItem.Click += async (_, _) =>
           {
+              Log.Debug("TRAY", "clicked Trim Programs");
               trimItem.Enabled = false;
               try
               {
@@ -41,6 +46,7 @@ public sealed class NotifyIconService : IDisposable
           var cacheItem = new Forms.ToolStripMenuItem("Clear System Cache") { Enabled = PreviewManager.IsAdministrator };
           cacheItem.Click += async (_, _) =>
           {
+              Log.Debug("TRAY", "clicked Clear System Cache");
               cacheItem.Enabled = false;
               try
               {
@@ -53,6 +59,7 @@ public sealed class NotifyIconService : IDisposable
         var explorerItem = new Forms.ToolStripMenuItem("Restart Windows Explorer");
         explorerItem.Click += async (_, _) =>
         {
+            Log.Debug("TRAY", "clicked Restart Windows Explorer");
             if (Dialogs.Ask(null, "Restart Windows Explorer",
                     "Close and restart Windows Explorer?\n\nThe taskbar and desktop disappear for a moment, and any open File Explorer windows close.",
                     "Restart", "Cancel") != 0) return;
@@ -60,7 +67,7 @@ public sealed class NotifyIconService : IDisposable
         };
 
         var debugItem = new Forms.ToolStripMenuItem("Detailed Logging") { CheckOnClick = false };
-        debugItem.Click += (_, _) => manager.SetDebugLogging(!Log.Verbose);
+        debugItem.Click += (_, _) => { manager.SetDebugLogging(!Log.Verbose); Log.Debug("TRAY", "clicked Detailed Logging (now on)"); };
         var openDebugItem = new Forms.ToolStripMenuItem("Open Debug Log");
         openDebugItem.Click += (_, _) =>
         {
@@ -73,14 +80,16 @@ public sealed class NotifyIconService : IDisposable
             catch (Exception ex) { Dialogs.Info(null, "Couldn't open the debug log: " + ex.Message); }
         };
         var exitItem = new Forms.ToolStripMenuItem("Exit");
-        exitItem.Click += (_, _) => Application.Current.Shutdown();
+        exitItem.Click += (_, _) => { Log.Debug("TRAY", "clicked Exit"); Application.Current.Shutdown(); };
 
         var menu = new Forms.ContextMenuStrip();
         menu.Items.Add(settingsItem);
         menu.Items.Add(profilesItem);
         menu.Items.Add(new Forms.ToolStripSeparator());
         menu.Items.Add(toggleItem);
-          menu.Items.Add(memoryToggleItem);
+        menu.Items.Add(memoryToggleItem);
+        menu.Items.Add(perfItem);
+        menu.Items.Add(pauseItem);
           menu.Items.Add(new Forms.ToolStripSeparator());
           menu.Items.Add(trimItem);
           menu.Items.Add(cacheItem);
@@ -94,6 +103,10 @@ public sealed class NotifyIconService : IDisposable
         menu.Opening += (_, _) =>
         {
             toggleItem.Text = manager.SwitcherEnabled ? "Disable Switcher" : "Enable Switcher";
+            FillSwitcher(toggleItem, manager);
+            pauseItem.Text = manager.HotkeysSuspended ? "Resume Hotkeys" : "Pause Hotkeys";
+            pauseItem.Enabled = manager.SwitcherEnabled;
+            perfItem.Text = manager.State.Performance.Enabled ? "Disable Performance" : "Enable Performance";
               profilesItem.Enabled = manager.SwitcherEnabled;
               memoryToggleItem.Text = manager.MemoryCleanerEnabled ? "Disable Memory Cleaner" : "Enable Memory Cleaner";
               trimItem.Enabled = manager.MemoryCleanerEnabled;
@@ -126,6 +139,40 @@ public sealed class NotifyIconService : IDisposable
         }
     }
 
+    /// <summary>The Disable Switcher submenu: all clients at once, then one line per client (ticked = the switcher leaves it alone).</summary>
+    private static void FillSwitcher(Forms.ToolStripMenuItem parent, PreviewManager manager)
+    {
+        parent.DropDownItems.Clear();
+        var all = new Forms.ToolStripMenuItem(manager.SwitcherEnabled ? "Disable All" : "Enable All");
+        all.Click += (_, _) => { Log.Debug("TRAY", "clicked Disable / Enable All (switcher)"); manager.ToggleSwitcher(); };
+        parent.DropDownItems.Add(all);
+        parent.DropDownItems.Add(new Forms.ToolStripSeparator());
+
+        var clients = manager.SwitcherClientList();
+        if (clients.Count == 0)
+        {
+            parent.DropDownItems.Add(new Forms.ToolStripMenuItem("(no clients open)") { Enabled = false });
+            return;
+        }
+        foreach (var client in clients)
+        {
+            string key = client.Key;
+            bool disabled = client.Disabled;
+            var item = new Forms.ToolStripMenuItem(client.Text.Replace("&", "&&"))
+            {
+                Checked = disabled,
+                Enabled = manager.SwitcherEnabled && key.Length > 0,
+                ToolTipText = disabled ? "Off for this client. Click to turn it back on." : "Click to turn the switcher off for this client."
+            };
+            item.Click += (_, _) =>
+            {
+                Log.Debug("TRAY", "clicked a client under Disable Switcher");
+                manager.SetClientDisabled(key, !disabled);
+            };
+            parent.DropDownItems.Add(item);
+        }
+    }
+
     /// <summary>Lists the profiles under "Profiles"; clicking one switches to it.</summary>
     private static void FillProfiles(Forms.ToolStripMenuItem parent, PreviewManager manager)
     {
@@ -144,7 +191,7 @@ public sealed class NotifyIconService : IDisposable
             {
                 Checked = name.Equals(manager.State.ActiveProfile, StringComparison.OrdinalIgnoreCase)
             };
-            item.Click += (_, _) => manager.SwitchProfile(chosen);    // works with the Configuration window open too: it follows
+            item.Click += (_, _) => { Log.Debug("TRAY", "clicked a profile"); manager.SwitchProfile(chosen); };    // works with the Configuration window open too: it follows
             parent.DropDownItems.Add(item);
         }
     }
@@ -172,5 +219,3 @@ public sealed class NotifyIconService : IDisposable
         _icon.Dispose();
     }
 }
-
-

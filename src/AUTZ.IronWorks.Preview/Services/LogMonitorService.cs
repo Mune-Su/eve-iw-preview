@@ -20,11 +20,15 @@ public sealed record LogConfig(
     bool ConversationInvite,
     bool Decloak,
     bool FleetRegroup,
+    bool WarpScram,
+    bool WarpBubble,
+    bool CloakFailed,
+    bool FleetInvite,
     int MiningIdleSeconds,
     string[] Keywords,
     bool SystemName);
 
-/// <summary>Kind is "attack", "mining" or "keyword".</summary>
+/// <summary>Kind is one of LogMonitorService.Kinds, or "keyword".</summary>
 public sealed record LogEvent(string Character, string Kind, string Message);
 
 /// <summary>
@@ -55,7 +59,14 @@ public sealed class LogMonitorService : IDisposable
     private readonly Dictionary<string, DateTime> _lastMining = new(StringComparer.OrdinalIgnoreCase);
     private readonly HashSet<string> _miningFired = new(StringComparer.OrdinalIgnoreCase);
     private Timer? _timer;
-    private LogConfig _config = new(false, "", "", 1000, true, false, false, false, false, false, false, false, 60, Array.Empty<string>(), false);
+    private LogConfig _config = new(false, "", "", 1000, true, false, false, false, false, false, false, false, false, false, false, false, 60, Array.Empty<string>(), false);
+
+    /// <summary>Every alert kind, in the order they are listed in Configuration.</summary>
+    public static readonly string[] Kinds =
+    {
+        "attack", "warp-scram", "warp-bubble", "decloak", "cloak-failed", "crystal", "mining", "compression",
+        "fleet-follow", "regroup", "fleet-invite", "conversation", "keyword"
+    };
     private bool _initialScanDone;
     private DateTime _lastScan = DateTime.MinValue;
 
@@ -303,21 +314,41 @@ public sealed class LogMonitorService : IDisposable
         if (config.Attack && kind == "combat" &&
             (IncomingRx.IsMatch(text) || text.Contains(" misses you", StringComparison.OrdinalIgnoreCase)))
         {
-            Post(new LogEvent(tail.Listener, "attack", text));
+            Post(tail, "attack", text);
         }
 
-        if (config.CrystalBroke && ContainsAny(text, "mining crystal has been destroyed", "mining crystal broke", "crystal has shattered")) Post(new LogEvent(tail.Listener, "crystal", text));
-        if (config.FleetFollow && ContainsAny(text, "fleet warp", "warp to member", "follow fleet warp")) Post(new LogEvent(tail.Listener, "fleet-follow", text));
-        if (config.MiningCompression && ContainsAny(text, "compression", "compressed")) Post(new LogEvent(tail.Listener, "compression", text));
-        if (config.ConversationInvite && ContainsAny(text, "conversation request", "conversation invitation", "invites you to a conversation")) Post(new LogEvent(tail.Listener, "conversation", text));
-        if (config.Decloak && ContainsAny(text, "cloaking device deactivates", "cloak deactivates", "decloaked")) Post(new LogEvent(tail.Listener, "decloak", text));
-        if (config.FleetRegroup && ContainsAny(text, "regroup", "fleet regroup")) Post(new LogEvent(tail.Listener, "regroup", text));
+        // The game log only holds messages from the game itself (never chat), so player names like "Crystal" can't trigger these.
+        // The text to match comes from real game-log lines.
+        if (config.CrystalBroke && text.Contains("deactivates due to the destruction", StringComparison.OrdinalIgnoreCase) &&
+            text.Contains("crystal", StringComparison.OrdinalIgnoreCase))
+            Post(tail, "crystal", text);
+        if (config.FleetFollow && text.StartsWith("Following ", StringComparison.OrdinalIgnoreCase) &&
+            text.Contains(" in warp", StringComparison.OrdinalIgnoreCase))
+            Post(tail, "fleet-follow", text);
+        if (config.MiningCompression && text.StartsWith("Successfully compressed", StringComparison.OrdinalIgnoreCase))
+            Post(tail, "compression", text);
+        if (config.ConversationInvite && text.Contains("is inviting you to a conversation", StringComparison.OrdinalIgnoreCase))
+            Post(tail, "conversation", text);
+        if (config.Decloak && ContainsAny(text, "cloak deactivates", "cloaking device deactivates", "decloaked"))
+            Post(tail, "decloak", text);
+        if (config.FleetRegroup && text.StartsWith("Regrouping", StringComparison.OrdinalIgnoreCase))
+            Post(tail, "regroup", text);
+        if (config.WarpScram && ContainsAny(text, "warp scramble attempt", "warp disruption attempt") &&
+            text.Contains("to you", StringComparison.OrdinalIgnoreCase))
+            Post(tail, "warp-scram", text);
+        if (config.WarpBubble && text.Contains("warp disruption zone", StringComparison.OrdinalIgnoreCase))
+            Post(tail, "warp-bubble", text);
+        if (config.CloakFailed && ContainsAny(text, "cloaking systems are unable to activate", "can't cloak", "cannot cloak"))
+            Post(tail, "cloak-failed", text);
+        if (config.FleetInvite && (text.Contains("wants you to join their fleet", StringComparison.OrdinalIgnoreCase) ||
+            (text.Contains("fleet", StringComparison.OrdinalIgnoreCase) && text.Contains("invit", StringComparison.OrdinalIgnoreCase))))
+            Post(tail, "fleet-invite", text);
 
         foreach (string keyword in config.Keywords)
         {
             if (keyword.Length > 0 && text.Contains(keyword, StringComparison.OrdinalIgnoreCase))
             {
-                Post(new LogEvent(tail.Listener, "keyword", text));
+                Post(tail, "keyword", text);
                 break;
             }
         }
@@ -338,6 +369,12 @@ public sealed class LogMonitorService : IDisposable
         }
     }
 
+    private void Post(Tail tail, string kind, string text)
+    {
+        Log.Debug("ALERT", $"'{tail.Listener}' game-log line matched '{kind}': {text}");
+        Post(new LogEvent(tail.Listener, kind, text));
+    }
+
     private void Post(LogEvent logEvent) =>
         _dispatcher.BeginInvoke(new Action(() => EventRaised?.Invoke(logEvent)));
 
@@ -353,5 +390,3 @@ public sealed class LogMonitorService : IDisposable
         }
     }
 }
-
-

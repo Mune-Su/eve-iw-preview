@@ -82,9 +82,10 @@ try {
     $projVersion = @($proj.Project.PropertyGroup | ForEach-Object { $_.Version } | Where-Object { $_ }) | Select-Object -First 1
     if ($projVersion -ne $Version) { Stop-Update "Project version '$projVersion' doesn't match the ZIP version '$Version'. Build stopped." }
 
-    # builds the app and installer-output\EVE-IW-Preview-Setup.exe, then opens the installer
+    # builds the app and installer-output\EVE-IW-Preview-Setup.exe (installs Inno Setup if it's missing)
     Write-Host 'Building the app and the installer...' -ForegroundColor Cyan
-    & '.\publish-exe.ps1'; if ($LASTEXITCODE) { Stop-Update 'Build failed.' }
+    & '.\installer\build-installer.ps1' -InstallInnoIfMissing
+    if ($LASTEXITCODE -ne 0) { Stop-Update 'Build failed. Copy the first error above and send it to me.' }
     $Built = $true
 } finally { if (Test-Path $Temp) { Remove-Item $Temp -Recurse -Force -ErrorAction SilentlyContinue } }
 
@@ -94,6 +95,9 @@ if ($Built) {
         Move-Item -LiteralPath $Selected.File.FullName -Destination (Join-Path $Versions $Selected.File.Name) -Force
         Write-Host "Moved $($Selected.File.Name) to $Versions" -ForegroundColor Cyan
     } catch { Write-Host "Couldn't move the ZIP out of Downloads: $($_.Exception.Message)" -ForegroundColor Yellow }
+
+    $Setup = Join-Path $Repo 'installer-output\EVE-IW-Preview-Setup.exe'
+    if (Test-Path $Setup) { Write-Host 'Opening the installer...' -ForegroundColor Cyan; Start-Process $Setup }
 
     Write-Host ''; Write-Host 'Changes (A = added, M = modified, D = deleted, R = renamed):' -ForegroundColor Cyan
     git status --short

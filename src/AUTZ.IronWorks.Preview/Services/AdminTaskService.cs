@@ -54,6 +54,30 @@ internal static class AdminTaskService
 
     public static bool Exists() => Run($"/Query /TN \"{TaskName}\"", out _);
 
+    /// <summary>The exe the task starts, or "" if there is no task (or Windows won't say).</summary>
+    public static string TaskCommand()
+    {
+        if (!Run($"/Query /TN \"{TaskName}\" /XML", out string xml)) return "";
+        var match = System.Text.RegularExpressions.Regex.Match(xml, "<Command>(.*?)</Command>", System.Text.RegularExpressions.RegexOptions.Singleline);
+        return match.Success ? System.Net.WebUtility.HtmlDecode(match.Groups[1].Value.Trim().Trim('"')) : "";
+    }
+
+    /// <summary>True when the task starts this exe. A task left pointing at an old or deleted copy must not be used.</summary>
+    public static bool PointsAtThisExe(out string taskExe)
+    {
+        taskExe = TaskCommand();
+        string? self = Environment.ProcessPath;
+        if (taskExe.Length == 0 || string.IsNullOrEmpty(self)) return false;
+        try
+        {
+            return string.Equals(Path.GetFullPath(taskExe), Path.GetFullPath(self), StringComparison.OrdinalIgnoreCase) && File.Exists(taskExe);
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
     /// <summary>Starts the task (the app, as administrator). Works from a normal, non-elevated copy of the app.</summary>
     public static bool RunNow(out string error)
     {
@@ -118,5 +142,3 @@ internal static class AdminTaskService
         }
     }
 }
-
-

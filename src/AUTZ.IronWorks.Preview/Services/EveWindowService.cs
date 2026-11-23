@@ -42,7 +42,7 @@ public sealed class EveWindowService
         {
             if (!_pidsThisScan.Contains(pid)) _gonePids.Add(pid);
         }
-        foreach (uint pid in _gonePids) { _startTimes.Remove(pid); _accountSignatures.Remove(pid); _diagLogged.Remove(pid); }
+        foreach (uint pid in _gonePids) { _startTimes.Remove(pid); _accountSignatures.Remove(pid); _diagLogged.Remove(pid); _isClient.Remove(pid); }
 
         _goneHandles.Clear();
         foreach (nint h in _firstSeen.Keys)
@@ -92,6 +92,8 @@ public sealed class EveWindowService
         }
 
         if (!IsEveTitle(title)) return true;
+        NativeMethods.GetWindowThreadProcessId(h, out uint ownerPid);
+        if (!IsClientProcess(ownerPid)) return true;                // e.g. a File Explorer window for a folder called "EVE"
         _titles.TryGetValue(h, out string? before);
         _titles[h] = title;
         string character = ParseCharacter(title);
@@ -121,6 +123,32 @@ public sealed class EveWindowService
         }
         _scan.Add(new EveClientWindow(h, title, character, opened, accountSignature));
         return true;
+    }
+
+    private readonly HashSet<uint> _isClient = new();          // processes known to be EVE clients
+    private readonly HashSet<uint> _notClientLogged = new();   // other programs already noted in the detailed log
+
+    /// <summary>True when the window belongs to the EVE client program (exefile.exe).</summary>
+    private bool IsClientProcess(uint pid)
+    {
+        if (pid == 0) return false;
+        if (_isClient.Contains(pid)) return true;
+        try
+        {
+            using var process = Process.GetProcessById((int)pid);
+            if (process.ProcessName.Equals("exefile", StringComparison.OrdinalIgnoreCase))
+            {
+                _isClient.Add(pid);
+                return true;
+            }
+            if (_notClientLogged.Count > 64) _notClientLogged.Clear();
+            if (_notClientLogged.Add(pid)) Log.Debug("CLIENTINFO", $"window titled like EVE ignored: it belongs to '{process.ProcessName}', not the EVE client");
+            return false;
+        }
+        catch
+        {
+            return true;            // Windows won't say: don't hide a real client because of that
+        }
     }
 
     private static bool LooksLikeEve(StringBuilder text) =>
@@ -217,7 +245,7 @@ public sealed class EveWindowService
         // attaching input queues to a frozen window can hang input for everything, so never do it then
         if (!foregroundHung)
         {
-            // fallback 1: join the focused window's input queue to the target's (the way EVE-O Preview does it)
+            // fallback 1: join the focused window's input queue to the target's
             if (foregroundThread != 0 && targetThread != 0 && foregroundThread != targetThread &&
                 NativeMethods.AttachThreadInput(foregroundThread, targetThread, true))
             {
@@ -276,5 +304,3 @@ public sealed class EveWindowService
         return fg == handle;
     }
 }
-
-

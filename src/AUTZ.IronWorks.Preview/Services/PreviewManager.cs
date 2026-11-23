@@ -33,6 +33,10 @@ public sealed class PreviewManager : IDisposable
     private readonly WindowWatcher _watcher = new();
     private readonly LogMonitorService _logs = new();
     private readonly NotificationService _notify = new();
+    private readonly PerformanceService _perf = new();
+    private readonly HotkeyService _toggleKeys = new();      // only the pause / resume hotkeys hotkey, so it still works while the others are paused
+    private StatusBadgeWindow? _pausedBadge;
+    private IReadOnlyList<EveClientWindow> _allClients = Array.Empty<EveClientWindow>();   // every client found, including ones the switcher leaves alone
     private readonly Dictionary<nint, ThumbnailWindow> _windows = new();
     private readonly Dictionary<ThumbnailWindow, Meta> _meta = new();
     private readonly Dictionary<nint, SavedBox> _inherit = new();
@@ -100,6 +104,7 @@ public sealed class PreviewManager : IDisposable
     {
         bool configBlocks = _settingsWindow is not null && (!_settings.HotkeysInConfig || _recordingHotkey);
         _hotkeys.Suspended = SwitchingPaused || HotkeysSuspended || configBlocks;
+        _toggleKeys.Suspended = configBlocks;
     }
 
     /// <summary>Called by the Configuration window when a hotkey box starts or stops recording.</summary>
@@ -207,6 +212,8 @@ public sealed class PreviewManager : IDisposable
         _visible = _state.SwitcherEnabled;
         UpdateHotkeySuspension();
         if (_state.SwitcherEnabled) Refresh();
+        if (_perf.CleanUpAfterCrash(_state.Performance, _eve.ClientProcessIds)) ProfileStore.SaveState(_state);
+        UpdatePerformance();
         _scanTimer.Start();
         ConfigureMemoryTimer();
         SyncAdminTask();
@@ -242,9 +249,12 @@ public sealed class PreviewManager : IDisposable
             return;
         }
         Log.Trace("SCAN", $"begin: dirty={_scanDirty}; previous={_lastScan.Count}; interval={_scanTimer.Interval.TotalMilliseconds:0}ms");
-        var raw = _eve.FindClients();
-        Log.Trace("SCAN", $"windows enumerated: {raw.Count} EVE client(s)");
+        var found = _eve.FindClients();
+        Log.Trace("SCAN", $"windows enumerated: {found.Count} EVE client(s)");
         _watcher.WatchProcesses(_eve.ClientProcessIds);       // title changes are only watched inside the EVE processes
+        _allClients = found;
+        RememberClientLabels(found);
+        var raw = EnabledOnly(found);                         // clients switched off under Disable Switcher are left alone
 
         if (!_scanDirty && SameClients(raw, _lastScan))
         {
@@ -619,7 +629,16 @@ public sealed class PreviewManager : IDisposable
         if (c is not null && c.Left.HasValue && c.Top.HasValue && IsOnScreen(c.Left.Value, c.Top.Value))
             return (c.Left.Value, c.Top.Value);
 
-        // no saved position: stack down the left edge (windows are created in client opening order)
+        // no saved position: stack down the left edge, or along the top (windows are created in client order)
+        if (_settings.StackDirection == "Across")
+        {
+            double left = 24;
+            foreach (var w in _windows.Values)
+            {
+                if (Math.Abs(w.Top - 24) < 1) left = Math.Max(left, w.Left + w.Width);
+            }
+            return (left, 24);
+        }
         double top = 24;
         foreach (var w in _windows.Values)
         {
@@ -704,6 +723,7 @@ public sealed class PreviewManager : IDisposable
         if (!_meta.TryGetValue(window, out var meta)) return;
         string key = meta.LayoutKey;
         double left = window.Left, top = window.Top;
+        Log.Debug("THUMB", $"thumbnail '{window.Client.CharacterName}' moved to {left:0},{top:0}");
         Persist(s =>
         {
             var c = s.GetOrAddCharacter(key);
@@ -727,6 +747,7 @@ public sealed class PreviewManager : IDisposable
     {
         int width = (int)Math.Round(window.ActualWidth);
         int height = (int)Math.Round(window.ActualHeight);
+        Log.Debug("THUMB", $"thumbnail '{window.Client.CharacterName}' resized to {width}x{height}");
 
         if (_settings.SameSizeForAll)
         {
@@ -759,15 +780,17 @@ public sealed class PreviewManager : IDisposable
             }
         });
 
-        double top = 24;
-        // stack in the order the clients were opened
+        double next = 24;
+        bool across = _settings.StackDirection == "Across";
+        // stack in client order: down the left edge, or along the top
         foreach (var client in _clients)
         {
             if (!_windows.TryGetValue(client.Handle, out var w)) continue;
-            w.Left = 24;
-            w.Top = top;
-            top += w.Height;
+            w.Left = across ? next : 24;
+            w.Top = across ? 24 : next;
+            next += across ? w.Width : w.Height;
         }
+        Log.Debug("THUMB", $"positions reset ({(across ? "along the top" : "down the left edge")})");
         Toast?.Invoke(AppInfo.Name, "Thumbnail positions were reset.");
     }
 
@@ -854,6 +877,7 @@ public sealed class PreviewManager : IDisposable
         UpdateBorders();
         ApplyVisibility();
         if (changed || force) ScheduleMinimise(changed);
+        if (changed || force) UpdatePerformance();
     }
 
     /// <summary>Minimise a client as soon as you switch away from it, if that is set for it.</summary>
@@ -988,6 +1012,9 @@ public sealed class PreviewManager : IDisposable
 
     // ---------- memory cleaner ----------
 
+    /// <summary>The last automatic clean (or why it is waiting), for the Memory page. "" until the first automatic check that matters.</summary>
+    public string AutoCleanNote { get; private set; } = "";
+
     /// <summary>The text of the last cleaning run ("14:32:10  Trimmed 87 programs; ..."), for the Memory page.</summary>
     public string LastMemoryResult { get; private set; } = "";
 
@@ -1037,14 +1064,26 @@ public sealed class PreviewManager : IDisposable
             int freePercent = status.IsValid ? 100 - status.LoadPercent : 100;
             bool trim = m.TrimEveryMinutes && now - _lastTrimAt >= TimeSpan.FromMinutes(Math.Max(1, m.TrimMinutes));
             bool cache = m.ClearCacheEvery && now - _lastCacheAt >= TimeSpan.FromMinutes(Math.Max(1, m.CacheMinutes));
-            if (!trim && m.TrimAboveUsage && status.LoadPercent >= m.TrimUsagePercent && now - _lastTrimAt >= ThresholdCooldown) trim = true;
+            if (!trim && m.TrimAboveUsage && status.LoadPercent >= m.TrimUsagePercent)
+            {
+                if (now - _lastTrimAt >= ThresholdCooldown) trim = true;
+                else AutoCleanNote = $"Memory at {status.LoadPercent}%. Next auto trim after {(_lastTrimAt + ThresholdCooldown).ToLocalTime():HH:mm:ss} (3 min gap).";
+            }
             if (!cache && m.ClearCacheAboveUsage && status.LoadPercent >= m.CacheUsagePercent && now - _lastCacheAt >= ThresholdCooldown) cache = true;
             Dictionary<string, int> limits = new();
             bool useLimits = m.UseProgramLimits && MemoryCleaner.TryParseLimits(m.ProgramLimits, out limits, out _) && limits.Count > 0;
             if (!trim && !cache && !useLimits) return;
             _memoryBusy = true;
             var messages = new List<string>();
-            if (trim) messages.Add((await TrimNowAsync(m)).Message);
+            if (trim)
+            {
+                var result = await TrimNowAsync(m);
+                messages.Add(result.Message);
+                var after = SampleMemory();
+                AutoCleanNote = $"{DateTime.Now:HH:mm:ss}  Auto trim at {status.LoadPercent}%: {result.Message}" +
+                                (after.IsValid ? $" Now {after.LoadPercent}%." : "");
+                Log.Debug("MEMORY", $"automatic trim at {status.LoadPercent}% -> {(after.IsValid ? after.LoadPercent + "%" : "?")}");
+            }
             if (useLimits)
             {
                 var overLimit = await TrimOverLimitsAsync(m, limits);
@@ -1357,10 +1396,45 @@ public sealed class PreviewManager : IDisposable
 
     // ---------- settings ----------
 
+    private string _loggedSettings = "";
+    private string _loggedState = "";
+
+    /// <summary>Detailed log: every setting that changed since the last time (name: old -> new).</summary>
+    private void LogChanges(string area, ref string before, object now)
+    {
+        string json = System.Text.Json.JsonSerializer.Serialize(now);
+        if (!Log.Verbose) { before = json; return; }
+        if (before.Length > 0 && before != json)
+        {
+            try
+            {
+                using var oldDoc = System.Text.Json.JsonDocument.Parse(before);
+                using var newDoc = System.Text.Json.JsonDocument.Parse(json);
+                foreach (var property in newDoc.RootElement.EnumerateObject())
+                {
+                    if (property.NameEquals("LogSalt")) continue;
+                    string newText = property.Value.GetRawText();
+                    string oldText = oldDoc.RootElement.TryGetProperty(property.Name, out var old) ? old.GetRawText() : "(none)";
+                    if (newText == oldText) continue;
+                    Log.Debug(area, newText.Length + oldText.Length > 240
+                        ? $"'{property.Name}' changed"
+                        : $"'{property.Name}': {oldText} -> {newText}");
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Debug(area, "couldn't compare settings: " + ex.Message);
+            }
+        }
+        before = json;
+    }
+
     public void ApplySettings()
     {
         _scanDirty = true;
         RegisterLogNames();
+        LogChanges("SETTINGS", ref _loggedSettings, _settings);
+        LogChanges("APPSTATE", ref _loggedState, _state);
         _scanTimer.Interval = TimeSpan.FromMilliseconds(Math.Clamp(_settings.RefreshMilliseconds, 500, 10000));
         LogSettings("settings applied");
 
@@ -1451,6 +1525,10 @@ public sealed class PreviewManager : IDisposable
             _settings.LogWatchConversationInvite,
             _settings.LogWatchDecloak,
             _settings.LogWatchFleetRegroup,
+            _settings.LogWatchWarpScram,
+            _settings.LogWatchWarpBubble,
+            _settings.LogWatchCloakFailed,
+            _settings.LogWatchFleetInvite,
             _settings.LogMiningIdleSeconds,
             keywords,
             _settings.ShowSystemName));
@@ -1467,6 +1545,7 @@ public sealed class PreviewManager : IDisposable
         }
 
         _recordingHotkey = false;
+        Log.Debug("CONFIG", "Configuration window opened");
         var dialog = new SettingsWindow(this);
         _settingsWindow = dialog;
         UpdateHotkeySuspension();        // paused (so the hotkey boxes can record any key) unless the hotkeys are set to keep working here
@@ -1475,6 +1554,7 @@ public sealed class PreviewManager : IDisposable
         // includes the thumbnails, so they could not be clicked (or moved) while Configuration was open.
         dialog.Closed += (_, _) =>
         {
+            Log.Debug("CONFIG", "Configuration window closed");
             _settingsWindow = null;
             _recordingHotkey = false;
             UpdateHotkeySuspension();
@@ -1575,6 +1655,11 @@ public sealed class PreviewManager : IDisposable
         SyncAdminTask();
         _state.Memory = disk.Memory.Clone();
         ConfigureMemoryTimer();
+        _state.SuspendHotkey = disk.SuspendHotkey;
+        _state.NextDesktopHotkey = disk.NextDesktopHotkey;
+        _state.PreviousDesktopHotkey = disk.PreviousDesktopHotkey;
+        _state.DisabledClients = new List<string>(disk.DisabledClients);
+        CopyPerformanceChoices(disk.Performance);
         Log.PerSessionFiles = disk.DebugLogMode == "PerSession";
         Log.Verbose = disk.DebugLogging;
 
@@ -1621,6 +1706,11 @@ public sealed class PreviewManager : IDisposable
         }
         _state.Memory = global.Memory.Clone();
         ConfigureMemoryTimer();
+        _state.SuspendHotkey = global.SuspendHotkey;
+        _state.NextDesktopHotkey = global.NextDesktopHotkey;
+        _state.PreviousDesktopHotkey = global.PreviousDesktopHotkey;
+        _state.DisabledClients = new List<string>(global.DisabledClients);
+        CopyPerformanceChoices(global.Performance);
         Log.PerSessionFiles = global.DebugLogMode == "PerSession";
         Log.Verbose = global.DebugLogging;
         if (_state.PinTrayIcon) TrayPinService.Promote();
@@ -1662,6 +1752,8 @@ public sealed class PreviewManager : IDisposable
     public void SwitchProfile(string name)
     {
         if (name.Equals(_state.ActiveProfile, StringComparison.OrdinalIgnoreCase) || !ProfileStore.Exists(name)) return;
+        Log.RegisterProfile(name);
+        Log.Debug("PROFILE", $"switching profile '{_state.ActiveProfile}' -> '{name}'");
 
         foreach (nint handle in _windows.Keys.ToList()) CloseWindow(handle, false);
         _inherit.Clear();
@@ -1728,6 +1820,8 @@ public sealed class PreviewManager : IDisposable
             Register(pair.Value, "Client " + slot, () => ActivateSlot(slot));
         }
 
+        Register(_state.NextDesktopHotkey, "Next desktop", () => SwitchDesktop(1));
+        Register(_state.PreviousDesktopHotkey, "Previous desktop", () => SwitchDesktop(-1));
         Register(_state.NextProfileHotkey, "Next profile", () => CycleProfile(1));
         Register(_state.PreviousProfileHotkey, "Previous profile", () => CycleProfile(-1));
         foreach (var pair in _state.ProfileHotkeys)
@@ -1736,14 +1830,56 @@ public sealed class PreviewManager : IDisposable
             Register(pair.Value, "Profile " + profile, () => SwitchProfile(profile));
         }
 
+        // the pause / resume hotkey lives on its own, so it keeps working while every other hotkey is paused
+        _toggleKeys.UnregisterAll();
+        if (!string.IsNullOrWhiteSpace(_state.SuspendHotkey))
+        {
+            if (_toggleKeys.Register(_state.SuspendHotkey, ToggleHotkeysSuspended)) Log.Debug("HOTKEY", $"registered '{_state.SuspendHotkey}' = Pause / resume hotkeys");
+            else invalid.Add("Pause / resume hotkeys: " + _state.SuspendHotkey);
+        }
+
         if (invalid.Count > 0) Log.Write("Hotkeys that couldn't be read: " + string.Join("; ", invalid));
     }
 
+    /// <summary>Pauses every hotkey (so the keys type normally) or turns them back on. A badge shows while they are paused.</summary>
     public void ToggleHotkeysSuspended()
     {
         HotkeysSuspended = !HotkeysSuspended;
         UpdateHotkeySuspension();
-        Toast?.Invoke(AppInfo.Name, HotkeysSuspended ? "Hotkeys are suspended." : "Hotkeys are back on.");
+        Log.Debug("HOTKEY", HotkeysSuspended ? "hotkeys paused" : "hotkeys resumed");
+        if (HotkeysSuspended)
+        {
+            if (_pausedBadge is null)
+            {
+                _pausedBadge = new StatusBadgeWindow("HOTKEYS PAUSED");
+                _pausedBadge.Show();
+            }
+        }
+        else
+        {
+            _pausedBadge?.Close();
+            _pausedBadge = null;
+        }
+    }
+
+    /// <summary>Next / previous Windows virtual desktop: sends Ctrl+Win+Right / Left.</summary>
+    private void SwitchDesktop(int direction)
+    {
+        const byte LCtrl = 0xA2, LWin = 0x5B, LShift = 0xA0, RShift = 0xA1, LAlt = 0xA4, RAlt = 0xA5;
+        const uint ExtendedKey = 0x1;
+        byte arrow = direction > 0 ? (byte)0x27 : (byte)0x25;
+        Log.Debug("DESKTOP", direction > 0 ? "next virtual desktop" : "previous virtual desktop");
+        NativeMethods.keybd_event(LCtrl, 0, 0, UIntPtr.Zero);
+        NativeMethods.keybd_event(LWin, 0, 0, UIntPtr.Zero);
+        // a held Alt or Shift (part of your own hotkey) would stop Windows recognising Ctrl+Win+arrow
+        foreach (byte held in new[] { LAlt, RAlt, LShift, RShift })
+        {
+            if (NativeMethods.GetAsyncKeyState(held) < 0) NativeMethods.keybd_event(held, 0, NativeMethods.KEYEVENTF_KEYUP, UIntPtr.Zero);
+        }
+        NativeMethods.keybd_event(arrow, 0, ExtendedKey, UIntPtr.Zero);
+        NativeMethods.keybd_event(arrow, 0, ExtendedKey | NativeMethods.KEYEVENTF_KEYUP, UIntPtr.Zero);
+        NativeMethods.keybd_event(LWin, 0, NativeMethods.KEYEVENTF_KEYUP, UIntPtr.Zero);
+        NativeMethods.keybd_event(LCtrl, 0, NativeMethods.KEYEVENTF_KEYUP, UIntPtr.Zero);
     }
 
     private bool IsCyclable(EveClientWindow client)
@@ -1757,7 +1893,7 @@ public sealed class PreviewManager : IDisposable
     private List<EveClientWindow> CurrentClients()
     {
         var list = _clients.Where(c => NativeMethods.IsWindow(c.Handle)).ToList();
-        if (list.Count == 0 || list.Count != _clients.Count) list = OrderClients(_eve.FindClients()).ToList();
+        if (list.Count == 0 || list.Count != _clients.Count) list = OrderClients(EnabledOnly(_eve.FindClients())).ToList();
         return list;
     }
 
@@ -1795,6 +1931,14 @@ public sealed class PreviewManager : IDisposable
         // another program it is just the last client you used, and that client must not be skipped: with one client (or one
         // client left that can be cycled to) the press used to do nothing at all while EVE wasn't in front.
         bool currentInFront = from == "focus" || from == "switch in progress";
+        if (Log.Verbose)
+        {
+            // everything needed to see why a press went where it did (or nowhere)
+            string order = string.Join(", ", all.Select((c, i) =>
+                $"#{i + 1} {(c.IsLoginScreen ? "[login]" : c.CharacterName)}{(IsCyclable(c) ? "" : " (skipped)")}{(NativeMethods.IsHungAppWindow(c.Handle) ? " (not responding)" : "")}"));
+            Log.Debug("SWITCH", $"cycle {(direction > 0 ? "next" : "previous")} pressed: window in front {Log.Win(NativeMethods.GetForegroundWindow())}; " +
+                                $"current {(start >= 0 ? "#" + (start + 1) : "none")} (from {from}, in front {currentInFront}); hotkeys only in EVE {_settings.HotkeysOnlyInEve}; order: {order}");
+        }
 
         int step = direction > 0 ? 1 : -1;
         int position = start >= 0 ? start : (direction > 0 ? -1 : 0);
@@ -1829,7 +1973,11 @@ public sealed class PreviewManager : IDisposable
 
             // one press = one switch. Only a client that has closed or frozen is stepped over; if Windows refused,
             // stop here instead of trying every other client in the same press.
-            if (how != "window gone" && how != "not responding") break;
+            if (how != "window gone" && how != "not responding")
+            {
+                Log.Debug("SWITCH", $"  Windows refused the switch ({how}): this press stops here on purpose");
+                break;
+            }
         }
 
         if (failed) Log.Debug("INFO", $"Cycle {way}: no switch");
@@ -1930,37 +2078,60 @@ public sealed class PreviewManager : IDisposable
         }
     }
 
+    /// <summary>The short name of each alert (used in the message and the log).</summary>
+    public static string AlertName(string kind) => kind switch
+    {
+        "attack" => "taking damage",
+        "mining" => "mining stopped",
+        "crystal" => "mining crystal broke",
+        "fleet-follow" => "warp follow",
+        "compression" => "compression done",
+        "conversation" => "conversation request",
+        "decloak" => "decloaked",
+        "regroup" => "fleet regroup",
+        "warp-scram" => "warp scrambled / disrupted",
+        "warp-bubble" => "in a warp bubble",
+        "cloak-failed" => "cloak failed",
+        "fleet-invite" => "fleet invite",
+        _ => "keyword"
+    };
+
     private void OnLogEvent(LogEvent e)
     {
-        if (!_settings.NotificationsEnabled) return;
+        if (!_settings.NotificationsEnabled)
+        {
+            Log.Debug("ALERT", $"'{e.Kind}' for '{e.Character}' not shown: notifications are off");
+            return;
+        }
 
         var client = _clients.FirstOrDefault(c => !c.IsLoginScreen &&
             c.CharacterName.Equals(e.Character, StringComparison.OrdinalIgnoreCase));
-        if (client is null) return;
-        if (_settings.NotifySkipActiveClient && client.Handle == _activeClient) return;
+        if (client is null)
+        {
+            Log.Debug("ALERT", $"'{e.Kind}' for '{e.Character}' not shown: that character has no client the switcher is using");
+            return;
+        }
+        if (_settings.NotifySkipActiveClient && client.Handle == _activeClient)
+        {
+            Log.Debug("ALERT", $"'{e.Kind}' for '{e.Character}' not shown: it is the client in front");
+            return;
+        }
 
         string key = client.CharacterName + "|" + e.Kind;
         var now = DateTime.UtcNow;
         if (_lastNotified.TryGetValue(key, out var last) &&
-            (now - last).TotalSeconds < Math.Max(0, _settings.NotifyCooldownSeconds)) return;
+            (now - last).TotalSeconds < Math.Max(0, _settings.NotifyCooldownSeconds))
+        {
+            Log.Debug("ALERT", $"'{e.Kind}' for '{e.Character}' not shown: cooldown");
+            return;
+        }
         _lastNotified[key] = now;
 
         string detail = e.Message.Length > 90 ? e.Message[..90] + "…" : e.Message;
-        string message = e.Kind switch
-        {
-            "attack" => $"{client.CharacterName} is under attack",
-            "mining" => $"{client.CharacterName} has stopped mining",
-            "crystal" => $"{client.CharacterName}: mining crystal broke",
-            "fleet-follow" => $"{client.CharacterName}: fleet warp follow",
-            "compression" => $"{client.CharacterName}: mining compression",
-            "conversation" => $"{client.CharacterName}: conversation request",
-            "decloak" => $"{client.CharacterName}: decloaked",
-            "regroup" => $"{client.CharacterName}: fleet regroup",
-            _ => $"{client.CharacterName}: {detail}"
-        };
+        string message = e.Kind == "keyword" ? $"{client.CharacterName}: {detail}" : $"{client.CharacterName}: {AlertName(e.Kind)}";
 
         _alertHex = _settings.NotifyBorderHex;
-        Deliver(_settings, message, client.Handle);
+        Deliver(_settings, message, client.Handle, e.Kind);
     }
 
     /// <summary>Sends a test alert using the given settings (so unsaved changes can be tried out).</summary>
@@ -1969,10 +2140,13 @@ public sealed class PreviewManager : IDisposable
         var client = _clients.FirstOrDefault(c => !c.IsLoginScreen) ?? _clients.FirstOrDefault();
         string name = client?.CharacterName ?? "Test";
         _alertHex = s.NotifyBorderHex;
-        Deliver(s, $"{name}: this is a test notification", client?.Handle ?? 0);
+        Deliver(s, $"{name}: this is a test notification", client?.Handle ?? 0, "");
     }
 
-    private void Deliver(AppSettings s, string message, nint handle)
+    /// <summary>The Test button next to a sound.</summary>
+    public void TestSound(string id, int volume) => _notify.Play(id, volume);
+
+    private void Deliver(AppSettings s, string message, nint handle, string kind)
     {
         if (s.NotifyFlashBorder && handle != 0 && _windows.ContainsKey(handle))
         {
@@ -1982,8 +2156,14 @@ public sealed class PreviewManager : IDisposable
             UpdateBorders();
         }
         if (s.NotifyToast) Toast?.Invoke(AppInfo.Name, message);
-        if (s.NotifySound) _notify.PlaySound(s.NotifySoundName, s.NotifySoundFile);
+        if (s.NotifySound)
+        {
+            string sound = kind.Length > 0 && s.AlertSounds.TryGetValue(kind, out var own) && !string.IsNullOrEmpty(own) ? own : s.NotifySoundName;
+            int volume = kind.Length > 0 && s.AlertVolumes.TryGetValue(kind, out int v) ? v : s.NotifyVolume;
+            _notify.Play(sound, volume, s.NotifySoundFile);
+        }
         if (s.NotifySpeak) _notify.Speak(message);
+        Log.Debug("ALERT", $"shown: {message} (flash {s.NotifyFlashBorder}, toast {s.NotifyToast}, sound {s.NotifySound}, speak {s.NotifySpeak})");
     }
 
     private void OnAlertTick()
@@ -2038,6 +2218,7 @@ public sealed class PreviewManager : IDisposable
             // _clients is IReadOnlyList; closing thumbnail windows and disabling Scan is sufficient.
             _clients = Array.Empty<EveClientWindow>();
             _clientHandles.Clear();
+            UpdatePerformance();
         }
         else
         {
@@ -2048,8 +2229,182 @@ public sealed class PreviewManager : IDisposable
         Log.Debug("SWITCH", _state.SwitcherEnabled ? "switcher enabled from the tray" : "switcher disabled from the tray");
     }
 
+    // ---------- switcher per client ----------
+
+    /// <summary>The key a client is remembered by: its account (works on the login screen too), otherwise its character.</summary>
+    public static string ClientKey(EveClientWindow c) =>
+        c.AccountSignature.Length > 0 ? "acct:" + c.AccountSignature : c.IsLoginScreen ? "" : "char:" + c.CharacterName;
+
+    private bool IsDisabled(EveClientWindow c)
+    {
+        if (_state.DisabledClients.Count == 0) return false;
+        string key = ClientKey(c);
+        if (key.Length > 0 && _state.DisabledClients.Contains(key, StringComparer.OrdinalIgnoreCase)) return true;
+        return !c.IsLoginScreen && _state.DisabledClients.Contains("char:" + c.CharacterName, StringComparer.OrdinalIgnoreCase);
+    }
+
+    private IReadOnlyList<EveClientWindow> EnabledOnly(IReadOnlyList<EveClientWindow> clients) =>
+        _state.DisabledClients.Count == 0 ? clients : clients.Where(c => !IsDisabled(c)).ToList();
+
+    /// <summary>Remembers which character each account last showed, so the menu can name it (even on the login screen).</summary>
+    private void RememberClientLabels(IReadOnlyList<EveClientWindow> clients)
+    {
+        bool changed = false;
+        foreach (var c in clients)
+        {
+            if (c.IsLoginScreen) continue;
+            string key = ClientKey(c);
+            if (key.Length == 0) continue;
+            if (_state.ClientLabels.TryGetValue(key, out var known) && known == c.CharacterName) continue;
+            _state.ClientLabels[key] = c.CharacterName;
+            changed = true;
+        }
+        if (changed) ProfileStore.SaveState(_state);
+    }
+
+    /// <summary>The list under Disable Switcher: every open client, then any switched-off client that is closed.</summary>
+    public IReadOnlyList<(string Key, string Text, bool Disabled)> SwitcherClientList()
+    {
+        var list = new List<(string Key, string Text, bool Disabled)>();
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        int login = 0;
+        foreach (var c in _allClients)
+        {
+            string key = ClientKey(c);
+            string text;
+            if (c.IsLoginScreen)
+            {
+                login++;
+                text = _state.ClientLabels.TryGetValue(key, out var name) ? name + " (login screen)" : $"Login screen {login}";
+            }
+            else text = c.CharacterName;
+            if (key.Length == 0)
+            {
+                list.Add(("", text + " (can't be told apart yet)", false));
+                continue;
+            }
+            if (!seen.Add(key)) continue;
+            list.Add((key, text, IsDisabled(c)));
+        }
+        foreach (string key in _state.DisabledClients)
+        {
+            if (!seen.Add(key)) continue;
+            string text = _state.ClientLabels.TryGetValue(key, out var name) ? name : key.StartsWith("char:") ? key[5..] : "Closed client";
+            list.Add((key, text + " (closed)", true));
+        }
+        return list;
+    }
+
+    /// <summary>Switches the switcher off (or back on) for one client.</summary>
+    public void SetClientDisabled(string key, bool disabled)
+    {
+        if (key.Length == 0) return;
+        _state.DisabledClients.RemoveAll(k => k.Equals(key, StringComparison.OrdinalIgnoreCase));
+        if (disabled) _state.DisabledClients.Add(key);
+        ProfileStore.SaveState(_state);
+        string name = _state.ClientLabels.TryGetValue(key, out var n) ? n : "a login screen";
+        Log.Debug("SWITCH", $"switcher {(disabled ? "off" : "on")} for '{name}'");
+        _settingsWindow?.FollowDisabledClients(_state.DisabledClients);
+        Refresh();
+    }
+
+    // ---------- performance ----------
+
+    private void UpdatePerformance()
+    {
+        var pids = new HashSet<uint>();
+        foreach (var c in _clients)
+        {
+            NativeMethods.GetWindowThreadProcessId(c.Handle, out uint pid);
+            if (pid != 0) pids.Add(pid);
+        }
+        uint front = 0;
+        if (_activeClient != 0) NativeMethods.GetWindowThreadProcessId(_activeClient, out front);
+        if (_perf.Update(_state.Performance, pids, front)) ProfileStore.SaveState(_state);
+    }
+
+    /// <summary>Takes the user's choices from Configuration, keeping what the app needs to put things back.</summary>
+    private void CopyPerformanceChoices(PerformanceSettings from)
+    {
+        var p = _state.Performance;
+        p.Enabled = from.Enabled;
+        p.HighPerformancePlan = from.HighPerformancePlan;
+        p.RaiseFrontClient = from.RaiseFrontClient;
+        p.LowerBackgroundClients = from.LowerBackgroundClients;
+        p.EfficiencyBackground = from.EfficiencyBackground;
+        UpdatePerformance();
+    }
+
+    /// <summary>The tray switch: turns every performance option off (putting things back) or on again.</summary>
+    public void TogglePerformance()
+    {
+        _state.Performance.Enabled = !_state.Performance.Enabled;
+        Log.Debug("PERF", _state.Performance.Enabled ? "performance options on (tray)" : "performance options off (tray)");
+        if (!_state.Performance.Enabled) _perf.RestoreAll(_state.Performance);
+        UpdatePerformance();
+        ProfileStore.SaveState(_state);
+        _settingsWindow?.FollowPerformance(_state.Performance.Enabled);
+    }
+
+    // ---------- saved layouts ----------
+
+    /// <summary>The client order and every thumbnail's spot right now, as a layout with the given name.</summary>
+    public SavedLayout CaptureLayout(string name)
+    {
+        var layout = new SavedLayout
+        {
+            Name = name,
+            ClientOrderMode = _settings.ClientOrderMode,
+            ClientOrder = new List<string>(_settings.ClientOrder),
+            SavedAccountSlots = new Dictionary<string, int>(_settings.SavedAccountSlots, StringComparer.OrdinalIgnoreCase),
+            PositionMode = _settings.PositionMode
+        };
+        foreach (var pair in _settings.Characters)
+        {
+            var c = pair.Value;
+            if (!c.Left.HasValue && c.Width <= 0) continue;
+            layout.Boxes[pair.Key] = new LayoutBox { Left = c.Left, Top = c.Top, Width = c.Width, Height = c.Height };
+        }
+        Log.Debug("LAYOUT", $"captured layout '{name}' ({layout.Boxes.Count} thumbnails)");
+        return layout;
+    }
+
+    /// <summary>Saves the list of layouts straight away (Configuration > Client Order And Positions).</summary>
+    public void StoreLayouts(List<SavedLayout> layouts)
+    {
+        var copy = System.Text.Json.JsonSerializer.Deserialize<List<SavedLayout>>(System.Text.Json.JsonSerializer.Serialize(layouts)) ?? new List<SavedLayout>();
+        Persist(s => s.Layouts = copy);
+    }
+
+    /// <summary>Puts a saved layout in place: the client order and every thumbnail's spot. Saved straight away.</summary>
+    public void ApplyLayout(SavedLayout layout)
+    {
+        Log.Debug("LAYOUT", $"loading layout '{layout.Name}' ({layout.Boxes.Count} thumbnails)");
+        Persist(s =>
+        {
+            s.ClientOrderMode = layout.ClientOrderMode;
+            s.ClientOrder = new List<string>(layout.ClientOrder);
+            s.SavedAccountSlots = new Dictionary<string, int>(layout.SavedAccountSlots, StringComparer.OrdinalIgnoreCase);
+            s.PositionMode = layout.PositionMode;
+            s.ClientOrderResetPending = false;
+            foreach (var pair in layout.Boxes)
+            {
+                var c = s.GetOrAddCharacter(pair.Key);
+                c.Left = pair.Value.Left;
+                c.Top = pair.Value.Top;
+                c.Width = pair.Value.Width;
+                c.Height = pair.Value.Height;
+            }
+        });
+        foreach (var pair in _meta) Relayout(pair.Key, pair.Value, pair.Value.LayoutKey);
+        Refresh();
+    }
+
     public void Dispose()
     {
+        if (_perf.RestoreAll(_state.Performance)) ProfileStore.SaveState(_state);
+        _pausedBadge?.Close();
+        _toggleKeys.Dispose();
         Microsoft.Win32.SystemEvents.DisplaySettingsChanged -= OnDisplaySettingsChanged;
         _scanTimer.Stop();
         _hideTimer.Stop();
