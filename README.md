@@ -6,6 +6,19 @@ A lightweight Windows utility for permanent live previews of your running EVE On
 
 **Run it:** double-click `EVE-IW-Preview.exe` in this folder (needs the .NET 8 Desktop Runtime, already installed if you have the .NET SDK). It runs in the **system tray only** (no taskbar button): right-click the tray icon for the menu, double-click it for Configuration.
 
+## v0.19.16
+- **Detailed Logging is free while off:** the keyboard and mouse hooks no longer build a trace line on every key press and click.
+- **Updater fixed:** `update-preview.ps1` accepts complete source packages and targeted overlay packages, checks the ZIP version matches the project before building, and moves the applied ZIP into the versions folder.
+
+## v0.19.15
+- **Simplified automatic cache cleaning:** the "only while free memory is below" option was removed from Memory settings.
+
+## v0.19.14
+- **GitHub production release** through the automated release pipeline.
+
+## v0.19.13
+- Reissued the named Events To Watch alerts as a complete project package.
+
 ## v0.19.11
 - **Full Detailed Logging:** while enabled, the debug log records the full operational trace: every scan, focus/title event, handled hotkey input, EVE log-monitor line, memory decision, settings action, lifecycle event and exception. Privacy scrubbing and background writing remain in place.
 
@@ -271,6 +284,6 @@ dotnet build -c Release
 The AUTZ IronWorks emblem is built in: `src\AUTZ.IronWorks.Preview\Assets\app.ico` (exe, tray and title bars) and `logo.png` (shown inside the app windows). To change it, replace those two files and rebuild.
 
 ## Update workflow
-`update-preview.ps1` replaces the repo with the newest `EVE-IW-Preview-v*.zip` (or `AUTZ-IronWorks-Preview-v*.zip`, the name used before the rename), finds the repo and the versions folder by itself, keeps Git history, LICENSE and the Assets folder (icon + logo), builds, publishes the exe to the repo root, and stages the changes. It does not commit or push. If the app is open it is left running; Windows lets the running exe be renamed, so the new exe takes its place and is used the next time you open the app. Always launch the exe in the repo root (not one from a `bin` folder).
+`update-preview.ps1` (run from the repo root on the `release` branch) takes the newest `EVE-IW-Preview-vX.Y.Z.zip` from Downloads. A ZIP with `.update-overlay.json` copies only the files it lists; a complete source package copies every file it contains. Nothing is deleted unless you rerun with `-AllowDeletes`. It checks the project version matches the ZIP, builds and publishes the exe to the repo root, moves the ZIP into the versions folder, starts the app if it isn't already running, and shows the Git changes. It does not commit or push.
 
 

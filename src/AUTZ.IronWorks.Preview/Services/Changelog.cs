@@ -7,6 +7,11 @@ internal static class Changelog
 {
     public static readonly ChangelogEntry[] Entries =  
       {
+        new("0.19.16", "Lighter detailed logging and a working updater", new[]
+        {
+            "Detailed Logging costs nothing again while it is off: the keyboard and mouse hooks no longer build a log line on every key press and click.",
+            "update-preview.ps1 accepts complete source packages as well as targeted overlay packages, checks the ZIP version matches the project before building, and moves the applied ZIP from Downloads into the versions folder."
+        }),
         new("0.19.15", "Simplified automatic cache cleaning", new[]
         {
             "Removed the 'only while free memory is below' option from Memory settings.",

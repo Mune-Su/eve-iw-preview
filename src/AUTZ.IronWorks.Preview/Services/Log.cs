@@ -178,14 +178,25 @@ internal static class Log
     /// <summary>High-volume operational trace. Completely inert while Detailed Logging is off.</summary>
     public static void Trace(string area, string text)
     {
-      if (!_verbose) return;
-      Queue.Enqueue((_activePath, Stamp(area, text)));
-      Signal.Set();
+        if (!_verbose) return;
+        Queue.Enqueue((_activePath, Stamp(area, text)));
+        Signal.Set();
+    }
+
+    /// <summary>
+    /// Same, for Log.Trace($"..."): while Detailed Logging is off the text is never built and nothing inside the braces is
+    /// evaluated. The keyboard and mouse hooks call this on every key press and click, so it must cost nothing when off.
+    /// </summary>
+    public static void Trace(string area, DebugLine line)
+    {
+        if (!_verbose) return;
+        Queue.Enqueue((_activePath, Stamp(area, line.Text)));
+        Signal.Set();
     }
 
     public static void TraceException(string source, Exception exception)
     {
-      if (_verbose) Trace("EXCEPT", source + ": " + exception);
+        if (_verbose) Trace("EXCEPT", source + ": " + exception);
     }
 
     private static string Stamp(string area, string text) =>
