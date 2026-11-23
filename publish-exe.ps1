@@ -1,84 +1,45 @@
-# publish-exe.ps1 - builds a single-file exe and puts it in the repo root as EVE-IW-Preview.exe
+# publish-exe.ps1 - builds the app and the installer, then opens the installer.
+# (The file name is kept so update-preview.ps1, including older copies of it, keeps working.)
 #
-# A running copy is NEVER closed or crashed. Windows won't let you overwrite a running exe, but it does
-# let you rename it. So if the app is open, the running exe is renamed to "...exe.old-<time>" (it keeps
-# running from that file) and the new exe takes its place. The new version starts the next time you
-# open the app. Old copies are cleaned up automatically once nothing is running them.
-#
-# Earlier versions were called AUTZ.IronWorks.Preview.exe. That file is retired here the same way.
-$root = $PSScriptRoot
-$proj = Join-Path $root 'src\AUTZ.IronWorks.Preview\AUTZ.IronWorks.Preview.csproj'
-$tmp  = Join-Path $root 'publish'
-$name = 'EVE-IW-Preview'
-$exe  = Join-Path $root "$name.exe"
-$new  = "$exe.new"
-$earlierNames = 'AUTZ.IronWorks.Preview', 'AUTZ IronWorks Preview'
+# EVE-IW-Preview is installed with EVE-IW-Preview-Setup.exe. There is no portable exe in the repo any more:
+# a leftover EVE-IW-Preview.exe in this folder is removed once the build has succeeded (or stepped aside
+# if it is still running, which Windows allows).
+param([switch]$NoLaunch)
 
-if (Test-Path $tmp) { Remove-Item $tmp -Recurse -Force -ErrorAction SilentlyContinue }
-dotnet publish $proj -c Release -r win-x64 --self-contained false -p:PublishSingleFile=true -p:DebugType=none -p:DebugSymbols=false -o $tmp --nologo -v q
-if ($LASTEXITCODE -ne 0) {
-  Write-Host "Publish FAILED - copy the first error above and send it to me. Your running app (if any) was not touched." -ForegroundColor Red
-  exit 1
+$root    = $PSScriptRoot
+$builder = Join-Path $root 'installer\build-installer.ps1'
+$setup   = Join-Path $root 'installer-output\EVE-IW-Preview-Setup.exe'
+
+& $builder -InstallInnoIfMissing
+$code = $LASTEXITCODE
+if ($code -ne 0 -and $code -ne 3) {
+    Write-Host 'Build FAILED - copy the first error above and send it to me.' -ForegroundColor Red
+    exit 1
 }
 
-$built = Join-Path $tmp "$name.exe"
-if (-not (Test-Path $built)) {
-  Write-Host "Publish finished but $built wasn't created. Contents of $tmp :" -ForegroundColor Red
-  Get-ChildItem $tmp | ForEach-Object { Write-Host "  $($_.Name)" }
-  exit 1
-}
-
-# clean up leftovers from earlier updates (silently skips any that are still running)
-foreach ($n in @($name) + $earlierNames) {
-  Get-ChildItem $root -Filter "$n.exe.old*" -ErrorAction SilentlyContinue | Remove-Item -Force -ErrorAction SilentlyContinue
-}
-
-# retire the exe from before the rename (steps aside if it's running, otherwise deleted)
-foreach ($n in $earlierNames) {
-  $oldExe = Join-Path $root "$n.exe"
-  if (Test-Path $oldExe) {
+# retire the old portable exe and leftovers from earlier updates
+$oldExe = Join-Path $root 'EVE-IW-Preview.exe'
+Get-ChildItem $root -Filter 'EVE-IW-Preview.exe.*' -ErrorAction SilentlyContinue | Remove-Item -Force -ErrorAction SilentlyContinue
+if (Test-Path $oldExe) {
     try {
-      if (Get-Process -Name $n -ErrorAction SilentlyContinue) {
-        Rename-Item $oldExe ("$n.exe.old-{0}" -f (Get-Date -Format 'yyyyMMddHHmmss')) -ErrorAction Stop
-      } else {
         Remove-Item $oldExe -Force -ErrorAction Stop
-      }
-    } catch {
-      Write-Host "Couldn't remove the old $n.exe: $($_.Exception.Message)" -ForegroundColor Yellow
+        Write-Host 'Removed the old portable EVE-IW-Preview.exe from the repo folder.' -ForegroundColor Cyan
     }
-  }
-}
-
-Copy-Item $built $new -Force
-
-$running = [bool](Get-Process -Name $name -ErrorAction SilentlyContinue)
-$applied = $false
-try {
-  if (Test-Path $exe) {
-    if ($running) {
-      # step the running exe aside; it keeps running from the renamed file
-      Rename-Item $exe ("$name.exe.old-{0}" -f (Get-Date -Format 'yyyyMMddHHmmss')) -ErrorAction Stop
-    } else {
-      Remove-Item $exe -Force -ErrorAction Stop
+    catch {
+        try {
+            Rename-Item $oldExe ('EVE-IW-Preview.exe.old-{0}' -f (Get-Date -Format 'yyyyMMddHHmmss')) -ErrorAction Stop
+            Write-Host 'The old portable EVE-IW-Preview.exe is still running, so it was stepped aside. Close it once Setup asks.' -ForegroundColor Cyan
+        }
+        catch {
+            Write-Host "Couldn't remove the old portable EVE-IW-Preview.exe: $($_.Exception.Message)" -ForegroundColor Yellow
+        }
     }
-  }
-  Move-Item $new $exe -Force -ErrorAction Stop
-  $applied = $true
-}
-catch {
-  Write-Host "Couldn't swap the exe: $($_.Exception.Message)" -ForegroundColor Red
-  Write-Host "The new build is saved as: $new" -ForegroundColor Yellow
-  Write-Host "Close the app, delete $name.exe (if present), then rename that file to $name.exe."
-  exit 1
 }
 
-if ($applied) {
-  $kb = [math]::Round((Get-Item $exe).Length / 1KB)
-  Write-Host "Done: $exe  ($kb KB)" -ForegroundColor Green
-  if ($running) {
-    Write-Host "The app is open and was left running. The update applies next time you open it." -ForegroundColor Cyan
-  }
+if ($code -eq 3) { exit 0 }
+
+if (-not $NoLaunch -and (Test-Path $setup)) {
+    Write-Host 'Opening the installer...' -ForegroundColor Cyan
+    Start-Process $setup
 }
 exit 0
-
-

@@ -19,7 +19,7 @@ jobs:
 
     steps:
       - name: Check out tagged source
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: 0
 
@@ -33,7 +33,7 @@ jobs:
           }
 
       - name: Set up .NET 8
-        uses: actions/setup-dotnet@v4
+        uses: actions/setup-dotnet@v5
         with:
           dotnet-version: "8.0.x"
 
@@ -62,7 +62,9 @@ jobs:
             ".\src\AUTZ.IronWorks.Preview\AUTZ.IronWorks.Preview.csproj",
             ".\src\AUTZ.IronWorks.Preview\Core\MemoryTrim.cs",
             ".\src\AUTZ.IronWorks.Preview\Services\PreviewManager.cs",
-            ".\src\AUTZ.IronWorks.Preview\Services\LogMonitorService.cs"
+            ".\src\AUTZ.IronWorks.Preview\Services\LogMonitorService.cs",
+            ".\installer\EVE-IW-Preview.iss",
+            ".\installer\build-installer.ps1"
           )
           $missingFiles = @($requiredFiles | Where-Object { -not (Test-Path $_) })
           if ($missingFiles.Count -gt 0) {
@@ -78,64 +80,27 @@ jobs:
         shell: pwsh
         run: dotnet build ".\AUTZ.IronWorks.Preview.sln" --configuration Release --no-restore --nologo
 
-      - name: Publish Windows executable
+      - name: Build installer
         shell: pwsh
         run: |
-          dotnet publish ".\src\AUTZ.IronWorks.Preview\AUTZ.IronWorks.Preview.csproj" `
-            --configuration Release `
-            --runtime win-x64 `
-            --self-contained false `
-            -p:PublishSingleFile=true `
-            -p:DebugType=none `
-            -p:DebugSymbols=false `
-            --output ".\published" `
-            --nologo
-
-      - name: Validate executable
-        shell: pwsh
-        run: |
-          $exe = ".\published\EVE-IW-Preview.exe"
-          $expectedVersion = "${{ steps.version.outputs.version }}"
-          if (-not (Test-Path $exe)) { throw "EVE-IW-Preview.exe was not created." }
-          $actualVersion = (Get-Item $exe).VersionInfo.ProductVersion
-          if (-not $actualVersion.StartsWith($expectedVersion)) {
-            throw "Executable version '$actualVersion' does not match '$expectedVersion'."
-          }
-
-      - name: Create release package
-        shell: pwsh
-        run: |
-          $version = "${{ steps.version.outputs.version }}"
-          $packageFolder = ".\EVE-IW-Preview-v$version"
-          $asset = ".\EVE-IW-Preview-Windows-x64.zip"
-          New-Item -ItemType Directory -Path $packageFolder -Force | Out-Null
-          Copy-Item ".\published\EVE-IW-Preview.exe" "$packageFolder\EVE-IW-Preview.exe"
-          Copy-Item ".\README.md" "$packageFolder\README.md"
-          @"
-          EVE-IW-Preview v$version
-
-          1. Extract the ZIP into a permanent folder.
-          2. Run EVE-IW-Preview.exe.
-          3. Do not run the application from inside the ZIP.
-
-          Requires Windows x64 and the .NET 8 Desktop Runtime.
-          "@ | Set-Content "$packageFolder\INSTALL.txt" -Encoding UTF8
-          Compress-Archive -Path $packageFolder -DestinationPath $asset -Force
-          if (-not (Test-Path $asset)) { throw "Release ZIP was not created." }
+          .\installer\build-installer.ps1 -Version "${{ steps.version.outputs.version }}" -InstallInnoIfMissing
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Generate SHA-256 checksum
         shell: pwsh
         run: |
-          $hash = Get-FileHash ".\EVE-IW-Preview-Windows-x64.zip" -Algorithm SHA256
-          "$($hash.Hash)  EVE-IW-Preview-Windows-x64.zip" | Set-Content ".\SHA256SUMS.txt" -Encoding ASCII
+          $setup = ".\installer-output\EVE-IW-Preview-Setup.exe"
+          if (-not (Test-Path $setup)) { throw "Installer was not created." }
+          $hash = Get-FileHash $setup -Algorithm SHA256
+          "$($hash.Hash)  EVE-IW-Preview-Setup.exe" | Set-Content ".\installer-output\SHA256SUMS.txt" -Encoding ASCII
 
       - name: Create GitHub release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           name: EVE-IW-Preview ${{ github.ref_name }}
           prerelease: ${{ steps.version.outputs.prerelease }}
           generate_release_notes: true
           fail_on_unmatched_files: true
           files: |
-            EVE-IW-Preview-Windows-x64.zip
-            SHA256SUMS.txt
+            installer-output/EVE-IW-Preview-Setup.exe
+            installer-output/SHA256SUMS.txt

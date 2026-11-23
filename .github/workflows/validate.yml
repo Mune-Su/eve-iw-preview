@@ -1,4 +1,4 @@
-﻿name: Validate EVE-IW-Preview
+name: Validate EVE-IW-Preview
 
 on:
   push:
@@ -15,10 +15,10 @@ jobs:
 
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up .NET 8
-        uses: actions/setup-dotnet@v4
+        uses: actions/setup-dotnet@v5
         with:
           dotnet-version: "8.0.x"
 
@@ -28,7 +28,9 @@ jobs:
           $requiredFiles = @(
               ".\AUTZ.IronWorks.Preview.sln",
               ".\src\AUTZ.IronWorks.Preview\AUTZ.IronWorks.Preview.csproj",
-              ".\src\AUTZ.IronWorks.Preview\Core\MemoryTrim.cs"
+              ".\src\AUTZ.IronWorks.Preview\Core\MemoryTrim.cs",
+              ".\installer\EVE-IW-Preview.iss",
+              ".\installer\build-installer.ps1"
           )
 
           $missingFiles = @(
@@ -56,3 +58,9 @@ jobs:
           --configuration Release
           --no-restore
           --nologo
+
+      - name: Build installer
+        shell: pwsh
+        run: |
+          .\installer\build-installer.ps1 -InstallInnoIfMissing
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

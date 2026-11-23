@@ -82,7 +82,8 @@ try {
     $projVersion = @($proj.Project.PropertyGroup | ForEach-Object { $_.Version } | Where-Object { $_ }) | Select-Object -First 1
     if ($projVersion -ne $Version) { Stop-Update "Project version '$projVersion' doesn't match the ZIP version '$Version'. Build stopped." }
 
-    Write-Host 'Building and publishing...' -ForegroundColor Cyan
+    # builds the app and installer-output\EVE-IW-Preview-Setup.exe, then opens the installer
+    Write-Host 'Building the app and the installer...' -ForegroundColor Cyan
     & '.\publish-exe.ps1'; if ($LASTEXITCODE) { Stop-Update 'Build failed.' }
     $Built = $true
 } finally { if (Test-Path $Temp) { Remove-Item $Temp -Recurse -Force -ErrorAction SilentlyContinue } }
@@ -94,13 +95,8 @@ if ($Built) {
         Write-Host "Moved $($Selected.File.Name) to $Versions" -ForegroundColor Cyan
     } catch { Write-Host "Couldn't move the ZIP out of Downloads: $($_.Exception.Message)" -ForegroundColor Yellow }
 
-    $Exe = Join-Path $Repo 'EVE-IW-Preview.exe'
-    if (Get-Process -Name 'EVE-IW-Preview' -ErrorAction SilentlyContinue) {
-        Write-Host 'The app is already running; the new version starts next time you open it.' -ForegroundColor Cyan
-    } elseif (Test-Path $Exe) { Start-Process $Exe -WorkingDirectory $Repo }
-
     Write-Host ''; Write-Host 'Changes (A = added, M = modified, D = deleted, R = renamed):' -ForegroundColor Cyan
     git status --short
     Write-Host ''; Write-Host "If anything in src/ shows as D (deleted) that you didn't expect, stop and check. Otherwise:" -ForegroundColor Cyan
-    Write-Host '  git diff'; Write-Host '  git add --all'; Write-Host '  git status'; Write-Host "  git commit -m `"v$Version`""; Write-Host '  ppush'
+    Write-Host '  git diff'; Write-Host '  git add --all'; Write-Host "  git commit -m `"v$Version`""; Write-Host '  ppush'
 }

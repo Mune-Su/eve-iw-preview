@@ -4,7 +4,12 @@
 
 A lightweight Windows utility for permanent live previews of your running EVE Online clients and instant client switching.
 
-**Run it:** double-click `EVE-IW-Preview.exe` in this folder (needs the .NET 8 Desktop Runtime, already installed if you have the .NET SDK). It runs in the **system tray only** (no taskbar button): right-click the tray icon for the menu, double-click it for Configuration.
+**Install it:** download `EVE-IW-Preview-Setup.exe` from the latest GitHub release and run it. It installs for your user account only (no admin rights), adds EVE-IW-Preview to Start and to Programs and Features, and upgrades in place when you run a newer Setup; your settings are kept. It needs the .NET 8 Desktop Runtime and warns you if it is missing. Setup asks you to close the app first if it is running. EVE-IW-Preview runs in the **system tray only** (no taskbar button): right-click the tray icon for the menu, double-click it for Configuration.
+
+## v0.19.17
+- **Proper installer:** `EVE-IW-Preview-Setup.exe` installs per user, appears in Programs and Features with its version, adds a Start menu entry and an uninstaller, and upgrades in place. Settings and profiles are kept.
+- **No portable exe:** the exe is no longer kept in the repo or attached to releases. The GitHub release ships the Setup and its SHA-256 checksum, and the test pipeline now builds the installer too.
+- **Pipelines:** the GitHub Actions steps use their Node 24 versions, which removes the Node.js 20 warning.
 
 ## v0.19.16
 - **Detailed Logging is free while off:** the keyboard and mouse hooks no longer build a trace line on every key press and click.
@@ -284,6 +289,9 @@ dotnet build -c Release
 The AUTZ IronWorks emblem is built in: `src\AUTZ.IronWorks.Preview\Assets\app.ico` (exe, tray and title bars) and `logo.png` (shown inside the app windows). To change it, replace those two files and rebuild.
 
 ## Update workflow
-`update-preview.ps1` (run from the repo root on the `release` branch) takes the newest `EVE-IW-Preview-vX.Y.Z.zip` from Downloads. A ZIP with `.update-overlay.json` copies only the files it lists; a complete source package copies every file it contains. Nothing is deleted unless you rerun with `-AllowDeletes`. It checks the project version matches the ZIP, builds and publishes the exe to the repo root, moves the ZIP into the versions folder, starts the app if it isn't already running, and shows the Git changes. It does not commit or push.
+`update-preview.ps1` (run from the repo root on the `release` branch) takes the newest `EVE-IW-Preview-vX.Y.Z.zip` from Downloads. A ZIP with `.update-overlay.json` copies only the files it lists; a complete source package copies every file it contains. Nothing is deleted unless you rerun with `-AllowDeletes`. It checks the project version matches the ZIP, builds the app and `installer-output\EVE-IW-Preview-Setup.exe` (installing Inno Setup with winget if it is missing), opens the installer, moves the ZIP into the versions folder, and shows the Git changes. It does not commit or push. Close the app when Setup asks.
+
+## Release pipeline
+Every push to `release` runs the validation workflow, which restores, builds and builds the installer. Pushing a `vX.Y.Z` tag runs the release workflow, which builds the installer and publishes `EVE-IW-Preview-Setup.exe` and `SHA256SUMS.txt` as the GitHub release.
 
 

@@ -7,6 +7,13 @@ internal static class Changelog
 {
     public static readonly ChangelogEntry[] Entries =  
       {
+        new("0.19.17", "Proper installer", new[]
+        {
+            "EVE-IW-Preview now installs properly: a per-user Setup adds it to Start and to Programs and Features with its version number, includes an uninstaller, and upgrades in place. Your settings and profiles are kept.",
+            "The portable exe is gone from the repo and from the GitHub release, which now ships EVE-IW-Preview-Setup.exe and its checksum.",
+            "update-preview.ps1 builds the installer and opens it, still taking the newest ZIP from Downloads.",
+            "The GitHub pipelines use the Node 24 versions of their actions, so the Node.js 20 warning is gone."
+        }),
         new("0.19.16", "Lighter detailed logging and a working updater", new[]
         {
             "Detailed Logging costs nothing again while it is off: the keyboard and mouse hooks no longer build a log line on every key press and click.",
