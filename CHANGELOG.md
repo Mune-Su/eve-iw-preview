@@ -2,6 +2,12 @@
 
 Every version of EVE-IW-Preview, newest first. The app shows the same list under About > What's New.
 
+## v0.19.20 — Desktop icon option
+
+- The installer now offers to create a desktop icon. It's unticked by default.
+- Updates keep what you chose the first time.
+- update-preview.ps1 now only checks the code builds.
+
 ## v0.19.19 — Silent updates and alert cooldowns
 
 - Updates install by themselves: a new version is downloaded in the background and installed silently the next time the app starts.

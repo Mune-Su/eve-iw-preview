@@ -49,8 +49,13 @@ WizardStyle=modern
 Source: "{#SourceExe}"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\README.md"; DestDir: "{app}"; Flags: ignoreversion
 
+[Tasks]
+; Unticked on a first install. An update keeps what was chosen the first time (Setup remembers it), so a silent update never adds or removes the icon.
+Name: "desktopicon"; Description: "Create a desktop icon"; Flags: unchecked
+
 [Icons]
 Name: "{autoprograms}\EVE-IW-Preview"; Filename: "{app}\EVE-IW-Preview.exe"
+Name: "{autodesktop}\EVE-IW-Preview"; Filename: "{app}\EVE-IW-Preview.exe"; Tasks: desktopicon
 
 [Run]
 Filename: "{app}\EVE-IW-Preview.exe"; Description: "Start EVE-IW-Preview"; Flags: nowait postinstall skipifsilent

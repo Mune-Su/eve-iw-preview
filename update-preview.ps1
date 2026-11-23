@@ -82,9 +82,9 @@ try {
     $projVersion = @($proj.Project.PropertyGroup | ForEach-Object { $_.Version } | Where-Object { $_ }) | Select-Object -First 1
     if ($projVersion -ne $Version) { Stop-Update "Project version '$projVersion' doesn't match the ZIP version '$Version'. Build stopped." }
 
-    # builds the app and installer-output\EVE-IW-Preview-Setup.exe (installs Inno Setup if it's missing)
-    Write-Host 'Building the app and the installer...' -ForegroundColor Cyan
-    & '.\installer\build-installer.ps1' -InstallInnoIfMissing
+    # compile check only. Your own PC updates from the GitHub Latest release, like everyone else's.
+    Write-Host 'Checking the code builds...' -ForegroundColor Cyan
+    dotnet build '.\AUTZ.IronWorks.Preview.sln' --configuration Release --nologo -v q
     if ($LASTEXITCODE -ne 0) { Stop-Update 'Build failed. Copy the first error above and send it to me.' }
     $Built = $true
 } finally { if (Test-Path $Temp) { Remove-Item $Temp -Recurse -Force -ErrorAction SilentlyContinue } }
@@ -96,16 +96,8 @@ if ($Built) {
         Write-Host "Moved $($Selected.File.Name) to $Versions" -ForegroundColor Cyan
     } catch { Write-Host "Couldn't move the ZIP out of Downloads: $($_.Exception.Message)" -ForegroundColor Yellow }
 
-    # leave the Setup for the app: it installs silently the next time the app starts
-    $Setup = Join-Path $Repo 'installer-output\EVE-IW-Preview-Setup.exe'
-    if (Test-Path $Setup) {
-        $Updates = Join-Path $env:LOCALAPPDATA 'EVE-IronWorks-Preview\updates'
-        New-Item -ItemType Directory -Force $Updates | Out-Null
-        Copy-Item $Setup (Join-Path $Updates "EVE-IW-Preview-Setup-$Version.exe") -Force
-    }
-
     Write-Host ''; Write-Host 'Changes (A = added, M = modified, D = deleted, R = renamed):' -ForegroundColor Cyan
     git status --short
     Write-Host ''; Write-Host "If anything in src/ shows as D (deleted) that you didn't expect, stop and check. Otherwise:" -ForegroundColor Cyan
-    Write-Host '  git diff'; Write-Host '  git add --all'; Write-Host "  git commit -m `"v$Version`""; Write-Host '  ppush'
+    Write-Host '  git add --all'; Write-Host "  git commit -m `"v$Version`""; Write-Host '  ppush'
 }

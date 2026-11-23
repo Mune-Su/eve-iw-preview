@@ -10,7 +10,8 @@ It only shows pictures of your clients and brings windows to the front. It never
 
 1. Download **`EVE-IW-Preview-Setup.exe`** from the [latest release](https://github.com/Mune-Su/eve-iw-preview/releases/latest).
 2. Run it. If Windows SmartScreen appears, choose **More info**, then **Run anyway** (the Setup isn't code-signed).
-3. Open **EVE-IW-Preview** from the Start menu. Its icon appears in the system tray.
+3. Tick **Create a desktop icon** if you want one.
+4. Open **EVE-IW-Preview** from the Start menu. Its icon appears in the system tray.
 
 - Installs for your Windows account only. No admin rights needed.
 - Shows in Programs and Features, with an uninstaller.
