@@ -7,12 +7,9 @@ using System.Text;
 namespace AUTZ.IronWorks.Preview.Services;
 
 /// <summary>
-/// "Always start as administrator" without a Windows prompt every time. The prompt (UAC) only appears when a program asks
-/// for administrator rights while it starts. A scheduled task set to "run with highest privileges" is allowed to start the
-/// app elevated without asking again, and your own account can run that task whenever it likes. So: the task is created once
-/// (while the app is running as administrator, which is why that step asks you), and from then on a normal start of the app
-/// runs the task and closes itself, and the task's copy carries on as administrator.
-/// The task has no trigger of its own: it only runs when the app starts it.
+/// "Always start as administrator" without a Windows prompt each time.
+/// A scheduled task is set up once (that step asks). After that, a normal start hands over to the task.
+/// The task has no trigger: it only runs when the app starts it.
 /// </summary>
 internal static class AdminTaskService
 {

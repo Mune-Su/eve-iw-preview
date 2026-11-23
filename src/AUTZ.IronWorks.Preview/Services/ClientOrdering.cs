@@ -3,16 +3,12 @@ using AUTZ.IronWorks.Preview.Models;
 namespace AUTZ.IronWorks.Preview.Services;
 
 /// <summary>
-/// Puts the EVE clients in the order the hotkeys, the numbered positions and the client hotkeys use.
-/// Automatic: the order the clients were opened. Saved / Manual: the order of the character list in the profile.
+/// Puts the clients in order for cycling, positions and client hotkeys.
+/// Automatic = opening order. Saved / Manual = the order saved in the profile.
 /// </summary>
 internal static class ClientOrdering
 {
-    /// <summary>
-    /// Adds a character that isn't in the saved order yet. It goes between the clients that were opened around it
-    /// (last if it was opened after all of them), so a list that builds up as clients log in ends up in the order the
-    /// clients were opened, whichever logs in first.
-    /// </summary>
+    /// <summary>Adds a new character to the saved order, in the spot it was opened. So the list matches opening order, whoever logs in first.</summary>
     public static void AddInPlace(List<string> order, string name, IReadOnlyList<EveClientWindow> openOrder)
     {
         static int IndexOf(List<string> list, string n)
@@ -137,5 +133,3 @@ internal static class ClientOrdering
         return sorted.Select(k => k.Client).ToList();
     }
 }
-
-

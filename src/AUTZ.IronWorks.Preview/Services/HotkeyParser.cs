@@ -21,10 +21,7 @@ public sealed class HotkeySpec
     public bool UsesMouse => Inputs.Any(i => i.Kind != HotkeyInputKind.Key);
 }
 
-/// <summary>
-/// Turns hotkey text such as "Ctrl+Alt+Right", "T", "Mouse4", "Shift+WheelUp", "A+S" or "RCtrl" into a spec the hook
-/// service can match, and turns captured input back into text. Any key, mouse button or combination is allowed.
-/// </summary>
+/// <summary>Turns hotkey text ("Ctrl+Alt+Right", "Mouse4", "RCtrl") into something the hotkey service can match, and back again.</summary>
 public static class HotkeyParser
 {
     // virtual keys of the left / right modifiers, indexed by group
@@ -171,5 +168,3 @@ public static class HotkeyParser
         return string.Join("+", modifiers.Concat(others));
     }
 }
-
-

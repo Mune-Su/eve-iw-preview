@@ -77,14 +77,11 @@ public sealed class MemoryUsageStats
 }
 
 /// <summary>
-/// Memory cleaning, done with functions built into Windows (the same ones the memory cleaner tools use):
-///  - trim working sets: asks Windows to move the memory a program isn't actively using out of its working set (EmptyWorkingSet).
-///    The program gets it back, on demand, if it needs it again. Works for your own programs without administrator rights.
-///  - clear the system cache: flushes Windows' file cache, writes modified pages to disk and drops the low-priority standby
-///    pages (SetSystemFileCacheSize and the memory-list commands). Needs administrator rights.
+/// Memory cleaning with Windows' own functions:
+///  - trim: takes back memory programs aren't using (they get it back if needed). No admin needed.
+///  - clear cache: flushes Windows' file cache. Needs admin.
 ///  - restart Windows Explorer.
-/// Nothing here runs unless the user presses a button or switches an automatic option on. Program names are used to decide
-/// what to trim but are never written to a log.
+/// Nothing runs unless you press a button or turn on an automatic option. Program names are never logged.
 /// </summary>
 internal static class MemoryCleaner
 {
@@ -182,10 +179,7 @@ internal static class MemoryCleaner
 
     // ---------- what is using the memory ----------
 
-    /// <summary>
-    /// Every program's working set, with processes of the same name added together. Reads only what Windows already
-    /// reports for each process (no handles are opened). Windows' core processes and this app are left out.
-    /// </summary>
+    /// <summary>Memory used by each program (same-name processes added together). Windows' core processes and this app are left out.</summary>
     public static Dictionary<string, (long Bytes, int Count)> Usage()
     {
         var map = new Dictionary<string, (long Bytes, int Count)>(StringComparer.OrdinalIgnoreCase);
@@ -223,11 +217,7 @@ internal static class MemoryCleaner
 
     // ---------- trimming ----------
 
-    /// <summary>
-    /// Trims the working set of the programs the scope allows. Never touched: the program in front, Windows' core processes
-    /// and the audio engine, this app, programs on the never-trim list, programs below the smallest size, and EVE clients
-    /// (depending on the EVE setting). Runs on a background thread.
-    /// </summary>
+    /// <summary>Trims the programs the scope allows. Never the program in front, Windows itself, this app, or the never-trim list. Runs in the background.</summary>
     public static CleanResult TrimWorkingSets(MemoryCleanerSettings settings, TrimScope scope, bool dryRun = false)
     {
         var before = Read();
@@ -300,10 +290,7 @@ internal static class MemoryCleaner
         return new CleanResult(trimmed > 0, message, trimmed, Math.Max(0, freed), trimmedBytes);
     }
 
-    /// <summary>
-    /// Parses "name=megabytes" limits, one per line (commas and semicolons also separate them). Names are Task Manager's
-    /// Details names without .exe.
-    /// </summary>
+    /// <summary>Reads "name=MB" limits, one per line. Names as in Task Manager, without .exe.</summary>
     public static bool TryParseLimits(string? text, out Dictionary<string, int> limits, out string error)
     {
         limits = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
@@ -325,10 +312,7 @@ internal static class MemoryCleaner
 
     // ---------- clearing the system cache ----------
 
-    /// <summary>
-    /// Flushes Windows' file cache, writes the modified pages to disk and drops the low-priority standby pages.
-    /// Needs administrator rights. Runs on a background thread.
-    /// </summary>
+    /// <summary>Flushes Windows' file cache and low-priority cached pages. Needs admin. Runs in the background.</summary>
     public static CleanResult ClearSystemCache()
     {
         if (!IsAdministrator)
@@ -362,11 +346,7 @@ internal static class MemoryCleaner
 
     private static bool _listPrivilegeTried;
 
-    /// <summary>
-    /// How much Clear system cache has to work with: modified pages (written to disk) and standby pages (cached files and data).
-    /// Only read with administrator rights. Standby pages already count as available memory, so dropping them barely moves the
-    /// "in use" figure.
-    /// </summary>
+    /// <summary>How much Clear system cache can work with. Admin only. Cached pages already count as available, so the in-use figure barely moves.</summary>
     public static CacheEstimate ReadCacheLists()
     {
         if (!IsAdministrator) return default;
@@ -408,10 +388,7 @@ internal static class MemoryCleaner
     private static uint _clipSequence = uint.MaxValue;
     private static ClipboardInfo _clipLast;
 
-    /// <summary>
-    /// The size of the text or picture on the clipboard. It is only read again when the clipboard changes, and it is meant to
-    /// be called from a background thread (reading can make the program that copied produce the data first).
-    /// </summary>
+    /// <summary>Size of what's on the clipboard. Only re-read when the clipboard changes. Call it from a background thread.</summary>
     public static ClipboardInfo ReadClipboard()
     {
         try
@@ -498,10 +475,7 @@ internal static class MemoryCleaner
 
     // ---------- Windows Explorer ----------
 
-    /// <summary>
-    /// Closes Windows Explorer (the taskbar, desktop and File Explorer windows) and starts it again. Windows usually starts
-    /// the shell again by itself within a second or two; if it hasn't by then, it is started here. Runs on a background thread.
-    /// </summary>
+    /// <summary>Closes and restarts Windows Explorer (taskbar, desktop, File Explorer). Runs in the background.</summary>
     public static CleanResult RestartExplorer()
     {
         try
@@ -551,5 +525,3 @@ internal static class MemoryCleaner
         return names;
     }
 }
-
-

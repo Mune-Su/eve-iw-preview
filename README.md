@@ -14,7 +14,8 @@ It only shows pictures of your clients and brings windows to the front. It never
 
 - Installs for your Windows account only. No admin rights needed.
 - Shows in Programs and Features, with an uninstaller.
-- Running a newer Setup upgrades in place. Your settings and profiles are kept.
+- **Updates itself:** new versions download in the background and install silently the next time the app starts. Turn it off under About > Update automatically.
+- Your settings and profiles are kept on every update.
 - Needs the .NET 8 Desktop Runtime. Setup tells you if it's missing.
 
 **Tray icon:** right-click for the menu, double-click for Configuration.
@@ -63,7 +64,7 @@ Read from EVE's own game logs (read only). Each alert can flash the thumbnail bo
 | Conversation request | Someone wants to start a chat |
 | Keywords | A game-log line matches one of your phrases |
 
-- Each alert has its own sound, volume and **Test** button.
+- Each alert has its own sound, volume, cooldown and **Test** button.
 - Built-in sounds: Chime, Ping, Double Beep, Klaxon, Rising, Falling, Alarm, Blip. The Windows sounds are listed too.
 - **Add your own:** .wav, .mp3, .m4a, .wma or .aac. Max 5 MB, plays up to 10 seconds.
 
@@ -107,6 +108,7 @@ dotnet build -c Release
 
 - Every push to `release` runs **Validate**: restore, build, and build the installer.
 - Pushing a `vX.Y.Z` tag runs **Release**: builds the installer and publishes `EVE-IW-Preview-Setup.exe` and `SHA256SUMS.txt` as the GitHub release.
+- Installed copies pick up the new **Latest** release by themselves and install it on their next start.
 
 ## Version history
 

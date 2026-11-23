@@ -3,13 +3,8 @@ using AUTZ.IronWorks.Preview.Core;
 namespace AUTZ.IronWorks.Preview.Services;
 
 /// <summary>
-/// Windows tells us the moment the focused window changes or an EVE window's title changes, so highlights,
-/// hiding and the login-to-character swap react instantly instead of waiting for a polling timer.
-/// The callbacks arrive on the UI thread (the hooks are created there).
-///
-/// The focus hook is system-wide (it only fires when the front window changes). Title changes are watched
-/// ONLY inside the EVE client processes: a system-wide title hook is called for every name change of every
-/// window and control on the PC (browser tabs, the clock, chat apps ...), which keeps the app awake all the time.
+/// Tells the app straight away when the window in front changes, or an EVE window's title changes.
+/// Title changes are only watched inside EVE clients, so other programs don't wake the app.
 /// </summary>
 internal sealed class WindowWatcher : IDisposable
 {
@@ -74,5 +69,3 @@ internal sealed class WindowWatcher : IDisposable
         _foregroundHook = 0;
     }
 }
-
-

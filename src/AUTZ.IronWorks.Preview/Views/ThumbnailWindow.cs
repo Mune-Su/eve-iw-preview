@@ -10,12 +10,9 @@ using AUTZ.IronWorks.Preview.Models;
 namespace AUTZ.IronWorks.Preview.Views;
 
 /// <summary>
-/// One borderless, always-on-top window per EVE client showing a live DWM thumbnail.
-/// Left-click switches to that client (unless it is switched off for characters / login screens). Hold SHIFT and drag
-/// with the RIGHT button to move it (it snaps to neighbouring thumbnails). There is no right-click menu.
-/// Hold SHIFT and the orange corner appears: drag it with the left button to resize (the shape is kept).
-/// Without Shift the corner is not shown and does nothing special, so a click there switches like anywhere else.
-/// The window is a non-activating overlay: clicking it never takes focus away from the game.
+/// One live thumbnail per EVE client.
+/// Click to switch. Shift + right-drag to move. Shift + drag the orange corner to resize.
+/// It never takes focus from the game.
 /// </summary>
 public sealed class ThumbnailWindow : Window
 {
@@ -388,5 +385,3 @@ public sealed class ThumbnailWindow : Window
         }
     }
 }
-
-

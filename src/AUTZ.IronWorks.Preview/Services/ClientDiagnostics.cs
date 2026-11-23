@@ -7,14 +7,8 @@ using AUTZ.IronWorks.Preview.Core;
 namespace AUTZ.IronWorks.Preview.Services;
 
 /// <summary>
-/// Detailed-log only. Writes what each EVE client was started with, so it can be seen whether anything stays the same per
-/// account (and could be used to tell login screens apart). Nothing secret or personal is written:
-///  - the program that started the client (its name, for example the launcher)
-///  - every command-line argument NAME as it is
-///  - every argument VALUE only as a short code (Arg-3FA9C1) and its length. The code is salted per install, so the same value
-///    always gives the same code on this PC (so you can compare two starts), but the value itself can't be worked out from it.
-/// A value that changes on every start (a token) shows a different code each time; a value that belongs to an account
-/// shows the same code every time.
+/// Detailed log only: what each EVE client was started with.
+/// Argument names are written as they are. Values only as a short code and length, never the value itself.
 /// </summary>
 internal static class ClientDiagnostics
 {
@@ -39,10 +33,7 @@ internal static class ClientDiagnostics
     [DllImport("kernel32.dll")] private static extern bool IsWow64Process(nint process, out bool wow64);
     [DllImport("ntdll.dll")] private static extern int NtQueryInformationProcess(nint process, int infoClass, ref PROCESS_BASIC_INFORMATION info, int size, out int returned);
 
-    /// <summary>
-    /// Returns a private, stable code for the EVE account that launched this client. LauncherData stays the same for an
-    /// account across restarts and across every character on that account. The raw launcher value is never stored.
-    /// </summary>
+    /// <summary>A private code for the EVE account behind a client. Same for every character on that account. The real value is never kept.</summary>
     public static string AccountSignature(uint pid)
     {
         nint handle = OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, false, pid);
@@ -210,5 +201,3 @@ internal static class ClientDiagnostics
         return ReadProcessMemory(process, address, buffer, count, out nint read) && read == count ? buffer : null;
     }
 }
-
-

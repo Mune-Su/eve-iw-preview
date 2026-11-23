@@ -3,12 +3,7 @@ using Microsoft.Win32;
 
 namespace AUTZ.IronWorks.Preview.Services;
 
-/// <summary>
-/// Windows 11 decides which tray icons sit on the taskbar and which hide behind the "^" (show hidden icons) arrow.
-/// That choice is stored per program under HKCU\Control Panel\NotifyIconSettings; IsPromoted = 1 means "show on the
-/// taskbar". This sets it for this app's own icon, the same switch as Settings > Personalisation > Taskbar > Other
-/// system tray icons. Windows 10 and older builds have no such key, so nothing happens there.
-/// </summary>
+/// <summary>Keeps the tray icon on the taskbar instead of under the ^ arrow (Windows 11). Does nothing on older Windows.</summary>
 internal static class TrayPinService
 {
     private const string KeyPath = @"Control Panel\NotifyIconSettings";
@@ -57,5 +52,3 @@ internal static class TrayPinService
         return false;
     }
 }
-
-

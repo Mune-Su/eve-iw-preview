@@ -2,6 +2,13 @@
 
 Every version of EVE-IW-Preview, newest first. The app shows the same list under About > What's New.
 
+## v0.19.19 — Silent updates and alert cooldowns
+
+- Updates install by themselves: a new version is downloaded in the background and installed silently the next time the app starts.
+- Turn it off under About > Update automatically.
+- Each alert has its own cooldown. Mining stopped keeps its own idle time.
+- Simpler comments throughout the code.
+
 ## v0.19.18 — Alerts, sounds, layouts and performance
 
 - Fixed: the app didn't open from the Start menu when 'Always start as administrator' was on.

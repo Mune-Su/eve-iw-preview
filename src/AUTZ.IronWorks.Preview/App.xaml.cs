@@ -33,6 +33,13 @@ public partial class App : System.Windows.Application
         };
 
         WaitForPreviousInstance(e.Args);               // "Restart as administrator": let the old copy finish closing first
+
+        // a downloaded update installs now, silently, and opens the new version
+        if (UpdateService.InstallPendingUpdate(ProfileStore.LoadState().AutoUpdate))
+        {
+            Shutdown();
+            return;
+        }
         // "Always start as administrator": a normal start hands over to the scheduled task (no Windows prompt) and closes itself.
         // A copy the task started, or one that was just restarted as administrator, never hands over again.
         // The task is only used when it starts this exe: a task left pointing at an old copy (for example the portable exe that was
@@ -86,6 +93,7 @@ public partial class App : System.Windows.Application
         // No main window and no taskbar button: the app lives in the system tray (right-click the icon).
         _tray = new NotifyIconService(_manager);
         _manager.Start();
+        UpdateService.StartChecks(() => _manager?.State.AutoUpdate == true);
 
         ShowWhatsNew(state);
     }
@@ -138,6 +146,7 @@ public partial class App : System.Windows.Application
     protected override void OnExit(ExitEventArgs e)
     {
         Log.Trace("APP", $"shutdown: exitCode={e.ApplicationExitCode}");
+        UpdateService.Stop();
         _tray?.Dispose();
         _manager?.Dispose();
         if (_ownsMutex && _mutex is not null)

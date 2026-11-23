@@ -9,9 +9,8 @@ using AUTZ.IronWorks.Preview.Views;
 namespace AUTZ.IronWorks.Preview.Services;
 
 /// <summary>
-/// Owns one ThumbnailWindow per shown EVE client, the hotkeys, profiles, alerts, log monitoring and the settings window.
-/// "Session" settings are what is running now; "saved" settings are what is in the config files. APPLY changes the
-/// first, SAVE writes the second.
+/// Runs the app: thumbnails, hotkeys, profiles, alerts, memory cleaner and the Configuration window.
+/// Apply changes the running settings. Save writes them to the profile file.
 /// </summary>
 public sealed class PreviewManager : IDisposable
 {
@@ -69,8 +68,8 @@ public sealed class PreviewManager : IDisposable
     private bool _scanDirty = true;                    // true = the next scan must redo the whole layout even if no client changed
     private static readonly TimeSpan IdleScan = TimeSpan.FromSeconds(3);                // scan interval while no EVE client is open
     private IReadOnlyList<EveClientWindow> _clients = Array.Empty<EveClientWindow>();
-    private Dictionary<nint, string> _loginAssign = new();   // v0.10.0: login screen -> the saved character whose place it holds
-    private Dictionary<nint, int> _slots = new();            // v0.11.1: client -> its numbered place (Saved / Manual order keep a closed client's place free)
+    private Dictionary<nint, string> _loginAssign = new();   //  login screen -> the saved character whose place it holds
+    private Dictionary<nint, int> _slots = new();            //  client -> its numbered place (Saved / Manual order keep a closed client's place free)
     private SettingsWindow? _settingsWindow;
 
     private bool _visible = true;          // false while client switching is paused
@@ -78,9 +77,9 @@ public sealed class PreviewManager : IDisposable
     private nint _activeClient;            // the EVE client that has focus right now (0 = none)
     private nint _lastActive;              // the EVE client that had focus most recently
     private nint _lastActivated;           // last client we switched to (used by the next / previous hotkeys)
-    private nint _pendingTarget;           // v0.9.6: a switch Windows has accepted but not finished yet (0 = none)
+    private nint _pendingTarget;           //  a switch Windows has accepted but not finished yet (0 = none)
     private long _pendingUntil;            // Log.Ms after which the pending switch is forgotten
-    private long _staleUntil;              // v0.9.9: after a switch, late focus reports from earlier clients are ignored until then
+    private long _staleUntil;              //  after a switch, late focus reports from earlier clients are ignored until then
     private const int StaleMs = 250;
     private const int PendingMs = 400;     // how long a switch is allowed to take before Windows' word is trusted again
     private string _alertHex = "#EF4444";
@@ -95,11 +94,7 @@ public sealed class PreviewManager : IDisposable
 
     private bool _recordingHotkey;                         // a hotkey box in the Configuration window has the keyboard
 
-    /// <summary>
-    /// Hotkeys are off while the user has suspended them, and while the Configuration window is open unless "keep working
-    /// while the Configuration window is open" is ticked. Even then they pause while a hotkey box is recording, so pressing a
-    /// hotkey there records it instead of firing it.
-    /// </summary>
+    /// <summary>Hotkeys are off while paused, and while Configuration is open (unless set to keep working). They always pause while a hotkey box is recording.</summary>
     private void UpdateHotkeySuspension()
     {
         bool configBlocks = _settingsWindow is not null && (!_settings.HotkeysInConfig || _recordingHotkey);
@@ -237,10 +232,7 @@ public sealed class PreviewManager : IDisposable
         Scan();
     }
 
-    /// <summary>
-    /// The periodic scan. If no client has opened, closed or changed its title since the last scan (nearly every time) the layout
-    /// is already right, so all that is left is to keep the focus state up to date.
-    /// </summary>
+    /// <summary>The regular client scan. If nothing changed, it only keeps the focus state up to date.</summary>
     private void Scan()
     {
         if (!_state.SwitcherEnabled)
@@ -341,10 +333,7 @@ public sealed class PreviewManager : IDisposable
         return true;
     }
 
-    /// <summary>
-    /// v0.9.6: while a switch is still finishing, the foreground Windows reports is stale. Don't let the scan
-    /// overwrite the active client with it.
-    /// </summary>
+    /// <summary>While a switch is still landing, Windows' answer is out of date, so the scan doesn't use it.</summary>
     private void FollowForeground()
     {
         if (IsPending()) SyncForeground(_pendingTarget, true);
@@ -405,11 +394,7 @@ public sealed class PreviewManager : IDisposable
     private int SlotOf(EveClientWindow client, int indexInList) =>
         _slots.TryGetValue(client.Handle, out int slot) ? slot : indexInList + 1;
 
-    /// <summary>
-    /// "Reset order": clears the saved client order at once. In Saved mode the clients that are open right now are put straight
-    /// back in the order they were opened (that is how the saved list always builds); anything not open is forgotten.
-    /// Returns how many names were cleared.
-    /// </summary>
+    /// <summary>Reset order: clears the saved order now. Open clients go back to opening order. Returns how many names were cleared.</summary>
     public int ClearClientOrder()
     {
         int cleared = _settings.ClientOrder.Count;
@@ -424,11 +409,7 @@ public sealed class PreviewManager : IDisposable
         return cleared;
     }
 
-    /// <summary>
-    /// "Save current order": stores the logged-in clients, in the order they are in right now, as the saved order. In Automatic
-    /// that is the order they were opened, so you can open the clients in the order you want and keep it. It is written straight
-    /// away. Returns the saved list (empty = no logged-in client is open, and nothing was changed).
-    /// </summary>
+    /// <summary>Save current order: saves the logged-in clients in their current order, straight away. Empty = nothing was open, nothing changed.</summary>
     public IReadOnlyList<string> SaveCurrentClientOrder()
     {
         var names = new List<string>();
@@ -473,10 +454,7 @@ public sealed class PreviewManager : IDisposable
         _pendingUntil = 0;
     }
 
-    /// <summary>
-    /// The EVE client you are really on: the one a switch is heading to if it hasn't finished yet, otherwise the
-    /// window in front (if it's a client), otherwise the last client that had focus.
-    /// </summary>
+    /// <summary>The client you're really on: the one being switched to, else the window in front, else the last client used.</summary>
     private nint CurrentClientHandle(out string from)
     {
         if (IsPending()) { from = "switch in progress"; return _pendingTarget; }
@@ -511,10 +489,8 @@ public sealed class PreviewManager : IDisposable
     }
 
     /// <summary>
-    /// The settings entry that holds a thumbnail's position and size.
-    /// "Client" mode: the Nth client to open always uses the Nth entry, logged in or not.
-    /// "Character" mode: a character's own entry. A login screen uses the entry of the character that usually
-    /// logs in on that slot, so it sits where that character's thumbnail will be.
+    /// Where a thumbnail's position and size are saved.
+    /// By client: the Nth slot uses the Nth entry. By character: the character's own entry (a login screen uses the character that usually logs in there).
     /// </summary>
     private string LayoutKeyFor(EveClientWindow client, int slot)
     {
@@ -699,11 +675,7 @@ public sealed class PreviewManager : IDisposable
 
     // ---------- saving ----------
 
-    /// <summary>
-    /// Makes a change to the running settings and writes it to the config file. While APPLIED-but-unsaved settings are
-    /// running, only this one change is written (to the saved copy), so positions you drag are kept without
-    /// accidentally saving settings you only applied.
-    /// </summary>
+    /// <summary>Changes a setting and saves it. If unsaved (applied) settings are running, only this one change is saved.</summary>
     private void Persist(Action<AppSettings> change)
     {
         change(_settings);
@@ -961,11 +933,7 @@ public sealed class PreviewManager : IDisposable
         }
     }
 
-    /// <summary>
-    /// Minimises every client except the one in front (or, if EVE isn't in front, the one used last). Clients that
-    /// haven't been in front yet are included from the start unless that is switched off, so a fresh start-up doesn't
-    /// waste resources on clients you aren't looking at.
-    /// </summary>
+    /// <summary>Minimises every client except the one in front (or the last one used).</summary>
     private void MinimiseInactive()
     {
         if (!_settings.AutoMinimiseInactive || _clients.Count == 0) return;
@@ -1030,10 +998,7 @@ public sealed class PreviewManager : IDisposable
         return status;
     }
 
-    /// <summary>
-    /// The automatic cleaning timer only exists while an automatic option is on: with nothing switched on the app does no
-    /// memory work at all. It checks every 30 s when a "memory use is over ..." limit is on, otherwise every 60 s.
-    /// </summary>
+    /// <summary>The automatic cleaning timer only runs while an automatic option is on. Every 30 s with a memory limit, otherwise every 60 s.</summary>
     private void ConfigureMemoryTimer()
     {
         _memoryTimer.Stop();
@@ -1130,10 +1095,7 @@ public sealed class PreviewManager : IDisposable
         return done.Task;
     }
 
-    /// <summary>
-    /// What a trim run may touch right now. Call it on the UI thread: it reads the client list and the window in front
-    /// (copied here, before the work moves to a background thread).
-    /// </summary>
+    /// <summary>What a trim may touch right now. Call on the UI thread.</summary>
     private TrimScope NewScope(MemoryCleanerSettings m, IReadOnlySet<string>? only = null, bool explicitNames = false, bool honourNeverList = true)
     {
         NativeMethods.GetWindowThreadProcessId(NativeMethods.GetForegroundWindow(), out uint foreground);
@@ -1204,10 +1166,7 @@ public sealed class PreviewManager : IDisposable
         return result;
     }
 
-    /// <summary>
-    /// Per-program limits: every program on the list that is using more than its limit is trimmed, at most once every
-    /// 3 minutes each. Null when nothing was over its limit.
-    /// </summary>
+    /// <summary>Trims programs over their own limit, at most once every 3 minutes each. Null if none were over.</summary>
     private async Task<CleanResult?> TrimOverLimitsAsync(MemoryCleanerSettings settings, Dictionary<string, int> limits)
     {
         var usage = await RunLow(MemoryCleaner.Usage);
@@ -1227,11 +1186,7 @@ public sealed class PreviewManager : IDisposable
         return result;
     }
 
-    /// <summary>
-    /// The programs using the most memory, with a trend against about a minute ago and a "growing" flag for a program whose
-    /// memory has kept rising for several minutes. Only called while the Memory page is open, so the readings (and the trends)
-    /// build up only then.
-    /// </summary>
+    /// <summary>Top programs by memory, with a trend and a "growing" flag. Only runs while the Memory page is open.</summary>
     public async Task<IReadOnlyList<ProgramUsage>> SampleProgramsAsync(int top)
     {
         var usage = await RunLow(MemoryCleaner.Usage);
@@ -1323,11 +1278,7 @@ public sealed class PreviewManager : IDisposable
     }
 
     /// <summary>Starts a second copy of the app with administrator rights (Windows asks first). The caller then closes this one.</summary>
-    /// <summary>
-    /// Keeps the "start as administrator" scheduled task in line with the setting. Only possible while running as administrator
-    /// (creating or removing the task needs it), so a normal copy leaves it alone. It also re-points the task at this exe, in case
-    /// the app was moved. Runs off the UI thread.
-    /// </summary>
+    /// <summary>Keeps the "start as administrator" task in line with the setting. Only works while running as admin. Runs in the background.</summary>
     private void SyncAdminTask()
     {
         if (!MemoryCleaner.IsAdministrator) return;
@@ -1550,7 +1501,7 @@ public sealed class PreviewManager : IDisposable
         _settingsWindow = dialog;
         UpdateHotkeySuspension();        // paused (so the hotkey boxes can record any key) unless the hotkeys are set to keep working here
 
-        // v0.18.2: a normal window, not a modal dialog. A modal dialog makes WPF disable every other window of the app, and that
+        //  a normal window, not a modal dialog. A modal dialog makes WPF disable every other window of the app, and that
         // includes the thumbnails, so they could not be clicked (or moved) while Configuration was open.
         dialog.Closed += (_, _) =>
         {
@@ -1651,6 +1602,7 @@ public sealed class PreviewManager : IDisposable
         _state.DebugLogging = disk.DebugLogging;
         _state.DebugLogMode = disk.DebugLogMode;
         _state.PinTrayIcon = disk.PinTrayIcon;
+        _state.AutoUpdate = disk.AutoUpdate;
         _state.AlwaysAdmin = disk.AlwaysAdmin;
         SyncAdminTask();
         _state.Memory = disk.Memory.Clone();
@@ -1699,6 +1651,7 @@ public sealed class PreviewManager : IDisposable
         _state.DebugLogging = global.DebugLogging;
         _state.DebugLogMode = global.DebugLogMode;
         _state.PinTrayIcon = global.PinTrayIcon;
+        _state.AutoUpdate = global.AutoUpdate;
         if (_state.AlwaysAdmin != global.AlwaysAdmin)
         {
             _state.AlwaysAdmin = global.AlwaysAdmin;
@@ -1716,10 +1669,7 @@ public sealed class PreviewManager : IDisposable
         if (_state.PinTrayIcon) TrayPinService.Promote();
     }
 
-    /// <summary>
-    /// The settings window never edits positions, so anything the app moved or created while the window was open
-    /// (a client logging in, for example) is carried over instead of being overwritten by the window's older copy.
-    /// </summary>
+    /// <summary>Keeps positions the app saved while Configuration was open, so the window's older copy doesn't overwrite them.</summary>
     private void MergeLiveGeometry(AppSettings incoming)
     {
         foreach (var pair in _settings.Characters)
@@ -1907,12 +1857,7 @@ public sealed class PreviewManager : IDisposable
         return -1;
     }
 
-    /// <summary>
-    /// Next / previous client, in the order the clients were opened. It works out where you are from the focused
-    /// window (or the last client it switched to), skips clients that are excluded, and moves on past any client that
-    /// is frozen or that Windows refuses to focus, so one stuck client can never stop the cycling. Every press is
-    /// written to preview.log.
-    /// </summary>
+    /// <summary>Next / previous client in client order. Skips excluded and frozen clients. One press = one switch.</summary>
     private void Cycle(int direction)
     {
         var all = CurrentClients();
@@ -1923,11 +1868,11 @@ public sealed class PreviewManager : IDisposable
             return;
         }
 
-        // v0.9.6: work out where you are from the switch in progress (if any), not from a foreground window that
+        //  work out where you are from the switch in progress (if any), not from a foreground window that
         // Windows hasn't updated yet. Reading the stale window made a press pick the same client again.
         nint current = CurrentClientHandle(out string from);
         int start = IndexOf(all, current);
-        // v0.17.1: "current" is only really in front when it comes from the focus or a switch in progress. When you are in
+        //  "current" is only really in front when it comes from the focus or a switch in progress. When you are in
         // another program it is just the last client you used, and that client must not be skipped: with one client (or one
         // client left that can be cycled to) the press used to do nothing at all while EVE wasn't in front.
         bool currentInFront = from == "focus" || from == "switch in progress";
@@ -2119,10 +2064,10 @@ public sealed class PreviewManager : IDisposable
 
         string key = client.CharacterName + "|" + e.Kind;
         var now = DateTime.UtcNow;
-        if (_lastNotified.TryGetValue(key, out var last) &&
-            (now - last).TotalSeconds < Math.Max(0, _settings.NotifyCooldownSeconds))
+        int cooldown = e.Kind == "mining" ? 0 : _settings.CooldownFor(e.Kind);       // mining stopped has its own timer instead
+        if (_lastNotified.TryGetValue(key, out var last) && (now - last).TotalSeconds < cooldown)
         {
-            Log.Debug("ALERT", $"'{e.Kind}' for '{e.Character}' not shown: cooldown");
+            Log.Debug("ALERT", $"'{e.Kind}' for '{e.Character}' not shown: cooldown ({cooldown} s)");
             return;
         }
         _lastNotified[key] = now;

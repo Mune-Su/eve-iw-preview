@@ -10,20 +10,9 @@ namespace AUTZ.IronWorks.Preview.Services;
 
 /// <summary>
 /// Two logs in %LOCALAPPDATA%\EVE-IronWorks-Preview:
-///  - preview.log : the normal diagnostics log (errors, one line per hotkey switch). Always on, kept small.
-///  - debug.log   : the ADMIN log. Only written while "Detailed logging" is on (Settings > Diagnostics > Logs, or
-///                  the tray menu). One continuous file, or (Diagnostics setting) a new debug-DATE_TIME.log every
-///                  time detailed logging is turned on. It records every step the app takes: hotkeys, each focus attempt and which method
-///                  worked, every minimise / restore / maximise it sends to a client, thumbnails shown / hidden /
-///                  created / closed, and every focus change Windows reports, all with millisecond timestamps.
-/// Debug lines are queued and written by a background thread, so logging never slows down a switch or the hotkey hook.
-///
-/// PRIVACY: a log can be sent to someone, so nothing personal is written. Every line goes through Scrub() first:
-///  - character names and profile names become a short code (Pilot-3FA9C1, Profile-B07E42): the same name always gives
-///    the same code on this PC, but the name can't be worked out from it
-///  - the title of any window that isn't an EVE client is never written (browser tabs and documents would show up there)
-///  - your Windows user name, PC name and folder paths (Documents, AppData ...) are replaced with placeholders
-///  - e-mail addresses and the EVE game-log file names (they hold the character's ID number) are removed
+///  - preview.log: errors and problems. Always on, kept small.
+///  - debug.log: everything the app does, only while Detailed logging is on. Written in the background.
+/// Nothing personal is written: names become codes (Pilot-3FA9C1), and paths, PC name, user name and other window titles are removed.
 /// </summary>
 internal static class Log
 {
@@ -78,10 +67,7 @@ internal static class Log
         }
     }
 
-    /// <summary>
-    /// True = every time detailed logging is turned on it starts a new file (debug-DATE_TIME.log).
-    /// False = one continuous debug.log. Changing it while logging is on moves to the other kind of file at once.
-    /// </summary>
+    /// <summary>True = a new debug log file each time logging is turned on. False = one continuous debug.log.</summary>
     public static bool PerSessionFiles
     {
         get => _perSession;
@@ -161,10 +147,7 @@ internal static class Log
         Signal.Set();
     }
 
-    /// <summary>
-    /// Same, for Log.Debug($"..."): while detailed logging is off the text is never built and nothing inside the braces
-    /// is evaluated (Log.Win and the other window lookups would otherwise run on every focus change and every switch).
-    /// </summary>
+    /// <summary>Log.Debug($"..."): while detailed logging is off, the text is never built. Costs nothing.</summary>
     public static void Debug(string area, DebugLine line)
     {
         if (!_verbose) return;
@@ -183,10 +166,7 @@ internal static class Log
         Signal.Set();
     }
 
-    /// <summary>
-    /// Same, for Log.Trace($"..."): while Detailed Logging is off the text is never built and nothing inside the braces is
-    /// evaluated. The keyboard and mouse hooks call this on every key press and click, so it must cost nothing when off.
-    /// </summary>
+    /// <summary>Log.Trace($"..."): while detailed logging is off, the text is never built. The hooks use this, so it must cost nothing.</summary>
     public static void Trace(string area, DebugLine line)
     {
         if (!_verbose) return;
@@ -202,10 +182,7 @@ internal static class Log
     private static string Stamp(string area, string text) =>
         $"{DateTime.Now:HH:mm:ss.fff}  +{Clock.ElapsedMilliseconds,9}ms  t{Environment.CurrentManagedThreadId,-3} {area,-8} {text}";
 
-    /// <summary>
-    /// A window handle for the log: "0x1A2B3C 'EVE - Pilot-3FA9C1'" for an EVE client, "[this app]" for our own windows and
-    /// "[other window]" for anything else. The title of a window that isn't an EVE client is never written.
-    /// </summary>
+    /// <summary>A window for the log: an EVE client shows its code, our own windows show [this app], anything else shows [other window].</summary>
     public static string Win(nint hwnd)
     {
         if (hwnd == 0) return "0x0 (none)";

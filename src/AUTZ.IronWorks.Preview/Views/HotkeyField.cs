@@ -5,11 +5,7 @@ using AUTZ.IronWorks.Preview.Services;
 
 namespace AUTZ.IronWorks.Preview.Views;
 
-/// <summary>
-/// A box that records a hotkey: click it, then press any key, mouse button, wheel notch or combination. Nothing is
-/// off limits except a plain left-click (that is how you click the box) and a plain Tab (that moves to the next box).
-/// Use the clear button to remove a hotkey.
-/// </summary>
+/// <summary>A box that records a hotkey: click it, then press a key, mouse button or combo. ✕ clears it.</summary>
 public sealed class HotkeyField : UserControl
 {
     private readonly TextBox _box = new();
@@ -160,5 +156,3 @@ public sealed class HotkeyField : UserControl
         Release(token);
     }
 }
-
-

@@ -12,8 +12,8 @@ public sealed record SoundChoice(string Id, string Text, string Tip)
 }
 
 /// <summary>
-/// The alert sounds: the ones built into the app, the Windows sounds, and the ones you add.
-/// Sound ids: "iw:Chime" (built in), "win:Exclamation" (Windows), "custom:file.mp3" (added by you), "none".
+/// Alert sounds: built in, Windows, and your own.
+/// Ids: "iw:Chime", "win:Exclamation", "custom:file.mp3", "none".
 /// </summary>
 internal static class SoundLibrary
 {

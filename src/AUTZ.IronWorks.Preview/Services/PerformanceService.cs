@@ -5,12 +5,9 @@ using AUTZ.IronWorks.Preview.Models;
 namespace AUTZ.IronWorks.Preview.Services;
 
 /// <summary>
-/// Performance options (each one has its own on/off switch, all off by default):
-///  - High Performance power plan while an EVE client is open (the old plan comes back when the last client closes),
-///  - Above Normal priority for the client in front,
-///  - Below Normal priority for the clients behind it,
-///  - Windows efficiency mode for the clients behind it.
-/// Turning an option off puts things back straight away. Anything left changed by a crash is put back on the next start.
+/// Performance options, each with its own switch, all off by default:
+/// High Performance power plan, client-in-front priority, background priority, background efficiency mode.
+/// Turning one off puts things back straight away. After a crash, they're put back on the next start.
 /// </summary>
 internal sealed class PerformanceService
 {

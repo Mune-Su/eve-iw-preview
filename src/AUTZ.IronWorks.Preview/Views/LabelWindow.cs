@@ -25,9 +25,8 @@ public sealed record LabelSpec(
 public sealed record BorderSpec(string Hex, int Width, string Style);
 
 /// <summary>
-/// Click-through overlay that sits on top of a thumbnail window and draws the label, the border, the
-/// "skipped by hotkeys" X and the resize grip. It is a separate window because DWM thumbnails always
-/// paint above anything drawn inside the window that hosts them.
+/// Click-through overlay on a thumbnail: label, border, red X and resize corner.
+/// It's a separate window because the live thumbnail always paints over its own window.
 /// </summary>
 public sealed class LabelWindow : Window
 {
@@ -235,5 +234,3 @@ public sealed class LabelWindow : Window
         _brackets.Data = geometry;
     }
 }
-
-

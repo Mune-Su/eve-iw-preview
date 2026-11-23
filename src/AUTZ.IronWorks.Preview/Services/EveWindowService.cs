@@ -193,9 +193,8 @@ public sealed class EveWindowService
     public bool Activate(nint handle) => Activate(handle, out _);
 
     /// <summary>
-    /// Brings an EVE client to the front without ever waiting on it. A frozen ("not responding") client is refused so
-    /// cycling can carry on past it. The normal call is tried first (instant when Windows allows it); the slower
-    /// fallbacks only run if Windows refuses. <paramref name="how"/> says what happened.
+    /// Brings a client to the front without ever waiting on it.
+    /// Frozen clients are refused. Tries the quick way first, then fallbacks. <paramref name="how"/> says what worked.
     /// </summary>
     public bool Activate(nint handle, out string how)
     {
@@ -284,10 +283,7 @@ public sealed class EveWindowService
         return false;
     }
 
-    /// <summary>
-    /// True once the target is in front. A switch Windows has accepted takes a few ms to land: for a moment nothing
-    /// (0x0) or still the old client is in front. Wait up to 60 ms for it; never treat either as a refusal.
-    /// </summary>
+    /// <summary>True once the client is in front. Waits up to 60 ms, because an accepted switch can take a moment to land.</summary>
     private static bool Settled(nint handle, bool accepted)
     {
         nint fg = NativeMethods.GetForegroundWindow();

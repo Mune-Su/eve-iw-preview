@@ -96,8 +96,13 @@ if ($Built) {
         Write-Host "Moved $($Selected.File.Name) to $Versions" -ForegroundColor Cyan
     } catch { Write-Host "Couldn't move the ZIP out of Downloads: $($_.Exception.Message)" -ForegroundColor Yellow }
 
+    # leave the Setup for the app: it installs silently the next time the app starts
     $Setup = Join-Path $Repo 'installer-output\EVE-IW-Preview-Setup.exe'
-    if (Test-Path $Setup) { Write-Host 'Opening the installer...' -ForegroundColor Cyan; Start-Process $Setup }
+    if (Test-Path $Setup) {
+        $Updates = Join-Path $env:LOCALAPPDATA 'EVE-IronWorks-Preview\updates'
+        New-Item -ItemType Directory -Force $Updates | Out-Null
+        Copy-Item $Setup (Join-Path $Updates "EVE-IW-Preview-Setup-$Version.exe") -Force
+    }
 
     Write-Host ''; Write-Host 'Changes (A = added, M = modified, D = deleted, R = renamed):' -ForegroundColor Cyan
     git status --short

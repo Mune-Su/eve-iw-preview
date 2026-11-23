@@ -7,6 +7,13 @@ internal static class Changelog
 {
     public static readonly ChangelogEntry[] Entries =  
       {
+        new("0.19.19", "Silent updates and alert cooldowns", new[]
+        {
+            "Updates install by themselves: a new version is downloaded in the background and installed silently the next time the app starts.",
+            "Turn it off under About > Update automatically.",
+            "Each alert has its own cooldown. Mining stopped keeps its own idle time.",
+            "Simpler comments throughout the code."
+        }),
         new("0.19.18", "Alerts, sounds, layouts and performance", new[]
         {
             "Fixed: the app didn't open from the Start menu when 'Always start as administrator' was on.",

@@ -5,10 +5,7 @@ using AUTZ.IronWorks.Preview.Models;
 
 namespace AUTZ.IronWorks.Preview.Services;
 
-/// <summary>
-/// Profiles are separate files in %LOCALAPPDATA%\EVE-IronWorks-Preview\profiles\NAME.json, and app.json
-/// remembers which one is active. The old single settings.json becomes the "Default" profile the first time.
-/// </summary>
+/// <summary>Each profile is a file in %LOCALAPPDATA%\EVE-IronWorks-Preview\profiles. app.json remembers which one is in use.</summary>
 public static class ProfileStore
 {
     public const string DefaultName = "Default";
@@ -144,6 +141,14 @@ public static class ProfileStore
         if (Is(s.LabelBackgroundHex, "#0A0F16", "#141414")) s.LabelBackgroundHex = "#0C0C0E";
         if (Is(s.InactiveBorderHex, "#606060")) s.InactiveBorderHex = "#6F6F7D";
         if (Is(s.NotifyBorderHex, "#EF4444")) s.NotifyBorderHex = "#F87171";
+        if (!s.AlertCooldownsMigrated)
+        {
+            // one shared cooldown became one per alert: a value you had changed is copied to every alert, once
+            if (s.NotifyCooldownSeconds != 20 && s.AlertCooldowns.Count == 0)
+                foreach (string kind in LogMonitorService.Kinds)
+                    if (kind != "mining") s.AlertCooldowns[kind] = Math.Clamp(s.NotifyCooldownSeconds, 0, 3600);
+            s.AlertCooldownsMigrated = true;
+        }
         return s;
     }
 
@@ -206,5 +211,3 @@ public static class ProfileStore
 
     private static string PathFor(string name) => Path.Combine(ProfilesFolder, name + ".json");
 }
-
-

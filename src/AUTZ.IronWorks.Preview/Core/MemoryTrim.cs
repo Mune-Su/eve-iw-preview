@@ -2,11 +2,7 @@ using System.Runtime.InteropServices;
 
 namespace AUTZ.IronWorks.Preview.Core;
 
-/// <summary>
-/// Gives memory back to Windows. A tray app spends nearly all its time idle, so after start-up and after the Configuration
-/// window has been closed (the two moments memory peaks) the heap is compacted and the working set emptied: the pages the app
-/// needs come back by themselves, the ones it doesn't stay out of RAM.
-/// </summary>
+/// <summary>Gives the app's unused memory back to Windows (after start-up and after Configuration closes).</summary>
 internal static class MemoryTrim
 {
     [DllImport("kernel32.dll")] private static extern nint GetCurrentProcess();
@@ -24,5 +20,3 @@ internal static class MemoryTrim
         catch { }
     }
 }
-
-

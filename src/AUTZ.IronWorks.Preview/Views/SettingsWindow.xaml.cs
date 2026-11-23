@@ -59,6 +59,7 @@ public partial class SettingsWindow : Window
         public CheckBox? Enabled;
         public ComboBox Sound = null!;
         public Slider Volume = null!;
+        public TextBox Cooldown = null!;     // for "mining" this is the seconds with no mining before the alert
     }
     private readonly List<AlertRow> _alertRows = new();
 
@@ -168,6 +169,7 @@ public partial class SettingsWindow : Window
         DebugLogBox.IsChecked = _state.DebugLogging;
         (_state.DebugLogMode == "PerSession" ? DebugSessionRadio : DebugContinuousRadio).IsChecked = true;
         PinTrayBox.IsChecked = _state.PinTrayIcon;
+        AutoUpdateBox.IsChecked = _state.AutoUpdate;
         AlwaysAdminBox.IsChecked = _state.AlwaysAdmin;
         UpdateAlwaysAdminControls();
         UpdateComponentToggleButtons();
@@ -456,7 +458,6 @@ public partial class SettingsWindow : Window
         // Notifications
         NotifyEnabledBox.IsChecked = s.NotificationsEnabled;
         NotifySkipActiveBox.IsChecked = s.NotifySkipActiveClient;
-        NotifyCooldownBox.Text = s.NotifyCooldownSeconds.ToString();
         NotifyFlashBox.IsChecked = s.NotifyFlashBorder;
         NotifyColourBox.Hex = s.NotifyBorderHex;
         NotifySecondsBox.Text = s.NotifyBorderSeconds.ToString();
@@ -474,7 +475,6 @@ public partial class SettingsWindow : Window
         GameFolderBox.Text = s.GameLogFolder;
         ChatFolderBox.Text = s.ChatLogFolder;
         BuildAlertRows(s);
-        LogMiningSecondsBox.Text = s.LogMiningIdleSeconds.ToString();
         LogKeywordsBox.Text = (s.LogKeywords ?? "").Replace("\r", "").Replace("\n", Environment.NewLine);
         LogSystemBox.IsChecked = s.ShowSystemName;
         LogStatusText.Text = _manager.LogStatus;
@@ -1067,10 +1067,7 @@ public partial class SettingsWindow : Window
         return row;
     }
 
-    /// <summary>
-    /// Stores the lines into the group on screen. With validate = true a bad name is reported (and false returned);
-    /// otherwise a bad name is just left out.
-    /// </summary>
+    /// <summary>Saves the character lines into the group. validate = true reports a bad name; otherwise it's skipped.</summary>
     private bool CommitThumbRows(bool validate)
     {
         var group = _shownThumbGroup;
@@ -1441,10 +1438,7 @@ public partial class SettingsWindow : Window
         return true;
     }
 
-    /// <summary>
-    /// The tray menu switched the running profile while this window is open: show the same profile here. Edits that are
-    /// still on screen for the profile that was shown are kept (they stay unsaved, like when you change profile in the box).
-    /// </summary>
+    /// <summary>The tray switched profile: show the same one here. Unsaved edits on screen are kept.</summary>
     public void FollowActiveProfile(string name)
     {
         bool before = _quiet;
@@ -1676,10 +1670,7 @@ public partial class SettingsWindow : Window
     private static DependencyObject? ParentOf(DependencyObject d) =>
         d is Visual || d is System.Windows.Media.Media3D.Visual3D ? VisualTreeHelper.GetParent(d) : LogicalTreeHelper.GetParent(d);
 
-    /// <summary>
-    /// The descriptions are read-only text boxes (so their text can be selected and copied). A text box swallows the mouse
-    /// wheel, so while the pointer is over one the wheel is passed on to the page to scroll it.
-    /// </summary>
+    /// <summary>Lets the mouse wheel scroll the page while the pointer is over selectable text.</summary>
     private void OnPreviewMouseWheel(object sender, MouseWheelEventArgs e)
     {
         if (e.Handled || e.OriginalSource is not DependencyObject source) return;
@@ -1784,7 +1775,7 @@ public partial class SettingsWindow : Window
     }
 
     private string StateSnapshot() => string.Join("|",
-        _state.NextProfileHotkey, _state.PreviousProfileHotkey, _state.RunOnStartup, _state.WhatsNewMode, _state.DebugLogging, _state.DebugLogMode, _state.PinTrayIcon, _state.AlwaysAdmin,
+        _state.NextProfileHotkey, _state.PreviousProfileHotkey, _state.RunOnStartup, _state.WhatsNewMode, _state.DebugLogging, _state.DebugLogMode, _state.PinTrayIcon, _state.AlwaysAdmin, _state.AutoUpdate,
         _state.SuspendHotkey, _state.NextDesktopHotkey, _state.PreviousDesktopHotkey,
         _state.Performance.Enabled, _state.Performance.HighPerformancePlan, _state.Performance.RaiseFrontClient, _state.Performance.LowerBackgroundClients, _state.Performance.EfficiencyBackground,
         JsonSerializer.Serialize(_state.Memory),
@@ -1804,6 +1795,7 @@ public partial class SettingsWindow : Window
         _state.DebugLogging = DebugLogBox.IsChecked == true;
         _state.DebugLogMode = DebugSessionRadio.IsChecked == true ? "PerSession" : "Continuous";
         _state.PinTrayIcon = PinTrayBox.IsChecked == true;
+        _state.AutoUpdate = AutoUpdateBox.IsChecked == true;
         _state.AlwaysAdmin = AlwaysAdminBox.IsChecked == true;
         _state.Memory = ReadMemorySettings();
         _state.WhatsNewMode = WhatsNewCombo.SelectedIndex switch { 1 => "Always", 2 => "Never", _ => "Update" };
@@ -2283,10 +2275,7 @@ public partial class SettingsWindow : Window
         SetStatus("The never-trim list changed. Press Apply or Save to use it.", false);
     }
 
-    /// <summary>
-    /// Changing "always start as administrator" needs the app to be running as administrator (the scheduled task can only be made or
-    /// removed from an elevated copy). Without that, the box is greyed out and says how to turn it on.
-    /// </summary>
+    /// <summary>"Always start as administrator" can only be changed while running as admin. Otherwise the box is greyed out.</summary>
     private void UpdateAlwaysAdminControls()
     {
         bool admin = PreviewManager.IsAdministrator;
@@ -2437,6 +2426,7 @@ public partial class SettingsWindow : Window
             grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(200) });
             grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
             grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
 
             FrameworkElement label;
             if (kind == "keyword")
@@ -2469,12 +2459,28 @@ public partial class SettingsWindow : Window
             var test = new Button { Content = "Test", Padding = new Thickness(10, 4, 10, 4), Margin = new Thickness(6, 0, 0, 0), ToolTip = "Play this alert's sound" };
             test.Click += (_, _) => TestRowSound(row);
 
+            bool mining = kind == "mining";
+            row.Cooldown = new TextBox
+            {
+                Width = 56,
+                Margin = new Thickness(8, 0, 0, 0),
+                VerticalAlignment = VerticalAlignment.Center,
+                Text = (mining ? s.LogMiningIdleSeconds : s.CooldownFor(kind)).ToString(),
+                ToolTip = mining ? "Seconds with no mining before the alert." : "Cooldown (s). 0 = every time."
+            };
+            var unit = new TextBlock { Text = mining ? "s idle" : "s", Width = 34, Margin = new Thickness(5, 0, 0, 0), Foreground = Theme.Muted, VerticalAlignment = VerticalAlignment.Center };
+            var cooldownPanel = new StackPanel { Orientation = Orientation.Horizontal };
+            cooldownPanel.Children.Add(row.Cooldown);
+            cooldownPanel.Children.Add(unit);
+
             Grid.SetColumn(row.Sound, 1);
             Grid.SetColumn(volumePanel, 2);
-            Grid.SetColumn(test, 3);
+            Grid.SetColumn(cooldownPanel, 3);
+            Grid.SetColumn(test, 4);
             grid.Children.Add(label);
             grid.Children.Add(row.Sound);
             grid.Children.Add(volumePanel);
+            grid.Children.Add(cooldownPanel);
             grid.Children.Add(test);
             AlertRows.Children.Add(grid);
             _alertRows.Add(row);
@@ -2485,6 +2491,8 @@ public partial class SettingsWindow : Window
     {
         s.AlertSounds = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         s.AlertVolumes = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        s.AlertCooldowns = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        s.AlertCooldownsMigrated = true;
         int main = (int)Math.Round(NotifyVolumeSlider.Value);
         foreach (var row in _alertRows)
         {
@@ -2493,7 +2501,25 @@ public partial class SettingsWindow : Window
             if (id.Length > 0) s.AlertSounds[row.Kind] = id;
             int volume = (int)Math.Round(row.Volume.Value);
             if (volume != main) s.AlertVolumes[row.Kind] = volume;
+            if (!int.TryParse(row.Cooldown.Text.Trim(), out int seconds)) continue;
+            if (row.Kind == "mining") s.LogMiningIdleSeconds = seconds;
+            else s.AlertCooldowns[row.Kind] = seconds;
         }
+    }
+
+    /// <summary>A short message for the first alert time that isn't valid, or null when they all are.</summary>
+    private string? AlertRowError()
+    {
+        foreach (var row in _alertRows)
+        {
+            string name = AlertKinds.First(k => k.Kind == row.Kind).Text;
+            if (row.Kind == "mining")
+            {
+                if (!InRange(row.Cooldown.Text, 10, 86400, out _)) return name + ": 10 seconds or more.";
+            }
+            else if (!InRange(row.Cooldown.Text, 0, 3600, out _)) return name + ": cooldown 0–3600 seconds.";
+        }
+        return null;
     }
 
     private string MainSoundId() => (NotifySoundCombo.SelectedItem as SoundChoice)?.Id ?? SoundLibrary.DefaultId;
@@ -2825,8 +2851,8 @@ public partial class SettingsWindow : Window
         if (!MemoryCleaner.TryParseLimits(MemLimitsText.Text, out _, out string limitError))
             return Fail(PageMemory_, limitError);
         // Notifications
-        if (!InRange(NotifyCooldownBox.Text, 0, 3600, out int cooldown))
-            return Fail(PageAlerts_, "The cooldown must be 0 to 3600 seconds.");
+        if (AlertRowError() is string alertError)
+            return Fail(PageAlerts_, alertError);
         if (!InRange(NotifySecondsBox.Text, 1, 120, out int flashSeconds))
             return Fail(PageAlerts_, "The flash time must be 1 to 120 seconds.");
         if (!NotifyColourBox.IsValid)
@@ -2835,8 +2861,6 @@ public partial class SettingsWindow : Window
         // Log monitoring
         if (!InRange(LogPollBox.Text, 250, 10000, out int logPoll))
             return Fail(PageAlerts_, "The check interval must be 250 to 10000 ms.");
-        if (!InRange(LogMiningSecondsBox.Text, 10, 86400, out int miningSeconds))
-            return Fail(PageAlerts_, "The mining quiet time must be 10 seconds or more.");
 
         // Characters
         if (!CommitCharacter())
@@ -2905,7 +2929,6 @@ public partial class SettingsWindow : Window
 
         _work.NotificationsEnabled = NotifyEnabledBox.IsChecked == true;
         _work.NotifySkipActiveClient = NotifySkipActiveBox.IsChecked == true;
-        _work.NotifyCooldownSeconds = cooldown;
         _work.NotifyFlashBorder = NotifyFlashBox.IsChecked == true;
         _work.NotifyBorderHex = NotifyColourBox.Hex.Length > 0 ? NotifyColourBox.Hex : "#F87171";
         _work.NotifyBorderSeconds = flashSeconds;
@@ -2920,7 +2943,6 @@ public partial class SettingsWindow : Window
         _work.GameLogFolder = GameFolderBox.Text.Trim();
         _work.ChatLogFolder = ChatFolderBox.Text.Trim();
         ReadAlertRows(_work);
-        _work.LogMiningIdleSeconds = miningSeconds;
         _work.LogKeywords = string.Join("\n", LogKeywordsBox.Text
             .Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries));
         _work.ShowSystemName = LogSystemBox.IsChecked == true;

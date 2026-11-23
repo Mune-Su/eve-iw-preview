@@ -192,7 +192,25 @@ public sealed class AppSettings
     // ----- notifications -----
     public bool NotificationsEnabled { get; set; } = false;
     public bool NotifySkipActiveClient { get; set; } = true;
+    /// <summary>Older versions: one cooldown for every alert. Copied into AlertCooldowns once if it had been changed.</summary>
     public int NotifyCooldownSeconds { get; set; } = 20;
+    /// <summary>Alert kind -> its own cooldown in seconds (0 = every time). Missing = the default for that alert.</summary>
+    public Dictionary<string, int> AlertCooldowns { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+    /// <summary>True once the old single cooldown has been moved into AlertCooldowns.</summary>
+    public bool AlertCooldownsMigrated { get; set; } = false;
+
+    /// <summary>Default cooldown for each alert, in seconds.</summary>
+    public static int DefaultCooldown(string kind) => kind switch
+    {
+        "attack" or "warp-scram" => 10,
+        "warp-bubble" or "keyword" => 30,
+        "decloak" or "cloak-failed" or "fleet-follow" or "regroup" => 5,
+        _ => 0
+    };
+
+    /// <summary>The cooldown in use for one alert.</summary>
+    public int CooldownFor(string kind) =>
+        AlertCooldowns.TryGetValue(kind, out int seconds) ? Math.Clamp(seconds, 0, 3600) : DefaultCooldown(kind);
     public bool NotifyFlashBorder { get; set; } = true;
     public string NotifyBorderHex { get; set; } = "#F87171";
     public int NotifyBorderSeconds { get; set; } = 6;
@@ -277,10 +295,7 @@ public sealed class AppSettings
     public IEnumerable<string> AllGroupCharacters() =>
         ThumbnailGroups.SelectMany(g => g.Characters).Concat(Roster);
 
-    /// <summary>
-    /// Makes sure there is at least one group of each kind. A profile from an older version gets a "Default" group built
-    /// from what it had before (its client hotkeys, its character list, "also show other characters").
-    /// </summary>
+    /// <summary>Makes sure there's at least one group of each kind. Old profiles get a "Default" group from what they had.</summary>
     public void EnsureGroups()
     {
         if (ClientHotkeyGroups.Count == 0)
@@ -410,6 +425,8 @@ public sealed class AppState
     public string DebugLogMode { get; set; } = "Continuous";
     /// <summary>Keep the tray icon on the main tray instead of the hidden-icons overflow (Windows 11).</summary>
     public bool PinTrayIcon { get; set; } = true;
+    /// <summary>Download new versions in the background and install them when the app next starts.</summary>
+    public bool AutoUpdate { get; set; } = true;
     /// <summary>True = the app always starts as administrator (through a scheduled task, so Windows doesn't ask each time). Set up once with "Restart as administrator".</summary>
     public bool AlwaysAdmin { get; set; } = false;
     /// <summary>A random value mixed into the codes that replace names in the logs (so the codes can't be matched against a list of names).</summary>

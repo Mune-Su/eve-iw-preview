@@ -12,10 +12,7 @@ internal sealed class NotificationService
     private SoundPlayer? _fallback;
     private object? _voice;
 
-    /// <summary>
-    /// Plays a sound at a volume (0 to 100). Stops after 10 seconds. If the sound can't be played, the default sound plays
-    /// instead and the reason goes in the log. legacyFile: a custom .wav path saved by an older version.
-    /// </summary>
+    /// <summary>Plays a sound at 0–100% volume, for up to 10 s. If it can't play, the default sound plays and the reason is logged.</summary>
     public void Play(string id, int volume, string legacyFile = "")
     {
         if (id == SoundLibrary.NoneId) return;

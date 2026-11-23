@@ -6,10 +6,8 @@ using AUTZ.IronWorks.Preview.Core;
 namespace AUTZ.IronWorks.Preview.Services;
 
 /// <summary>
-/// Global hotkeys. A plain key (with optional Ctrl/Alt/Shift/Win) is registered with Windows so switches are allowed
-/// directly; everything else uses low-level keyboard and mouse hooks, so there are no restrictions: any key, any mouse button
-/// (including the side buttons and the wheel), single keys with no modifier, chords of several keys, and
-/// modifier-only hotkeys all work. The hook callbacks do almost nothing: a match is handed to the UI thread.
+/// Global hotkeys. Plain keys are registered with Windows. Everything else (mouse buttons, combos, modifier-only) uses keyboard and mouse hooks.
+/// The hooks only pass a match on to the UI thread.
 /// </summary>
 public sealed class HotkeyService : IDisposable
 {
@@ -19,7 +17,7 @@ public sealed class HotkeyService : IDisposable
         public string Text = "";
         public Action Action = () => { };
         public int Weight => Spec.Inputs.Count * 4 + Spec.Modifiers.Count;
-        public int SystemId;                 // v0.9.7: non-zero while registered with Windows (RegisterHotKey)
+        public int SystemId;                 //  non-zero while registered with Windows (RegisterHotKey)
     }
 
     private static readonly int[] MouseVk = { 0, 0x01, 0x02, 0x04, 0x05, 0x06 };
@@ -76,12 +74,7 @@ public sealed class HotkeyService : IDisposable
         UpdateHooks();
     }
 
-    /// <summary>
-    /// A low-level hook is called for EVERY key press (or mouse move) on the whole PC, so it is only installed while a hotkey
-    /// really needs it: the keyboard hook for hotkeys Windows can't deliver itself (chords, mouse buttons, modifier-only,
-    /// pass-through, "only in EVE"), the mouse hook for mouse hotkeys. Hotkeys registered with Windows need neither,
-    /// and while hotkeys are suspended nothing is hooked at all.
-    /// </summary>
+    /// <summary>The hooks see every key press on the PC, so they're only installed when a hotkey needs them. Nothing is hooked while hotkeys are paused.</summary>
     private void UpdateHooks()
     {
         bool needKeys = !_suspended && _bindings.Any(b => b.SystemId == 0);
@@ -122,10 +115,7 @@ public sealed class HotkeyService : IDisposable
 
     private long _lastBlockedLog = -10000;
 
-    /// <summary>
-    /// A key that is one of our hotkeys was pressed while hotkeys are limited to "only while an EVE client is in front" and none
-    /// is: say so in preview.log (at most once every 5 seconds), because from the outside it just looks like the hotkey is broken.
-    /// </summary>
+    /// <summary>A hotkey was pressed but blocked by "only while EVE is in front". Notes it in preview.log (at most every 5 s).</summary>
     private void NoteBlocked(int vk)
     {
         try

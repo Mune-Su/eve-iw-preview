@@ -32,9 +32,8 @@ public sealed record LogConfig(
 public sealed record LogEvent(string Character, string Kind, string Message);
 
 /// <summary>
-/// Reads the log files the EVE client itself writes for the player (Documents\EVE\logs): game logs for combat, mining
-/// and keyword alerts, and the Local chat log for the current solar system. It only ever reads; new lines are picked
-/// up as they are written. File work happens on a background timer and results are handed to the UI thread.
+/// Reads EVE's own log files (Documents\EVE\logs) for alerts and the current solar system.
+/// Read only. Works on a background timer and hands results to the UI thread.
 /// </summary>
 public sealed class LogMonitorService : IDisposable
 {
@@ -170,10 +169,7 @@ public sealed class LogMonitorService : IDisposable
             _tails.Remove(stale.Path);
     }
 
-    /// <summary>
-    /// The log files written to since the given time. The game-log folder grows by a file per session for years, so the
-    /// listing is filtered while the folder is read: only the few recent files are ever turned into objects.
-    /// </summary>
+    /// <summary>The log files changed since the given time. Only recent files are looked at, so years of old logs cost nothing.</summary>
     private static List<string> RecentFiles(string folder, DateTime sinceLocal, bool chat)
     {
         DateTime sinceUtc = sinceLocal.ToUniversalTime();
