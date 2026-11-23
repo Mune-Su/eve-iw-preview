@@ -7,6 +7,12 @@ internal static class Changelog
 {
     public static readonly ChangelogEntry[] Entries =  
       {
+        new("0.19.22", "One-start updates", new[]
+        {
+            "Updates now install in a single start. The app checks GitHub before it opens and installs a newer version straight away.",
+            "A small window with the crucible shows the download. It only appears when there is an update.",
+            "If there's no internet or GitHub is slow, the app opens as normal."
+        }),
         new("0.19.21", "Smarter mining alert", new[]
         {
             "Mining stopped can be set to 0 (automatic). It alerts as soon as a mining cycle is missed.",

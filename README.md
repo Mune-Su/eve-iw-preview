@@ -15,7 +15,7 @@ It only shows pictures of your clients and brings windows to the front. It never
 
 - Installs for your Windows account only. No admin rights needed.
 - Shows in Programs and Features, with an uninstaller.
-- **Updates itself:** new versions download in the background and install silently the next time the app starts. Turn it off under About > Update automatically.
+- **Updates itself:** the app checks for a newer version each time it starts, and installs it straight away with no prompts. Turn it off under About > Update automatically.
 - Your settings and profiles are kept on every update.
 - Needs the .NET 8 Desktop Runtime. Setup tells you if it's missing.
 
@@ -109,7 +109,7 @@ dotnet build -c Release
 
 - Every push to `release` runs **Validate**: restore, build, and build the installer.
 - Pushing a `vX.Y.Z` tag runs **Release**: builds the installer and publishes `EVE-IW-Preview-Setup.exe` and `SHA256SUMS.txt` as the GitHub release.
-- Installed copies pick up the new **Latest** release by themselves and install it on their next start.
+- Installed copies pick up the new **Latest** release the next time they start.
 
 ## Version history
 

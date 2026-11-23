@@ -34,8 +34,16 @@ public partial class App : System.Windows.Application
 
         WaitForPreviousInstance(e.Args);               // "Restart as administrator": let the old copy finish closing first
 
-        // a downloaded update installs now, silently, and opens the new version
-        if (UpdateService.InstallPendingUpdate(ProfileStore.LoadState().AutoUpdate))
+        // updates: a Setup that is already downloaded installs now. Otherwise GitHub is checked (a few seconds at most) and a newer
+        // version is downloaded with the crucible window, installed silently, and opened. Nothing shows when there is no update.
+        bool autoUpdate = ProfileStore.LoadState().AutoUpdate;
+        if (UpdateService.InstallPendingUpdate(autoUpdate))
+        {
+            Shutdown();
+            return;
+        }
+        // a copy the admin task or "Restart as administrator" started has just been through this: it doesn't check again
+        if (!HasArg(e.Args, AdminTaskService.TaskArgument) && !HasArg(e.Args, "--after-pid") && UpdateService.UpdateAtStartup(autoUpdate))
         {
             Shutdown();
             return;
