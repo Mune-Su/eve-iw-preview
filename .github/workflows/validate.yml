@@ -1,5 +1,8 @@
 name: Validate EVE-IW-Preview
 
+# the run title in the Actions list, e.g. "v0.19.21 Test"
+run-name: ${{ github.event.head_commit.message || github.ref_name }} Test
+
 on:
   push:
     branches:

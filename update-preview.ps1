@@ -32,11 +32,12 @@ git fetch origin release --tags; if ($LASTEXITCODE) { Stop-Update 'Fetch failed.
 git pull --ff-only origin release; if ($LASTEXITCODE) { Stop-Update 'Fast-forward pull failed.' }
 
 $Downloads = Join-Path $HOME 'Downloads'
-$Packages = Get-ChildItem $Downloads -File -Filter 'EVE-IW-Preview-v*.zip' | ForEach-Object {
-    if ($_.BaseName -match '^EVE-IW-Preview-v(.+)$') { $k = Version-Key $Matches[1]; if ($k) { [pscustomobject]@{ File = $_; Version = $Matches[1]; Key = $k } } }
+# accepts EVE-IW-Preview-v0.19.21.zip and EVE-IW-Preview v0.19.21.zip (a space instead of the dash)
+$Packages = Get-ChildItem $Downloads -File | Where-Object { $_.Extension -eq '.zip' -and $_.Name -match '^EVE-IW-Preview[- ]v' } | ForEach-Object {
+    if ($_.BaseName -match '^EVE-IW-Preview[- ]v(.+)$') { $k = Version-Key $Matches[1]; if ($k) { [pscustomobject]@{ File = $_; Version = $Matches[1]; Key = $k } } }
 } | Sort-Object Key -Descending
 $Selected = $Packages | Select-Object -First 1
-if (-not $Selected) { Stop-Update 'No EVE-IW-Preview-vX.Y.Z.zip found in Downloads.' }
+if (-not $Selected) { Stop-Update 'No EVE-IW-Preview-vX.Y.Z.zip (or EVE-IW-Preview vX.Y.Z.zip) found in Downloads.' }
 $Version = $Selected.Version
 Write-Host "Using $($Selected.File.Name)" -ForegroundColor Cyan
 
@@ -92,8 +93,9 @@ try {
 if ($Built) {
     $Versions = Get-VersionsFolder
     try {
-        Move-Item -LiteralPath $Selected.File.FullName -Destination (Join-Path $Versions $Selected.File.Name) -Force
-        Write-Host "Moved $($Selected.File.Name) to $Versions" -ForegroundColor Cyan
+        $KeepName = "EVE-IW-Preview-v$Version.zip"      # saved with the dash, whichever way it arrived
+        Move-Item -LiteralPath $Selected.File.FullName -Destination (Join-Path $Versions $KeepName) -Force
+        Write-Host "Moved $KeepName to $Versions" -ForegroundColor Cyan
     } catch { Write-Host "Couldn't move the ZIP out of Downloads: $($_.Exception.Message)" -ForegroundColor Yellow }
 
     Write-Host ''; Write-Host 'Changes (A = added, M = modified, D = deleted, R = renamed):' -ForegroundColor Cyan

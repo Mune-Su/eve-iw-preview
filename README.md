@@ -57,7 +57,7 @@ Read from EVE's own game logs (read only). Each alert can flash the thumbnail bo
 | Decloaked | Your cloak dropped |
 | Cloak failed | Your cloak couldn't turn on |
 | Mining crystal broke | A mining crystal was used up |
-| Mining stopped | No mining for the time you set |
+| Mining stopped | A missed mining cycle (automatic), or no mining for the time you set |
 | Compression done | Ore was compressed |
 | Warp follow | You're following a fleet warp |
 | Fleet regroup | Your fleet is regrouping |

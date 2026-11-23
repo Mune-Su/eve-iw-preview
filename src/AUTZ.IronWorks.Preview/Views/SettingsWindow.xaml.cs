@@ -2466,7 +2466,7 @@ public partial class SettingsWindow : Window
                 Margin = new Thickness(8, 0, 0, 0),
                 VerticalAlignment = VerticalAlignment.Center,
                 Text = (mining ? s.LogMiningIdleSeconds : s.CooldownFor(kind)).ToString(),
-                ToolTip = mining ? "Seconds with no mining before the alert." : "Cooldown (s). 0 = every time."
+                ToolTip = mining ? "0 = automatic: alerts as soon as a mining cycle is missed." : "Cooldown (s). 0 = every time."
             };
             var unit = new TextBlock { Text = mining ? "s idle" : "s", Width = 34, Margin = new Thickness(5, 0, 0, 0), Foreground = Theme.Muted, VerticalAlignment = VerticalAlignment.Center };
             var cooldownPanel = new StackPanel { Orientation = Orientation.Horizontal };
@@ -2515,7 +2515,7 @@ public partial class SettingsWindow : Window
             string name = AlertKinds.First(k => k.Kind == row.Kind).Text;
             if (row.Kind == "mining")
             {
-                if (!InRange(row.Cooldown.Text, 10, 86400, out _)) return name + ": 10 seconds or more.";
+                if (!InRange(row.Cooldown.Text, 0, 86400, out _)) return name + ": 0–86400 seconds.";
             }
             else if (!InRange(row.Cooldown.Text, 0, 3600, out _)) return name + ": cooldown 0–3600 seconds.";
         }

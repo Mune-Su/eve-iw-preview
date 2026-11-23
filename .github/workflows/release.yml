@@ -1,5 +1,8 @@
 name: Release EVE-IW-Preview
 
+# the run title in the Actions list, e.g. "v0.19.21 PROD"
+run-name: ${{ github.ref_name }} PROD
+
 on:
   push:
     tags:

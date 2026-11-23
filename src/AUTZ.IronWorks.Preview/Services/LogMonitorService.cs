@@ -57,6 +57,7 @@ public sealed class LogMonitorService : IDisposable
     private readonly Dictionary<string, Tail> _tails = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, DateTime> _lastMining = new(StringComparer.OrdinalIgnoreCase);
     private readonly HashSet<string> _miningFired = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, Queue<double>> _miningGaps = new(StringComparer.OrdinalIgnoreCase);   // recent seconds between mining lines, per character
     private Timer? _timer;
     private LogConfig _config = new(false, "", "", 1000, true, false, false, false, false, false, false, false, false, false, false, false, 60, Array.Empty<string>(), false);
 
@@ -97,6 +98,7 @@ public sealed class LogMonitorService : IDisposable
             _tails.Clear();
             _lastMining.Clear();
             _miningFired.Clear();
+            _miningGaps.Clear();
             _initialScanDone = false;
             _lastScan = DateTime.MinValue;
 
@@ -303,7 +305,19 @@ public sealed class LogMonitorService : IDisposable
 
         if (kind == "mining")
         {
-            _lastMining[tail.Listener] = DateTime.UtcNow;
+            var now = DateTime.UtcNow;
+            if (_lastMining.TryGetValue(tail.Listener, out var before) && !_miningFired.Contains(tail.Listener))
+            {
+                // learn the mining cycle: the longest gap between the last few mining lines (lasers on the same ship can be staggered)
+                if (!_miningGaps.TryGetValue(tail.Listener, out var gaps)) _miningGaps[tail.Listener] = gaps = new Queue<double>();
+                gaps.Enqueue((now - before).TotalSeconds);
+                while (gaps.Count > 8) gaps.Dequeue();
+            }
+            else if (_miningFired.Contains(tail.Listener))
+            {
+                _miningGaps.Remove(tail.Listener);       // mining started again after a stop: learn the cycle afresh
+            }
+            _lastMining[tail.Listener] = now;
             _miningFired.Remove(tail.Listener);
         }
 
@@ -353,14 +367,21 @@ public sealed class LogMonitorService : IDisposable
     private static bool ContainsAny(string text, params string[] fragments) =>
         fragments.Any(fragment => text.Contains(fragment, StringComparison.OrdinalIgnoreCase));
 
+    private const double MiningAutoMargin = 3;      // seconds of slack on top of the learned mining cycle
+
     private void CheckMiningIdle(LogConfig config)
     {
         if (!config.MiningIdle) return;
-        var limit = TimeSpan.FromSeconds(Math.Max(10, config.MiningIdleSeconds));
         foreach (var pair in _lastMining.ToList())
         {
-            if (_miningFired.Contains(pair.Key) || DateTime.UtcNow - pair.Value < limit) continue;
+            if (_miningFired.Contains(pair.Key)) continue;
+            double limit;
+            if (config.MiningIdleSeconds > 0) limit = config.MiningIdleSeconds;
+            else if (_miningGaps.TryGetValue(pair.Key, out var gaps) && gaps.Count >= 2) limit = Math.Clamp(gaps.Max(), 3, 600) + MiningAutoMargin;   // 0 = automatic: the learned cycle plus a few seconds
+            else limit = 90;                                                                                                                             // cycle not learned yet
+            if ((DateTime.UtcNow - pair.Value).TotalSeconds < limit) continue;
             _miningFired.Add(pair.Key);
+            Log.Debug("ALERT", $"mining stopped: no mining line for {(DateTime.UtcNow - pair.Value).TotalSeconds:0} s (limit {limit:0} s{(config.MiningIdleSeconds > 0 ? "" : ", automatic")})");
             Post(new LogEvent(pair.Key, "mining", "has stopped mining"));
         }
     }

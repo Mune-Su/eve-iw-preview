@@ -2,6 +2,11 @@
 
 Every version of EVE-IW-Preview, newest first. The app shows the same list under About > What's New.
 
+## v0.19.21 — Smarter mining alert
+
+- Mining stopped can be set to 0 (automatic). It alerts as soon as a mining cycle is missed.
+- The app learns each character's mining cycle. A number above 0 still works as a fixed time.
+
 ## v0.19.20 — Desktop icon option
 
 - The installer now offers to create a desktop icon. It's unticked by default.
