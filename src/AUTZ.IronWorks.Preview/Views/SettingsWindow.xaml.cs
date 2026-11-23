@@ -21,8 +21,7 @@ public partial class SettingsWindow : Window
     private const int PageGroups_ = 2;          // the character groups and Find Running Clients
     private const int PageHotkeys_ = 3;
     private const int PageAlerts_ = 4;          // notifications and log monitoring
-    private const int PageMemory_ = 5;
-    private const int PagePerformance_ = 6;
+    private const int PageMemory_ = 5;          // the Performance page: features, memory, client speed, top programs, exclusions
 
     private const int MaxSlotRows = 20;
     private const int MaxThumbRows = 60;
@@ -89,8 +88,8 @@ public partial class SettingsWindow : Window
     private readonly List<HotkeyField> _slotFields = new();
     private HashSet<string> _running;
     private bool _fontsLoaded;
-    private readonly System.Windows.Threading.DispatcherTimer _memTimer = new() { Interval = TimeSpan.FromSeconds(2) };   // runs only while the Memory page is showing
-    private readonly System.Windows.Threading.DispatcherTimer _progTimer = new() { Interval = TimeSpan.FromSeconds(10) };  // Top Programs: only while the Memory page is showing and the window isn't minimised
+    private readonly System.Windows.Threading.DispatcherTimer _memTimer = new() { Interval = TimeSpan.FromSeconds(2) };   // runs only while the Performance page is showing
+    private readonly System.Windows.Threading.DispatcherTimer _progTimer = new() { Interval = TimeSpan.FromSeconds(10) };  // Top Programs: only while the Performance page is showing and the window isn't minimised
     private bool _progBusy;
     private TrimEstimate? _trimEstimate;
     private ClipboardInfo? _clipInfo;
@@ -217,16 +216,15 @@ public partial class SettingsWindow : Window
 
     private void BuildNav()
     {
-        _pages.Add(new PageDef("General", PageGeneral, new Control[] { CardComponents, CardStartup, CardClients }));
+        _pages.Add(new PageDef("General", PageGeneral, new Control[] { CardStartup, CardClients }));
         _pages.Add(new PageDef("Thumbnails", PageThumbs, new Control[] { CardSize, CardLabel, CardActiveBorder, CardCharacter, CardInteraction }));
         _pages.Add(new PageDef("Grouping", PageGroups, new Control[] { CardRoster, CardScan, CardClientOrder }));
         _pages.Add(new PageDef("Hotkeys", PageHotkeys, new Control[] { CardCycling, CardHotkeyOptions, CardSlotKeys, CardCharActions, CardSkipped, CardProfileKeys, CardOtherKeys }));
         _pages.Add(new PageDef("Alerts", PageAlerts, new Control[] { CardNotifyMain, CardLogMain, CardLogEvents }));
-        _pages.Add(new PageDef("Memory", PageMemory, new Control[] { CardMemoryNow, CardMemoryAuto, CardMemoryTop, CardMemoryKeep }));
-        _pages.Add(new PageDef("Performance", PagePerformance, new Control[] { CardPerformance }));
-        _pages.Add(new PageDef("About", PageAbout, new Control[] { CardAbout, CardWhatsNew }));
+        _pages.Add(new PageDef("Performance", PageMemory, new Control[] { CardComponents, CardMemoryNow, CardPerformance, CardMemoryTop, CardMemoryKeep }));
         _pages.Add(new PageDef("Diagnostics", PageDiagnostics, new Control[] { CardFiles, CardDiagnostics }));
         if (AdminAccess.IsOwner) _pages.Add(new PageDef("Admin", PageAdmin, new Control[] { CardAdmin, CardAdminTools }));
+        _pages.Add(new PageDef("About", PageAbout, new Control[] { CardAbout, CardWhatsNew }));          // About is always last
 
         for (int i = 0; i < _pages.Count; i++)
         {
@@ -297,12 +295,12 @@ public partial class SettingsWindow : Window
         _pages[index].Page.ScrollToVerticalOffset(0);
         if (leavingThumbs) RefreshAfterThumbEdit();
 
-        // the memory and program readings are only taken while the Memory page is showing
+        // the memory and program readings are only taken while the Performance page is showing
         if (index == PageMemory_) RefreshMemory();
         UpdateMemoryTimers();
     }
 
-    /// <summary>The memory readings and the Top Programs list run only while the Memory page is showing and the window isn't minimised.</summary>
+    /// <summary>The memory readings and the Top Programs list run only while the Performance page is showing and the window isn't minimised.</summary>
     private void UpdateMemoryTimers()
     {
         if (_pageIndex == PageMemory_ && WindowState != WindowState.Minimized)
@@ -2282,7 +2280,7 @@ public partial class SettingsWindow : Window
         AlwaysAdminBox.IsEnabled = admin;
         AlwaysAdminNote.Text = admin
             ? "Starts as administrator every time, with no Windows prompt."
-            : "To turn this on: Memory > Restart as administrator > Always.";
+            : "To turn this on: Performance > Restart as administrator > Always.";
     }
 
     /// <summary>The scheduled task couldn't be made after all: untick the box and say why.</summary>

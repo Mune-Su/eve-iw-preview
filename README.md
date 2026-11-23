@@ -69,13 +69,13 @@ Read from EVE's own game logs (read only). Each alert can flash the thumbnail bo
 - Built-in sounds: Chime, Ping, Double Beep, Klaxon, Rising, Falling, Alarm, Blip. The Windows sounds are listed too.
 - **Add your own:** .wav, .mp3, .m4a, .wma or .aac. Max 5 MB, plays up to 10 seconds.
 
-### Memory cleaner
+### Memory cleaner (Configuration > Performance)
 - Trim programs, clear the system cache (admin), clear the clipboard, restart Windows Explorer.
 - Automatic cleaning on a timer, when memory use is high, or when a program goes over its own limit.
 - Top 10 programs by memory, with trends. A never-trim list.
 - Shows the last automatic clean, or why it's waiting.
 
-### Performance
+### Client speed (Configuration > Performance)
 All off by default. Each one has its own switch, and the tray menu turns them all off or on at once.
 - High Performance power plan while EVE is running. Switches back when the last client closes.
 - Raise priority of the client in front (Above Normal).

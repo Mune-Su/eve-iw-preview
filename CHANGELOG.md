@@ -2,6 +2,13 @@
 
 Every version of EVE-IW-Preview, newest first. The app shows the same list under About > What's New.
 
+## v0.19.23 — Memory and Performance together
+
+- Memory and Performance are now one page, called Performance. Everything from both is still there.
+- The App Components card moved to the top of Performance and is now called Features.
+- The Performance card is now called Client Speed.
+- About is always the last menu.
+
 ## v0.19.22 — One-start updates
 
 - Updates now install in a single start. The app checks GitHub before it opens and installs a newer version straight away.
