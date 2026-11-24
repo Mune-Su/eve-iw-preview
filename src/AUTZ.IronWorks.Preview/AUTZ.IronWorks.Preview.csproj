@@ -8,11 +8,11 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <AssemblyName>EVE-IW-Preview</AssemblyName>
     <RootNamespace>AUTZ.IronWorks.Preview</RootNamespace>
-    <Version>0.19.23</Version>
+    <Version>0.19.24</Version>
     <Product>EVE-IronWorks-Preview</Product>
     <Company>AUTZ IronWorks</Company>
     <Authors>AUTZ IronWorks</Authors>
-    <Description>EVE-IW-Preview (EVE-IronWorks-Preview): live previews and instant switching for your EVE Online clients, by AUTZ IronWorks</Description>
+    <Description>EVE-IW-Preview (EVE-IronWorks-Preview): live previews and instant switching for your EVE Online clients, by AUTZ IronWorks. Windows only.</Description>
     <Copyright>AUTZ IronWorks</Copyright>
     <ApplicationIcon>Assets\app.ico</ApplicationIcon>
     <ApplicationManifest>app.manifest</ApplicationManifest>
@@ -41,3 +41,4 @@
     <Using Remove="System.Drawing" />
   </ItemGroup>
 </Project>
+

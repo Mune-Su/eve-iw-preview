@@ -9,7 +9,7 @@ namespace AUTZ.IronWorks.Preview.Services;
 
 public sealed record ProfileImportResult(AppSettings Settings, string Source, string SuggestedName, int Characters, int Positions, int Groups);
 
-/// <summary>Reads EVE-IW profiles, and profiles made by other preview apps (.ini and .json), into a new EVE-IW profile.</summary>
+/// <summary>Reads EVE-IW profiles, and .ini and .json profiles, into a new EVE-IW profile.</summary>
 public static class ProfileImportService
 {
     public static bool TryImport(string path, out ProfileImportResult? result, out string error)
@@ -23,7 +23,7 @@ public static class ProfileImportService
             if (Path.GetExtension(path).Equals(".ini", StringComparison.OrdinalIgnoreCase))
             {
                 var settings = ImportIni(text, out int positions, out int groups);
-                result = Result(settings, "Preview app (.ini)", name, positions, groups);
+                result = Result(settings, ".ini", name, positions, groups);
                 return true;
             }
             using var document = JsonDocument.Parse(text);
@@ -32,14 +32,14 @@ public static class ProfileImportService
                 (root.TryGetProperty("characters", out _) || root.TryGetProperty("hotkeyGroups", out _)))
             {
                 var settings = ImportNested(root, out int positions, out int groups);
-                result = Result(settings, "Preview app (.json)", name, positions, groups);
+                result = Result(settings, ".json", name, positions, groups);
                 return true;
             }
             if (root.ValueKind == JsonValueKind.Object &&
                 (root.TryGetProperty("FlatLayout", out _) || root.TryGetProperty("ClientHotkey", out _) || root.TryGetProperty("ThumbnailRefreshPeriod", out _)))
             {
                 var settings = ImportFlat(root, out int positions, out int groups);
-                result = Result(settings, "Preview app (.json)", name, positions, groups);
+                result = Result(settings, ".json", name, positions, groups);
                 return true;
             }
             if (root.TryGetProperty("PreviewWidth", out _))
@@ -370,3 +370,4 @@ public static class ProfileImportService
     private static string Colour(string text, string fallback) => Colour(text, fallback, out _);
     private static string Colour(string text, string fallback, out int alpha) { alpha = 100; text = text.Trim(); if (Regex.IsMatch(text, @"^0x[0-9A-Fa-f]{8}$")) { alpha = (int)Math.Round(Convert.ToInt32(text.Substring(2, 2), 16) * 100 / 255d); return "#" + text[4..].ToUpperInvariant(); } if (Regex.IsMatch(text, @"^#[0-9A-Fa-f]{8}$")) { alpha = (int)Math.Round(Convert.ToInt32(text.Substring(1, 2), 16) * 100 / 255d); return "#" + text[3..].ToUpperInvariant(); } return Regex.IsMatch(text, @"^#[0-9A-Fa-f]{6}$") ? text.ToUpperInvariant() : fallback; }
 }
+

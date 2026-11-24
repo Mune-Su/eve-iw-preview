@@ -2,6 +2,12 @@
 
 Every version of EVE-IW-Preview, newest first. The app shows the same list under About > What's New.
 
+## v0.19.24 — Login screen hotkeys and Discord
+- New: Next / Previous Login Screen hotkeys. They only go to clients that aren't logged in yet.
+- Cycling now says which order it follows.
+- Client Speed notes say when each option helps.
+- About says the app is Windows only, and links to the Discord, website and GitHub.
+
 ## v0.19.23 — Memory and Performance together
 
 - Memory and Performance are now one page, called Performance. Everything from both is still there.
@@ -119,9 +125,9 @@ Every version of EVE-IW-Preview, newest first. The app shows the same list under
 - Hide All Thumbnails is now Pause Switching. It hides every thumbnail and disables client cycling, client-slot hotkeys, per-character jump hotkeys, profile hotkeys and tray profile switching until Resume Switching is selected.
 - Pause Switching now fully closes every thumbnail window, including its border and label. Pause/resume and Detailed Logging no longer show tray notifications.
 
-## v0.19.3 — Import profiles from other preview apps
+## v0.19.3 — Import profiles
 
-- Configuration > Import now reads .ini and .json profiles from other preview apps, as well as EVE-IW profiles.
+- Configuration > Import now reads .ini and .json profiles, as well as EVE-IW profiles.
 - Supported thumbnail appearance, character groups, saved positions, snapping, hiding, auto-minimise, log folders and hotkeys are converted into a new EVE-IW profile.
 - A summary is shown before import. The source file and existing EVE-IW profiles are never changed.
 - Settings with no genuine EVE-IW equivalent are safely ignored.
@@ -439,3 +445,4 @@ Every version of EVE-IW-Preview, newest first. The app shows the same list under
 
 - AUTZ IronWorks emblem for the exe, tray and windows.
 - Drag the bottom-right corner to resize, colour pickers, and updates that never touch a running app.
+

@@ -46,6 +46,12 @@ internal static class AppInfo
     /// <summary>Where the credit line links to.</summary>
     public const string Website = "https://autz-ironworks.vercel.app/#/home";
 
+    /// <summary>The project page on GitHub.</summary>
+    public const string GitHub = "https://github.com/Mune-Su/eve-iw-preview";
+
+    /// <summary>The Discord invite for suggestions and bug reports (AUTZ IronWorks and EVE-IW-Preview).</summary>
+    public const string Discord = "https://discord.gg/8vBCG4WsTx";
+
     private static string LocalAppData => Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
 
     /// <summary>Profiles, app.json and the log live here.</summary>
@@ -63,5 +69,6 @@ internal static class AppInfo
         }
     }
 }
+
 
 

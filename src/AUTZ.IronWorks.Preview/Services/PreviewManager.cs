@@ -1756,6 +1756,8 @@ public sealed class PreviewManager : IDisposable
 
         Register(_settings.CycleForwardHotkey, "Next client", () => Cycle(1));
         Register(_settings.CycleBackHotkey, "Previous client", () => Cycle(-1));
+        Register(_settings.CycleLoginForwardHotkey, "Next login screen", () => Cycle(1, true));
+        Register(_settings.CycleLoginBackHotkey, "Previous login screen", () => Cycle(-1, true));
 
         foreach (var pair in _settings.Characters)
         {
@@ -1832,8 +1834,9 @@ public sealed class PreviewManager : IDisposable
         NativeMethods.keybd_event(LCtrl, 0, NativeMethods.KEYEVENTF_KEYUP, UIntPtr.Zero);
     }
 
-    private bool IsCyclable(EveClientWindow client)
+    private bool IsCyclable(EveClientWindow client, bool loginsOnly = false)
     {
+        if (loginsOnly) return client.IsLoginScreen;
         if (client.IsLoginScreen) return _settings.CycleIncludeLoginScreens;
         var c = _settings.TryGetCharacter(client.CharacterName);
         return c is null || !c.ExcludeFromCycling;
@@ -1857,14 +1860,22 @@ public sealed class PreviewManager : IDisposable
         return -1;
     }
 
-    /// <summary>Next / previous client in client order. Skips excluded and frozen clients. One press = one switch.</summary>
-    private void Cycle(int direction)
+    /// <summary>
+    /// Next / previous client in client order. Skips excluded and frozen clients. One press = one switch.
+    /// loginsOnly = the login screen hotkeys: only clients that aren't logged in yet.
+    /// </summary>
+    private void Cycle(int direction, bool loginsOnly = false)
     {
         var all = CurrentClients();
         int count = all.Count;
         if (count == 0)
         {
             LogNoSwitch("no EVE client is open");
+            return;
+        }
+        if (loginsOnly && !all.Any(c => c.IsLoginScreen))
+        {
+            LogNoSwitch("no login screen is open");
             return;
         }
 
@@ -1880,14 +1891,14 @@ public sealed class PreviewManager : IDisposable
         {
             // everything needed to see why a press went where it did (or nowhere)
             string order = string.Join(", ", all.Select((c, i) =>
-                $"#{i + 1} {(c.IsLoginScreen ? "[login]" : c.CharacterName)}{(IsCyclable(c) ? "" : " (skipped)")}{(NativeMethods.IsHungAppWindow(c.Handle) ? " (not responding)" : "")}"));
-            Log.Debug("SWITCH", $"cycle {(direction > 0 ? "next" : "previous")} pressed: window in front {Log.Win(NativeMethods.GetForegroundWindow())}; " +
+                $"#{i + 1} {(c.IsLoginScreen ? "[login]" : c.CharacterName)}{(IsCyclable(c, loginsOnly) ? "" : " (skipped)")}{(NativeMethods.IsHungAppWindow(c.Handle) ? " (not responding)" : "")}"));
+            Log.Debug("SWITCH", $"cycle {(direction > 0 ? "next" : "previous")}{(loginsOnly ? " login screen" : "")} pressed: window in front {Log.Win(NativeMethods.GetForegroundWindow())}; " +
                                 $"current {(start >= 0 ? "#" + (start + 1) : "none")} (from {from}, in front {currentInFront}); hotkeys only in EVE {_settings.HotkeysOnlyInEve}; order: {order}");
         }
 
         int step = direction > 0 ? 1 : -1;
         int position = start >= 0 ? start : (direction > 0 ? -1 : 0);
-        string way = direction > 0 ? "next" : "previous";
+        string way = (direction > 0 ? "next" : "previous") + (loginsOnly ? " login screen" : "");
         bool failed = false;
         bool switched = false;
 
@@ -1895,7 +1906,7 @@ public sealed class PreviewManager : IDisposable
         {
             position = ((position + step) % count + count) % count;
             var client = all[position];
-            if (!IsCyclable(client))
+            if (!IsCyclable(client, loginsOnly))
             {
                 Log.Debug("SWITCH", $"  skip #{position + 1} '{client.CharacterName}' (excluded from cycling)");
                 continue;
@@ -1926,7 +1937,9 @@ public sealed class PreviewManager : IDisposable
         }
 
         if (failed) Log.Debug("INFO", $"Cycle {way}: no switch");
-        else if (!switched) LogNoSwitch("every client is excluded from cycling, or the only one open is already in front");
+        else if (!switched) LogNoSwitch(loginsOnly
+            ? "the only login screen open is already in front"
+            : "every client is excluded from cycling, or the only one open is already in front");
     }
 
     private long _lastNoSwitchLog = -10000;
@@ -2367,3 +2380,4 @@ public sealed class PreviewManager : IDisposable
         _meta.Clear();
     }
 }
+

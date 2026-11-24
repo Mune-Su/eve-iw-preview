@@ -157,6 +157,9 @@ public sealed class AppSettings
     // ----- hotkeys and cycling -----
     public string CycleForwardHotkey { get; set; } = "Ctrl+Alt+Right";
     public string CycleBackHotkey { get; set; } = "Ctrl+Alt+Left";
+    /// <summary>Next / previous login screen. These only go to clients that aren't logged in yet.</summary>
+    public string CycleLoginForwardHotkey { get; set; } = "";
+    public string CycleLoginBackHotkey { get; set; } = "";
     public bool CycleIncludeLoginScreens { get; set; } = true;
     /// <summary>Older versions: the red X on skipped thumbnails was an option. It is always shown now; this value is ignored.</summary>
     public bool ShowExcludedOverlay { get; set; } = true;
@@ -455,3 +458,4 @@ public sealed class AppState
     public AppState Clone() =>
         JsonSerializer.Deserialize<AppState>(JsonSerializer.Serialize(this)) ?? new AppState();
 }
+

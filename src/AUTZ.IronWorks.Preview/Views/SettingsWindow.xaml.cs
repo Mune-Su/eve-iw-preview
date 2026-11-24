@@ -224,7 +224,7 @@ public partial class SettingsWindow : Window
         _pages.Add(new PageDef("Performance", PageMemory, new Control[] { CardComponents, CardMemoryNow, CardPerformance, CardMemoryTop, CardMemoryKeep }));
         _pages.Add(new PageDef("Diagnostics", PageDiagnostics, new Control[] { CardFiles, CardDiagnostics }));
         if (AdminAccess.IsOwner) _pages.Add(new PageDef("Admin", PageAdmin, new Control[] { CardAdmin, CardAdminTools }));
-        _pages.Add(new PageDef("About", PageAbout, new Control[] { CardAbout, CardWhatsNew }));          // About is always last
+        _pages.Add(new PageDef("About", PageAbout, new Control[] { CardAbout, CardCommunity, CardWhatsNew }));          // About is always last
 
         for (int i = 0; i < _pages.Count; i++)
         {
@@ -432,6 +432,8 @@ public partial class SettingsWindow : Window
         // Hotkeys
         ForwardBox.Text = s.CycleForwardHotkey;
         BackBox.Text = s.CycleBackHotkey;
+        LoginForwardBox.Text = s.CycleLoginForwardHotkey;
+        LoginBackBox.Text = s.CycleLoginBackHotkey;
         CycleLoginBox.IsChecked = s.CycleIncludeLoginScreens;
         _orderLoading = true;
         try
@@ -1627,6 +1629,12 @@ public partial class SettingsWindow : Window
         OpenPath(this, e.Uri.AbsoluteUri);
         e.Handled = true;
     }
+
+    private void Discord_Click(object sender, RoutedEventArgs e) => OpenPath(this, AppInfo.Discord);
+
+    private void WebsiteButton_Click(object sender, RoutedEventArgs e) => OpenPath(this, AppInfo.Website);
+
+    private void GitHub_Click(object sender, RoutedEventArgs e) => OpenPath(this, AppInfo.GitHub);
 
     private void OpenTaskbarSettings_Click(object sender, RoutedEventArgs e) => OpenPath(this, "ms-settings:taskbar");
 
@@ -2826,7 +2834,7 @@ public partial class SettingsWindow : Window
             return Fail(PageGeneral_, "The minimise delay must be 0 to 600 seconds.");
 
         // Hotkeys
-        if (!ForwardBox.IsValid || !BackBox.IsValid || _slotFields.Any(f => !f.IsValid))
+        if (!ForwardBox.IsValid || !BackBox.IsValid || !LoginForwardBox.IsValid || !LoginBackBox.IsValid || _slotFields.Any(f => !f.IsValid))
             return Fail(PageHotkeys_, "One of the hotkeys isn't supported. Click the box and press the keys again, or use ✕ to clear it.");
         if (!ProfileHotkeyBox.IsValid || !NextProfileBox.IsValid || !PrevProfileBox.IsValid)
             return Fail(PageHotkeys_, "A profile hotkey isn't supported. Press the keys again, or clear it with ✕.");
@@ -2914,6 +2922,8 @@ public partial class SettingsWindow : Window
 
         _work.CycleForwardHotkey = ForwardBox.Text;
         _work.CycleBackHotkey = BackBox.Text;
+        _work.CycleLoginForwardHotkey = LoginForwardBox.Text;
+        _work.CycleLoginBackHotkey = LoginBackBox.Text;
         _work.CycleIncludeLoginScreens = CycleLoginBox.IsChecked == true;
         _work.HotkeysOnlyInEve = HotkeysOnlyEveBox.IsChecked == true;
         _work.HotkeyPassThrough = PassThroughBox.IsChecked == true;
@@ -2958,3 +2968,4 @@ public partial class SettingsWindow : Window
         return true;
     }
 }
+

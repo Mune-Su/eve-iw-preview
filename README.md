@@ -4,6 +4,8 @@
 
 Live previews of all your EVE Online clients, with instant switching, alerts and a memory cleaner. It runs in the system tray.
 
+**Windows only** (Windows 10 and 11, 64-bit). Not for macOS or Linux.
+
 It only shows pictures of your clients and brings windows to the front. It never sends keys or mouse clicks to EVE.
 
 ## Install
@@ -34,6 +36,8 @@ It only shows pictures of your clients and brings windows to the front. It never
 
 ### Switching and hotkeys
 - Next / previous client, a hotkey for the 1st, 2nd, 3rd client, and a jump-to key per character.
+- Separate next / previous **login screen** hotkeys. They only go to clients that aren't logged in yet.
+- Next / previous follow the client order (see Order, groups and layouts). Skipped clients are passed over.
 - Any key, mouse button or combination.
 - **Pause / Resume Hotkeys:** stops every other hotkey so you can type. A "HOTKEYS PAUSED" badge shows while paused.
 - **Next / Previous Desktop:** switches Windows virtual desktops.
@@ -86,7 +90,7 @@ If the app closes unexpectedly, it puts everything back the next time it starts.
 
 ### Profiles and import
 - As many profiles as you like. Switch from the tray, Configuration or a hotkey.
-- **Import** reads EVE-IW profiles and profiles from other preview apps (.json and .ini).
+- **Import** reads EVE-IW profiles, and .json and .ini profiles.
 
 ### Diagnostics
 - **Detailed logging** records everything the app does: switches, hotkeys, settings changes, tray clicks, alerts, memory and performance actions.
@@ -111,6 +115,12 @@ dotnet build -c Release
 - Pushing a `vX.Y.Z` tag runs **Release**: builds the installer and publishes `EVE-IW-Preview-Setup.exe` and `SHA256SUMS.txt` as the GitHub release.
 - Installed copies pick up the new **Latest** release the next time they start.
 
+## Suggestions and bug reports
+- [Join the Discord](https://discord.gg/8vBCG4WsTx) for suggestions, bug reports and help.
+- Or open an issue on [GitHub](https://github.com/Mune-Su/eve-iw-preview/issues).
+- For a bug, turn on Detailed logging (Configuration > Diagnostics > Logs), repeat the problem, and attach the log. Names show as codes, so it's safe to share.
+
 ## Version history
 
 See [CHANGELOG.md](CHANGELOG.md).
+
