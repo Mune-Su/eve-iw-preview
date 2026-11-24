@@ -213,7 +213,8 @@ public sealed class HotkeyService : IDisposable
     {
         long pressed = Log.Ms;
         Log.Debug("HOTKEY", $"'{binding.Text}' matched (swallowed: {!PassThrough})");
-        _dispatcher.BeginInvoke(new Action(() =>
+        // v0.19.30: highest priority, so a switch never waits behind thumbnail drawing or other queued work
+        _dispatcher.BeginInvoke(DispatcherPriority.Send, new Action(() =>
         {
             Log.Debug("HOTKEY", $"'{binding.Text}' running ({Log.Ms - pressed} ms after the key)");
             try { binding.Action(); }
@@ -454,4 +455,4 @@ public sealed class HotkeyService : IDisposable
         _keyHook = 0;
         _mouseHook = 0;
     }
-}
+}

@@ -16,6 +16,11 @@ internal sealed class PerformanceService
     [DllImport("kernel32.dll")] private static extern nint LocalFree(nint memory);
     [DllImport("kernel32.dll", SetLastError = true)]
     private static extern bool SetProcessInformation(nint process, int infoClass, ref PowerThrottlingState info, int size);
+    [DllImport("kernel32.dll", SetLastError = true)] private static extern nint OpenProcess(uint access, bool inherit, uint pid);
+    [DllImport("kernel32.dll")] private static extern bool CloseHandle(nint handle);
+    [DllImport("kernel32.dll", SetLastError = true)] private static extern uint GetPriorityClass(nint process);
+    [DllImport("kernel32.dll", SetLastError = true)] private static extern bool SetPriorityClass(nint process, uint priorityClass);
+    private const uint ProcessSetInformation = 0x0200, ProcessQueryLimitedInformation = 0x1000;
 
     [StructLayout(LayoutKind.Sequential)]
     private struct PowerThrottlingState
@@ -32,6 +37,9 @@ internal sealed class PerformanceService
     // what this app has set on each client process, so it can be put back
     private readonly Dictionary<uint, (ProcessPriorityClass Priority, bool Efficient)> _applied = new();
     private readonly HashSet<uint> _refused = new();         // processes Windows won't let us change (logged once)
+    // v0.19.30: one open handle per client, kept while it runs. Process.GetProcessById lists every process on the PC each time,
+    // which cost several ms per client on every switch.
+    private readonly Dictionary<uint, nint> _handles = new();
     private bool _planFailedLogged;
 
     /// <summary>
@@ -48,9 +56,10 @@ internal sealed class PerformanceService
         // clients no longer in the list (closed, or the switcher was turned off for them): put back if still running
         foreach (uint pid in _applied.Keys.Where(k => !clientPids.Contains(k)).ToList())
         {
-            PutBackQuietly(pid);
+            PutBackQuietly(pid, cachedOnly: true);               // only the handle we already hold: the id may belong to another program now
             _applied.Remove(pid);
         }
+        foreach (uint pid in _handles.Keys.Where(k => !clientPids.Contains(k)).ToList()) CloseFor(pid);
         _refused.RemoveWhere(pid => !clientPids.Contains(pid));
 
         foreach (uint pid in clientPids)
@@ -79,11 +88,31 @@ internal sealed class PerformanceService
         return dirty;
     }
 
+    /// <summary>
+    /// v0.19.30: called just BEFORE a switch. A background client that was slowed down (lower priority or efficiency mode) gets its
+    /// full speed back first, so it draws and takes your click at once instead of a moment after it comes to the front.
+    /// Only touches a client this app slowed down; costs nothing otherwise.
+    /// </summary>
+    public void Boost(PerformanceSettings p, uint pid)
+    {
+        if (pid == 0 || !p.Enabled || _refused.Contains(pid)) return;
+        var priority = p.RaiseFrontClient ? ProcessPriorityClass.AboveNormal : ProcessPriorityClass.Normal;
+        bool known = _applied.TryGetValue(pid, out var now);
+        if (!known && priority == ProcessPriorityClass.Normal) return;                 // never slowed down: nothing to do
+        if (known && now.Priority == priority && !now.Efficient) return;
+        if (Set(pid, priority, false))
+        {
+            if (priority == ProcessPriorityClass.Normal) _applied.Remove(pid);
+            else _applied[pid] = (priority, false);
+        }
+    }
+
     /// <summary>Puts everything back (app closing, or the master switch turned off).</summary>
     public bool RestoreAll(PerformanceSettings p)
     {
         foreach (uint pid in _applied.Keys.ToList()) PutBackQuietly(pid);
         _applied.Clear();
+        foreach (uint pid in _handles.Keys.ToList()) CloseFor(pid);
         bool dirty = RestorePlan(p);
         if (p.PrioritiesChanged)
         {
@@ -148,14 +177,30 @@ internal sealed class PerformanceService
         finally { LocalFree(pointer); }
     }
 
-    private static void PutBackQuietly(uint pid)
+    /// <summary>The client's process handle, opened once and kept. Throws when Windows refuses (e.g. EVE runs as administrator).</summary>
+    private nint HandleFor(uint pid)
+    {
+        if (_handles.TryGetValue(pid, out nint h)) return h;
+        h = OpenProcess(ProcessSetInformation | ProcessQueryLimitedInformation, false, pid);
+        if (h == 0) throw new System.ComponentModel.Win32Exception(Marshal.GetLastWin32Error());
+        _handles[pid] = h;
+        return h;
+    }
+
+    private void CloseFor(uint pid)
+    {
+        if (_handles.Remove(pid, out nint h) && h != 0) CloseHandle(h);
+    }
+
+    private void PutBackQuietly(uint pid, bool cachedOnly = false)
     {
         try
         {
-            using var process = Process.GetProcessById((int)pid);
-            process.PriorityClass = ProcessPriorityClass.Normal;
+            if (cachedOnly && !_handles.ContainsKey(pid)) return;
+            nint h = HandleFor(pid);
+            SetPriorityClass(h, (uint)ProcessPriorityClass.Normal);
             var state = new PowerThrottlingState { Version = 1 };
-            SetProcessInformation(process.Handle, ProcessPowerThrottling, ref state, Marshal.SizeOf<PowerThrottlingState>());
+            SetProcessInformation(h, ProcessPowerThrottling, ref state, Marshal.SizeOf<PowerThrottlingState>());
         }
         catch
         {
@@ -167,22 +212,24 @@ internal sealed class PerformanceService
     {
         try
         {
-            using var process = Process.GetProcessById((int)pid);
-            if (process.PriorityClass != priority) process.PriorityClass = priority;
+            nint h = HandleFor(pid);
+            if (GetPriorityClass(h) != (uint)priority && !SetPriorityClass(h, (uint)priority))
+                throw new System.ComponentModel.Win32Exception(Marshal.GetLastWin32Error());
             var state = new PowerThrottlingState
             {
                 Version = 1,
                 ControlMask = efficient ? ThrottleExecutionSpeed : 0,      // 0 = let Windows decide again
                 StateMask = efficient ? ThrottleExecutionSpeed : 0
             };
-            SetProcessInformation(process.Handle, ProcessPowerThrottling, ref state, Marshal.SizeOf<PowerThrottlingState>());
+            SetProcessInformation(h, ProcessPowerThrottling, ref state, Marshal.SizeOf<PowerThrottlingState>());
             Log.Debug("PERF", $"client pid {pid}: priority {priority}, efficiency mode {(efficient ? "on" : "off")}");
             return true;
         }
         catch (Exception ex)
         {
+            CloseFor(pid);
             if (_refused.Add(pid)) Log.Write($"Performance: couldn't change an EVE client's priority ({ex.Message}). If EVE runs as administrator, the app must too.");
             return false;
         }
     }
-}
+}

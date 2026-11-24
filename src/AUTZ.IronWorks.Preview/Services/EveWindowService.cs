@@ -241,6 +241,7 @@ public sealed class EveWindowService
         uint thisThread = NativeMethods.GetCurrentThreadId();
 
         Log.Debug("FOCUS", $"  step 1 refused by Windows; foreground {Log.Win(foreground)}{(foregroundHung ? " is HUNG (skipping input attach)" : "")}");
+        _settleUntil = Log.Ms + SettleBudgetMs;     // v0.19.30: all fallbacks share one short wait (was up to 60 ms EACH)
         // attaching input queues to a frozen window can hang input for everything, so never do it then
         if (!foregroundHung)
         {
@@ -295,21 +296,27 @@ public sealed class EveWindowService
         return false;
     }
 
-    /// <summary>True once the client is in front. Waits up to 60 ms, because an accepted switch can take a moment to land.</summary>
-    private static bool Settled(nint handle, bool accepted)
+    private const int SettleBudgetMs = 80;
+    private long _settleUntil;
+
+    /// <summary>
+    /// True once the client is in front. An accepted switch can take a moment to land, so it waits a little, but every fallback
+    /// together waits about 80 ms at most (v0.19.30; before, each one could wait 60 ms, so a refused switch could block for 240 ms).
+    /// </summary>
+    private bool Settled(nint handle, bool accepted)
     {
         nint fg = NativeMethods.GetForegroundWindow();
         if (fg == handle) return true;
         if (!accepted) return false;
-        // real 60 ms limit: Thread.Sleep(5) can sleep ~15 ms each, which froze input for ~180 ms per press
+        long limit = Math.Max(5, _settleUntil - Log.Ms);            // budget used up: one quick 5 ms look only
         var sw = System.Diagnostics.Stopwatch.StartNew();
-        while (fg != handle && sw.ElapsedMilliseconds < 60)
+        while (fg != handle && sw.ElapsedMilliseconds < limit)
         {
             Thread.Sleep(1);
             fg = NativeMethods.GetForegroundWindow();
         }
-        if (fg != handle) Log.Debug("FOCUS", $"  settle: foreground still {Log.Win(fg)} after 60 ms (switch still landing)");
+        if (fg != handle) Log.Debug("FOCUS", $"  settle: foreground still {Log.Win(fg)} after {sw.ElapsedMilliseconds} ms (switch still landing)");
         return fg == handle;
     }
 }
-
+

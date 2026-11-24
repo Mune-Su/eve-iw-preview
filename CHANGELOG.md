@@ -2,6 +2,13 @@
 
 Every version of EVE-IW-Preview, newest first. The app shows the same list under About > What's New.
 
+## v0.19.30 — Faster switching
+- Faster switching: a client slowed down by Client Speed gets full speed back before it comes to the front, not after.
+- Rapid cycling no longer waits on priority changes. The client you left is slowed down only once you stop switching.
+- A switch Windows refuses now waits at most about 80 ms in total, not up to 240 ms.
+- Mouse-button and key-combo hotkeys run ahead of everything else the app is doing.
+- Less work per switch: client priorities are changed without listing every program on the PC.
+
 ## v0.19.29 — New Discord invite
 - The Discord link under About > Community and in the README has a new, working invite.
 

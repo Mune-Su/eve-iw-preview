@@ -52,6 +52,9 @@ public sealed class PreviewManager : IDisposable
     private readonly DispatcherTimer _refreshSoonTimer = new() { Interval = TimeSpan.FromMilliseconds(60) };
     private readonly DispatcherTimer _trimTimer = new();
     private readonly DispatcherTimer _memoryTimer = new();
+    // v0.19.30: the client you left is slowed down (Client Speed options) only once switching has stopped for this long,
+    // so rapid cycling never waits on priority changes and a client you just clicked in finishes what you asked of it.
+    private readonly DispatcherTimer _perfTimer = new(DispatcherPriority.Background) { Interval = TimeSpan.FromMilliseconds(1500) };
     private readonly MemoryUsageStats _memoryStats = new();
     private readonly Dictionary<nint, DateTime> _lastActiveAt = new();            // memory cleaner: when each EVE client last had focus (for trimming idle background clients)
     private readonly Dictionary<string, List<(DateTime At, long Bytes)>> _programHistory = new(StringComparer.OrdinalIgnoreCase);   // Top Programs: recent readings per program
@@ -156,6 +159,11 @@ public sealed class PreviewManager : IDisposable
             MemoryTrim.Trim();
         };
         _memoryTimer.Tick += (_, _) => MemoryTick();
+        _perfTimer.Tick += (_, _) =>
+        {
+            _perfTimer.Stop();
+            UpdatePerformance();
+        };
 
         _watcher.ForegroundChanged += hwnd =>
         {
@@ -849,7 +857,7 @@ public sealed class PreviewManager : IDisposable
         UpdateBorders();
         ApplyVisibility();
         if (changed || force) ScheduleMinimise(changed);
-        if (changed || force) UpdatePerformance();
+        if (changed || force) SchedulePerformance(changed);
     }
 
     /// <summary>Minimise a client as soon as you switch away from it, if that is set for it.</summary>
@@ -1967,6 +1975,12 @@ public sealed class PreviewManager : IDisposable
     /// <summary>Brings a client to the front and applies its "when I switch to it" action.</summary>
     private bool SwitchTo(EveClientWindow client, out string how)
     {
+        // v0.19.30: a slowed-down client gets its full speed back before it comes to the front, not after
+        if (_state.Performance.Enabled)
+        {
+            NativeMethods.GetWindowThreadProcessId(client.Handle, out uint pid);
+            _perf.Boost(_state.Performance, pid);
+        }
         bool ok = _eve.Activate(client.Handle, out how);
         _lastActivated = client.Handle;
         if (!ok) return false;
@@ -2308,6 +2322,26 @@ public sealed class PreviewManager : IDisposable
 
     // ---------- performance ----------
 
+    /// <summary>
+    /// After a focus change: the client in front gets full speed now; everything else waits until switching stops.
+    /// A rescan without a focus change only makes sure an update is coming (it never pushes it back, or it could never run).
+    /// </summary>
+    private void SchedulePerformance(bool focusChanged)
+    {
+        if (!_state.Performance.Enabled) { if (_state.Performance.PrioritiesChanged) UpdatePerformance(); return; }
+        if (focusChanged)
+        {
+            if (_activeClient != 0)
+            {
+                NativeMethods.GetWindowThreadProcessId(_activeClient, out uint front);
+                _perf.Boost(_state.Performance, front);
+            }
+            _perfTimer.Stop();
+            _perfTimer.Start();
+        }
+        else if (!_perfTimer.IsEnabled) _perfTimer.Start();
+    }
+
     private void UpdatePerformance()
     {
         var pids = new HashSet<uint>();
@@ -2411,6 +2445,7 @@ public sealed class PreviewManager : IDisposable
         _displayTimer.Stop();
         _refreshSoonTimer.Stop();
         _trimTimer.Stop();
+        _perfTimer.Stop();
         _memoryTimer.Stop();
         _watcher.Dispose();
         _logs.Dispose();
@@ -2421,4 +2456,4 @@ public sealed class PreviewManager : IDisposable
     }
 }
 
-
+
