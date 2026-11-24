@@ -252,6 +252,8 @@ public sealed class AppSettings
     public bool LogWatchCloakFailed { get; set; } = false;
     public bool LogWatchFleetInvite { get; set; } = false;
     public int LogMiningIdleSeconds { get; set; } = 60;
+    /// <summary>Mining stopped also alerts when you switch a module off yourself (the game writes nothing for that, so it waits for silence).</summary>
+    public bool LogMiningManualStop { get; set; } = true;
     /// <summary>One phrase per line. A game-log line containing one of them raises an alert.</summary>
     public string LogKeywords { get; set; } = "warp scramble\nwarp disrupt";
     /// <summary>Show the solar system next to the name on each thumbnail (read from the Local chat log).</summary>
@@ -458,4 +460,5 @@ public sealed class AppState
     public AppState Clone() =>
         JsonSerializer.Deserialize<AppState>(JsonSerializer.Serialize(this)) ?? new AppState();
 }
+
 

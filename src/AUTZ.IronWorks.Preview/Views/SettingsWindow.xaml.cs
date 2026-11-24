@@ -220,7 +220,7 @@ public partial class SettingsWindow : Window
         _pages.Add(new PageDef("Thumbnails", PageThumbs, new Control[] { CardSize, CardLabel, CardActiveBorder, CardCharacter, CardInteraction }));
         _pages.Add(new PageDef("Grouping", PageGroups, new Control[] { CardRoster, CardScan, CardClientOrder }));
         _pages.Add(new PageDef("Hotkeys", PageHotkeys, new Control[] { CardCycling, CardHotkeyOptions, CardSlotKeys, CardCharActions, CardSkipped, CardProfileKeys, CardOtherKeys }));
-        _pages.Add(new PageDef("Alerts", PageAlerts, new Control[] { CardNotifyMain, CardLogMain, CardLogEvents }));
+        _pages.Add(new PageDef("Alerts", PageAlerts, new Control[] { CardNotifyMain, CardLogEvents, CardLogMain }));
         _pages.Add(new PageDef("Performance", PageMemory, new Control[] { CardComponents, CardMemoryNow, CardPerformance, CardMemoryTop, CardMemoryKeep }));
         _pages.Add(new PageDef("Diagnostics", PageDiagnostics, new Control[] { CardFiles, CardDiagnostics }));
         if (AdminAccess.IsOwner) _pages.Add(new PageDef("Admin", PageAdmin, new Control[] { CardAdmin, CardAdminTools }));
@@ -470,11 +470,11 @@ public partial class SettingsWindow : Window
         NotifySpeakBox.IsChecked = s.NotifySpeak;
 
         // Log monitoring
-        LogEnabledBox.IsChecked = s.LogMonitoringEnabled;
-        LogPollBox.Text = s.LogPollMilliseconds.ToString();
+        MiningManualBox.IsChecked = s.LogMiningManualStop;
         GameFolderBox.Text = s.GameLogFolder;
         ChatFolderBox.Text = s.ChatLogFolder;
         BuildAlertRows(s);
+        UpdateMiningRow();
         LogKeywordsBox.Text = (s.LogKeywords ?? "").Replace("\r", "").Replace("\n", Environment.NewLine);
         LogSystemBox.IsChecked = s.ShowSystemName;
         LogStatusText.Text = _manager.LogStatus;
@@ -2353,7 +2353,7 @@ public partial class SettingsWindow : Window
         ("decloak", "Decloaked", "Your cloak dropped."),
         ("cloak-failed", "Cloak failed", "Your cloak couldn't turn on."),
         ("crystal", "Mining crystal broke", "A mining crystal was used up."),
-        ("mining", "Mining stopped", "No mining for the time set below."),
+        ("mining", "Mining stopped", "Hold full, rock gone, or no mining for the time set."),
         ("compression", "Compression done", "Ore was compressed."),
         ("fleet-follow", "Warp follow", "You're following a fleet warp."),
         ("regroup", "Fleet regroup", "Your fleet is regrouping."),
@@ -2543,19 +2543,39 @@ public partial class SettingsWindow : Window
     {
         var dialog = new Microsoft.Win32.OpenFileDialog
         {
-            Title = "Add a sound",
+            Title = "Add sounds",
+            Multiselect = true,
             Filter = "Sounds (*.wav;*.mp3;*.m4a;*.wma;*.aac)|*.wav;*.mp3;*.m4a;*.wma;*.aac|All files (*.*)|*.*"
         };
         if (dialog.ShowDialog(this) != true) return;
-        if (!SoundLibrary.TryAdd(dialog.FileName, out string id, out string error))
+
+        var added = new List<string>();
+        var skipped = new List<string>();
+        foreach (string file in dialog.FileNames)
         {
-            Dialogs.Info(this, error);
-            return;
+            if (SoundLibrary.TryAdd(file, out string id, out string error)) added.Add(id);
+            else skipped.Add(Path.GetFileName(file) + ": " + error);
         }
-        var rows = _alertRows.Select(r => (r, (r.Sound.SelectedItem as SoundChoice)?.Id ?? "")).ToList();
-        FillSoundCombo(NotifySoundCombo, false, id);
-        foreach (var (row, chosen) in rows) FillSoundCombo(row.Sound, true, chosen);
-        SetStatus("Sound added and set as the main sound.", true);
+
+        if (added.Count > 0)
+        {
+            // one file becomes the main sound; several are just added to every list
+            string main = added.Count == 1 ? added[0] : MainSoundId();
+            var rows = _alertRows.Select(r => (r, (r.Sound.SelectedItem as SoundChoice)?.Id ?? "")).ToList();
+            FillSoundCombo(NotifySoundCombo, false, main);
+            foreach (var (row, chosen) in rows) FillSoundCombo(row.Sound, true, chosen);
+            SetStatus(added.Count == 1 ? "Sound added and set as the main sound." : $"{added.Count} sounds added.", true);
+        }
+        if (skipped.Count > 0) Dialogs.Info(this, "Skipped:" + Environment.NewLine + string.Join(Environment.NewLine, skipped));
+    }
+
+    private void MiningManual_Changed(object sender, RoutedEventArgs e) => UpdateMiningRow();
+
+    /// <summary>The seconds box on the Mining stopped row only matters for a stop by hand.</summary>
+    private void UpdateMiningRow()
+    {
+        var row = _alertRows.FirstOrDefault(r => r.Kind == "mining");
+        if (row is not null) row.Cooldown.IsEnabled = MiningManualBox.IsChecked == true;
     }
 
     // ---------- switcher per client ----------
@@ -2864,10 +2884,6 @@ public partial class SettingsWindow : Window
         if (!NotifyColourBox.IsValid)
             return Fail(PageThumbs_, "The flash colour isn't valid. Use the Pick button, or type something like #F87171.");
 
-        // Log monitoring
-        if (!InRange(LogPollBox.Text, 250, 10000, out int logPoll))
-            return Fail(PageAlerts_, "The check interval must be 250 to 10000 ms.");
-
         // Characters
         if (!CommitCharacter())
         {
@@ -2946,8 +2962,9 @@ public partial class SettingsWindow : Window
         _work.NotifyVolume = (int)Math.Round(NotifyVolumeSlider.Value);
         _work.NotifySpeak = NotifySpeakBox.IsChecked == true;
 
-        _work.LogMonitoringEnabled = LogEnabledBox.IsChecked == true;
-        _work.LogPollMilliseconds = logPoll;
+        _work.LogMonitoringEnabled = NotifyEnabledBox.IsChecked == true || LogSystemBox.IsChecked == true;   // alerts on = log monitoring on
+        _work.LogPollMilliseconds = 250;
+        _work.LogMiningManualStop = MiningManualBox.IsChecked == true;
         _work.GameLogFolder = GameFolderBox.Text.Trim();
         _work.ChatLogFolder = ChatFolderBox.Text.Trim();
         ReadAlertRows(_work);
@@ -2968,4 +2985,5 @@ public partial class SettingsWindow : Window
         return true;
     }
 }
+
 

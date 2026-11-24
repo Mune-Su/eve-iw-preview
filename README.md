@@ -51,7 +51,7 @@ It only shows pictures of your clients and brings windows to the front. It never
 - **Disable Switcher:** for all clients, or one client at a time (tray menu or General page).
 
 ### Alerts
-Read from EVE's own game logs (read only). Each alert can flash the thumbnail border, show a Windows notification, play a sound and speak.
+Read from EVE's own game logs (read only). **Enable Alerts** turns on log monitoring too. Each alert can flash the thumbnail border, show a Windows notification, play a sound and speak.
 
 | Alert | What sets it off |
 |---|---|
@@ -61,7 +61,7 @@ Read from EVE's own game logs (read only). Each alert can flash the thumbnail bo
 | Decloaked | Your cloak dropped |
 | Cloak failed | Your cloak couldn't turn on |
 | Mining crystal broke | A mining crystal was used up |
-| Mining stopped | A missed mining cycle (automatic), or no mining for the time you set |
+| Mining stopped | The hold is full or the rock runs out (at once). A stop by hand is caught after a missed cycle, or the time you set. You can turn that off. |
 | Compression done | Ore was compressed |
 | Warp follow | You're following a fleet warp |
 | Fleet regroup | Your fleet is regrouping |
@@ -71,7 +71,9 @@ Read from EVE's own game logs (read only). Each alert can flash the thumbnail bo
 
 - Each alert has its own sound, volume, cooldown and **Test** button.
 - Built-in sounds: Chime, Ping, Double Beep, Klaxon, Rising, Falling, Alarm, Blip. The Windows sounds are listed too.
-- **Add your own:** .wav, .mp3, .m4a, .wma or .aac. Max 5 MB, plays up to 10 seconds.
+- **Add your own:** pick one or more files. .wav, .mp3, .m4a, .wma or .aac. Max 5 MB each, plays up to 10 seconds.
+- The same alert on several clients plays one sound.
+- An alert that isn't shown says why in the normal log.
 
 ### Memory cleaner (Configuration > Performance)
 - Trim programs, clear the system cache (admin), clear the clipboard, restart Windows Explorer.
@@ -123,4 +125,5 @@ dotnet build -c Release
 ## Version history
 
 See [CHANGELOG.md](CHANGELOG.md).
+
 

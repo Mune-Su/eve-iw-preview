@@ -26,7 +26,8 @@ public sealed record LogConfig(
     bool FleetInvite,
     int MiningIdleSeconds,
     string[] Keywords,
-    bool SystemName);
+    bool SystemName,
+    bool MiningManualStop);
 
 /// <summary>Kind is one of LogMonitorService.Kinds, or "keyword".</summary>
 public sealed record LogEvent(string Character, string Kind, string Message);
@@ -57,11 +58,14 @@ public sealed class LogMonitorService : IDisposable
     private readonly Dictionary<string, Tail> _tails = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, DateTime> _lastMining = new(StringComparer.OrdinalIgnoreCase);
     private readonly HashSet<string> _miningFired = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, DateTime> _miningInstantAt = new(StringComparer.OrdinalIgnoreCase);   // when the game itself said mining stopped
+    private readonly Dictionary<string, DateTime> _offNoted = new(StringComparer.OrdinalIgnoreCase);
+    private static readonly Regex MinerRx = new(@"\bminers?\b", RegexOptions.IgnoreCase);
     private readonly HashSet<string> _olderLogs = new(StringComparer.OrdinalIgnoreCase);   // old logs of a character that has a newer one: not watched
     private const int MaxLogFiles = 80;                                                    // per kind (game / chat)
     private readonly Dictionary<string, Queue<double>> _miningGaps = new(StringComparer.OrdinalIgnoreCase);   // recent seconds between mining lines, per character
     private Timer? _timer;
-    private LogConfig _config = new(false, "", "", 1000, true, false, false, false, false, false, false, false, false, false, false, false, 60, Array.Empty<string>(), false);
+    private LogConfig _config = new(false, "", "", 1000, true, false, false, false, false, false, false, false, false, false, false, false, 60, Array.Empty<string>(), false, true);
 
     /// <summary>Every alert kind, in the order they are listed in Configuration.</summary>
     public static readonly string[] Kinds =
@@ -100,6 +104,7 @@ public sealed class LogMonitorService : IDisposable
             _tails.Clear();
             _lastMining.Clear();
             _miningFired.Clear();
+            _miningInstantAt.Clear();
             _miningGaps.Clear();
             _olderLogs.Clear();
             _initialScanDone = false;
@@ -125,7 +130,7 @@ public sealed class LogMonitorService : IDisposable
             var config = _config;
             if (!config.Enabled) return;
 
-            if (DateTime.UtcNow - _lastScan > TimeSpan.FromSeconds(5))
+            if (DateTime.UtcNow - _lastScan > TimeSpan.FromSeconds(1))
             {
                 _lastScan = DateTime.UtcNow;
                 ScanFolder(string.IsNullOrWhiteSpace(config.GameFolder) ? DefaultGameFolder : config.GameFolder, false);
@@ -328,6 +333,7 @@ public sealed class LogMonitorService : IDisposable
         if (kind == "mining")
         {
             var now = DateTime.UtcNow;
+            bool justAnnounced = _miningInstantAt.TryGetValue(tail.Listener, out var announced) && (now - announced).TotalSeconds < 3;
             if (!_lastMining.ContainsKey(tail.Listener)) Log.Debug("ALERT", $"mining line seen for '{tail.Listener}': watching for it to stop");
             if (_lastMining.TryGetValue(tail.Listener, out var before) && !_miningFired.Contains(tail.Listener))
             {
@@ -337,12 +343,19 @@ public sealed class LogMonitorService : IDisposable
                 while (gaps.Count > 8) gaps.Dequeue();
                 if (gaps.Count == 2) Log.Debug("ALERT", $"mining cycle learned for '{tail.Listener}': about {gaps.Max():0} s");
             }
-            else if (_miningFired.Contains(tail.Listener))
+            else if (_miningFired.Contains(tail.Listener) && !justAnnounced)
             {
                 _miningGaps.Remove(tail.Listener);       // mining started again after a stop: learn the cycle afresh
             }
             _lastMining[tail.Listener] = now;
-            _miningFired.Remove(tail.Listener);
+            if (!justAnnounced) _miningFired.Remove(tail.Listener);   // a last line of the cycle the game just announced must not re-arm
+        }
+
+        // The game says outright when a miner stops: the hold is full, or the rock is gone. Alert at once, no waiting.
+        if (kind == "notify" && MiningStopReason(text) is string stopReason)
+        {
+            if (config.MiningIdle) MiningStopNow(tail.Listener, stopReason, text);
+            else NoteOff("mining", tail.Listener);
         }
 
         if (config.Attack && kind == "combat" &&
@@ -359,8 +372,11 @@ public sealed class LogMonitorService : IDisposable
         if (config.FleetFollow && text.StartsWith("Following ", StringComparison.OrdinalIgnoreCase) &&
             text.Contains(" in warp", StringComparison.OrdinalIgnoreCase))
             Post(tail, "fleet-follow", text);
-        if (config.MiningCompression && text.StartsWith("Successfully compressed", StringComparison.OrdinalIgnoreCase))
-            Post(tail, "compression", text);
+        if (text.StartsWith("Successfully compressed", StringComparison.OrdinalIgnoreCase))
+        {
+            if (config.MiningCompression) Post(tail, "compression", text);
+            else NoteOff("compression", tail.Listener);
+        }
         if (config.ConversationInvite && text.Contains("is inviting you to a conversation", StringComparison.OrdinalIgnoreCase))
             Post(tail, "conversation", text);
         if (config.Decloak && ContainsAny(text, "cloak deactivates", "cloaking device deactivates", "decloaked"))
@@ -395,7 +411,7 @@ public sealed class LogMonitorService : IDisposable
 
     private void CheckMiningIdle(LogConfig config)
     {
-        if (!config.MiningIdle) return;
+        if (!config.MiningIdle || !config.MiningManualStop) return;
         foreach (var pair in _lastMining.ToList())
         {
             if (_miningFired.Contains(pair.Key)) continue;
@@ -408,6 +424,39 @@ public sealed class LogMonitorService : IDisposable
             Log.Debug("ALERT", $"mining stopped: no mining line for {(DateTime.UtcNow - pair.Value).TotalSeconds:0} s (limit {limit:0} s{(config.MiningIdleSeconds > 0 ? "" : ", automatic")})");
             Post(new LogEvent(pair.Key, "mining", "has stopped mining"));
         }
+    }
+
+    /// <summary>The text of a game line that ends mining, or null.</summary>
+    private static string? MiningStopReason(string text)
+    {
+        if (text.Contains("cargo hold is full", StringComparison.OrdinalIgnoreCase)) return "hold full";
+        if (text.Contains("deactivates", StringComparison.OrdinalIgnoreCase) &&
+            !text.Contains("destruction", StringComparison.OrdinalIgnoreCase) &&      // a broken crystal has its own alert
+            MinerRx.IsMatch(text)) return "module deactivated";
+        return null;
+    }
+
+    /// <summary>Mining stopped, straight from the game. One alert per stop: the silence timer and the other module stay quiet.</summary>
+    private void MiningStopNow(string listener, string reason, string text)
+    {
+        if (_miningFired.Contains(listener))
+        {
+            Log.Debug("ALERT", $"mining stopped ({reason}) for '{listener}': already alerted");
+            return;
+        }
+        _miningFired.Add(listener);
+        _miningInstantAt[listener] = DateTime.UtcNow;
+        Log.Debug("ALERT", $"mining stopped ({reason}) for '{listener}': {text}");
+        Post(new LogEvent(listener, "mining", "has stopped mining"));
+    }
+
+    /// <summary>A game line for an alert that is switched off: said once a minute in the normal log, so a missing alert isn't a mystery.</summary>
+    private void NoteOff(string kind, string listener)
+    {
+        string key = kind + "|" + listener;
+        if (_offNoted.TryGetValue(key, out var at) && (DateTime.UtcNow - at).TotalSeconds < 60) return;
+        _offNoted[key] = DateTime.UtcNow;
+        Log.Write($"A '{kind}' line was read for '{listener}' but that alert is off (tick it under Events To Watch).");
     }
 
     private void Post(Tail tail, string kind, string text)
@@ -431,4 +480,5 @@ public sealed class LogMonitorService : IDisposable
         }
     }
 }
+
 

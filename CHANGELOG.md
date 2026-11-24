@@ -2,6 +2,16 @@
 
 Every version of EVE-IW-Preview, newest first. The app shows the same list under About > What's New.
 
+## v0.19.27 — Faster alerts, one Alerts switch
+- Mining stopped now alerts the moment the hold is full or the rock runs out.
+- New: Alert when I stop mining by hand. Off = only hold full and rock gone alert.
+- Alerts and log monitoring are one switch now: Enable Alerts.
+- Events To Watch now sits above the log files. The check interval box is gone.
+- Faster: the game logs are checked 4 times a second, and new logs are found within a second.
+- The same alert on several clients plays one sound, not one each.
+- Add several sounds at once.
+- An alert that isn't shown now says why in the normal log.
+
 ## v0.19.26 — Fix: mining stopped alerts missing
 - Fixed: mining stopped alerts could miss some characters when there were lots of EVE log files.
 - Only the newest log of each character is watched, newest first.
@@ -455,4 +465,5 @@ Every version of EVE-IW-Preview, newest first. The app shows the same list under
 
 - AUTZ IronWorks emblem for the exe, tray and windows.
 - Drag the bottom-right corner to resize, colour pickers, and updates that never touch a running app.
+
 

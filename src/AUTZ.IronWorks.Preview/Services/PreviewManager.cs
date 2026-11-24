@@ -1470,10 +1470,10 @@ public sealed class PreviewManager : IDisposable
             .Split(new[] { '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 
         _logs.Configure(new LogConfig(
-            _settings.LogMonitoringEnabled,
+            _settings.NotificationsEnabled || _settings.ShowSystemName,       // alerts on = log monitoring on
             (_settings.GameLogFolder ?? "").Trim(),
             (_settings.ChatLogFolder ?? "").Trim(),
-            _settings.LogPollMilliseconds,
+            250,                                                              // check for new lines four times a second
             _settings.LogWatchAttack,
             _settings.LogWatchMiningIdle,
             _settings.LogWatchCrystalBroke,
@@ -1488,7 +1488,8 @@ public sealed class PreviewManager : IDisposable
             _settings.LogWatchFleetInvite,
             _settings.LogMiningIdleSeconds,
             keywords,
-            _settings.ShowSystemName));
+            _settings.ShowSystemName,
+            _settings.LogMiningManualStop));
     }
 
     public void OpenSettings()
@@ -2065,6 +2066,29 @@ public sealed class PreviewManager : IDisposable
         _ => "keyword"
     };
 
+    private readonly Dictionary<string, long> _blockedNoted = new();
+    private readonly Dictionary<string, long> _lastSoundAt = new();
+    private const int SoundBurstMs = 4000;     // the same alert on several clients inside this time plays one sound
+
+    /// <summary>An alert that wasn't shown says why in the normal log (once every 30 s for the same reason).</summary>
+    private void NoteBlocked(string kind, string character, string reason)
+    {
+        Log.Debug("ALERT", $"'{kind}' for '{character}' not shown: {reason}");
+        string key = kind + "|" + character + "|" + reason;
+        if (_blockedNoted.TryGetValue(key, out long at) && Log.Ms - at < 30000) return;
+        _blockedNoted[key] = Log.Ms;
+        Log.Write($"Alert '{kind}' for '{character}' not shown: {reason}.");
+    }
+
+    /// <summary>True when a sound for this alert has just played, so a burst gives one sound, not one per client.</summary>
+    private bool SoundInBurst(string kind)
+    {
+        long now = Log.Ms;
+        if (_lastSoundAt.TryGetValue(kind, out long at) && now - at < SoundBurstMs) return true;
+        _lastSoundAt[kind] = now;
+        return false;
+    }
+
     private void OnLogEvent(LogEvent e)
     {
         if (!_settings.NotificationsEnabled)
@@ -2077,12 +2101,12 @@ public sealed class PreviewManager : IDisposable
             c.CharacterName.Equals(e.Character, StringComparison.OrdinalIgnoreCase));
         if (client is null)
         {
-            Log.Debug("ALERT", $"'{e.Kind}' for '{e.Character}' not shown: that character has no client the switcher is using");
+            NoteBlocked(e.Kind, e.Character, "that character has no client the switcher is using");
             return;
         }
         if (_settings.NotifySkipActiveClient && client.Handle == _activeClient)
         {
-            Log.Debug("ALERT", $"'{e.Kind}' for '{e.Character}' not shown: it is the client in front");
+            NoteBlocked(e.Kind, e.Character, "it is the client in front");
             return;
         }
 
@@ -2091,7 +2115,7 @@ public sealed class PreviewManager : IDisposable
         int cooldown = e.Kind == "mining" ? 0 : _settings.CooldownFor(e.Kind);       // mining stopped has its own timer instead
         if (_lastNotified.TryGetValue(key, out var last) && (now - last).TotalSeconds < cooldown)
         {
-            Log.Debug("ALERT", $"'{e.Kind}' for '{e.Character}' not shown: cooldown ({cooldown} s)");
+            NoteBlocked(e.Kind, e.Character, $"cooldown ({cooldown} s)");
             return;
         }
         _lastNotified[key] = now;
@@ -2125,7 +2149,11 @@ public sealed class PreviewManager : IDisposable
             UpdateBorders();
         }
         if (s.NotifyToast) Toast?.Invoke(AppInfo.Name, message);
-        if (s.NotifySound)
+        if (s.NotifySound && kind.Length > 0 && SoundInBurst(kind))
+        {
+            Log.Debug("ALERT", $"sound for '{kind}' skipped: one just played");
+        }
+        else if (s.NotifySound)
         {
             string sound = kind.Length > 0 && s.AlertSounds.TryGetValue(kind, out var own) && !string.IsNullOrEmpty(own) ? own : s.NotifySoundName;
             int volume = kind.Length > 0 && s.AlertVolumes.TryGetValue(kind, out int v) ? v : s.NotifyVolume;
@@ -2391,4 +2419,5 @@ public sealed class PreviewManager : IDisposable
         _meta.Clear();
     }
 }
+
 
