@@ -118,7 +118,7 @@ dotnet build -c Release
 - Installed copies pick up the new **Latest** release the next time they start.
 
 ## Suggestions and bug reports
-- [Join the Discord](https://discord.gg/8vBCG4WsTx) for suggestions, bug reports and help.
+- [Join the Discord](https://discord.gg/TseFqVu6GF) for suggestions, bug reports and help.
 - Or open an issue on [GitHub](https://github.com/Mune-Su/eve-iw-preview/issues).
 - For a bug, turn on Detailed logging (Configuration > Diagnostics > Logs), repeat the problem, and attach the log. Names show as codes, so it's safe to share.
 
@@ -126,4 +126,4 @@ dotnet build -c Release
 
 See [CHANGELOG.md](CHANGELOG.md).
 
-
+

@@ -7,6 +7,10 @@ internal static class Changelog
 {
     public static readonly ChangelogEntry[] Entries =  
       {
+        new("0.19.29", "New Discord invite", new[]
+        {
+            "The Discord link under About > Community and in the README has a new, working invite."
+        }),
         new("0.19.28", "Alert sound gap", new[]
         {
             "New: Same Alert Sound Gap (Alerts page). The same alert on several clients inside this many seconds plays one sound.",
@@ -483,4 +487,4 @@ internal static class Changelog
     };
 }
 
-
+

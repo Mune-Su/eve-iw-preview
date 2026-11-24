@@ -2,6 +2,9 @@
 
 Every version of EVE-IW-Preview, newest first. The app shows the same list under About > What's New.
 
+## v0.19.29 — New Discord invite
+- The Discord link under About > Community and in the README has a new, working invite.
+
 ## v0.19.28 — Alert sound gap
 - New: Same Alert Sound Gap (Alerts page). The same alert on several clients inside this many seconds plays one sound.
 - The default is 1.5 seconds, so quick compressing plays every sound. 0 = every alert plays its sound.
@@ -470,4 +473,4 @@ Every version of EVE-IW-Preview, newest first. The app shows the same list under
 - AUTZ IronWorks emblem for the exe, tray and windows.
 - Drag the bottom-right corner to resize, colour pickers, and updates that never touch a running app.
 
-
+
