@@ -7,6 +7,12 @@ internal static class Changelog
 {
     public static readonly ChangelogEntry[] Entries =  
       {
+        new("0.19.28", "Alert sound gap", new[]
+        {
+            "New: Same Alert Sound Gap (Alerts page). The same alert on several clients inside this many seconds plays one sound.",
+            "The default is 1.5 seconds, so quick compressing plays every sound. 0 = every alert plays its sound.",
+            "Flashes and notifications are not affected."
+        }),
         new("0.19.27", "Faster alerts, one Alerts switch", new[]
         {
             "Mining stopped now alerts the moment the hold is full or the rock runs out.",
@@ -14,7 +20,6 @@ internal static class Changelog
             "Alerts and log monitoring are one switch now: Enable Alerts.",
             "Events To Watch now sits above the log files. The check interval box is gone.",
             "Faster: the game logs are checked 4 times a second, and new logs are found within a second.",
-            "The same alert on several clients plays one sound, not one each.",
             "Add several sounds at once.",
             "An alert that isn't shown now says why in the normal log."
         }),

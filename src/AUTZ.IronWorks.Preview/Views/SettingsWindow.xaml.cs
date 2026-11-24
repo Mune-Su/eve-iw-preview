@@ -461,6 +461,7 @@ public partial class SettingsWindow : Window
         NotifyFlashBox.IsChecked = s.NotifyFlashBorder;
         NotifyColourBox.Hex = s.NotifyBorderHex;
         NotifySecondsBox.Text = s.NotifyBorderSeconds.ToString();
+        SoundGapBox.Text = s.AlertSoundGapSeconds.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture);
         NotifyToastBox.IsChecked = s.NotifyToast;
         NotifySoundBox.IsChecked = s.NotifySound;
         MoveOldCustomSound(s);
@@ -2881,6 +2882,9 @@ public partial class SettingsWindow : Window
             return Fail(PageAlerts_, alertError);
         if (!InRange(NotifySecondsBox.Text, 1, 120, out int flashSeconds))
             return Fail(PageAlerts_, "The flash time must be 1 to 120 seconds.");
+        if (!double.TryParse(SoundGapBox.Text.Trim().Replace(',', '.'), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out double soundGap) ||
+            soundGap < 0 || soundGap > 30)
+            return Fail(PageAlerts_, "The same-alert sound gap must be 0 to 30 seconds.");
         if (!NotifyColourBox.IsValid)
             return Fail(PageThumbs_, "The flash colour isn't valid. Use the Pick button, or type something like #F87171.");
 
@@ -2956,6 +2960,7 @@ public partial class SettingsWindow : Window
         _work.NotifyFlashBorder = NotifyFlashBox.IsChecked == true;
         _work.NotifyBorderHex = NotifyColourBox.Hex.Length > 0 ? NotifyColourBox.Hex : "#F87171";
         _work.NotifyBorderSeconds = flashSeconds;
+        _work.AlertSoundGapSeconds = Math.Round(soundGap, 2);
         _work.NotifyToast = NotifyToastBox.IsChecked == true;
         _work.NotifySound = NotifySoundBox.IsChecked == true;
         _work.NotifySoundName = (NotifySoundCombo.SelectedItem as SoundChoice)?.Id ?? SoundLibrary.DefaultId;

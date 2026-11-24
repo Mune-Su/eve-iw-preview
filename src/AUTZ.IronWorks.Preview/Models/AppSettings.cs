@@ -195,6 +195,8 @@ public sealed class AppSettings
     // ----- notifications -----
     public bool NotificationsEnabled { get; set; } = false;
     public bool NotifySkipActiveClient { get; set; } = true;
+    /// <summary>The same alert on several clients inside this many seconds plays one sound. 0 = every alert plays its sound.</summary>
+    public double AlertSoundGapSeconds { get; set; } = 1.5;
     /// <summary>Older versions: one cooldown for every alert. Copied into AlertCooldowns once if it had been changed.</summary>
     public int NotifyCooldownSeconds { get; set; } = 20;
     /// <summary>Alert kind -> its own cooldown in seconds (0 = every time). Missing = the default for that alert.</summary>

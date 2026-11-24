@@ -2068,7 +2068,6 @@ public sealed class PreviewManager : IDisposable
 
     private readonly Dictionary<string, long> _blockedNoted = new();
     private readonly Dictionary<string, long> _lastSoundAt = new();
-    private const int SoundBurstMs = 4000;     // the same alert on several clients inside this time plays one sound
 
     /// <summary>An alert that wasn't shown says why in the normal log (once every 30 s for the same reason).</summary>
     private void NoteBlocked(string kind, string character, string reason)
@@ -2083,8 +2082,10 @@ public sealed class PreviewManager : IDisposable
     /// <summary>True when a sound for this alert has just played, so a burst gives one sound, not one per client.</summary>
     private bool SoundInBurst(string kind)
     {
+        long gap = (long)(Math.Clamp(_settings.AlertSoundGapSeconds, 0, 30) * 1000);
+        if (gap <= 0) return false;
         long now = Log.Ms;
-        if (_lastSoundAt.TryGetValue(kind, out long at) && now - at < SoundBurstMs) return true;
+        if (_lastSoundAt.TryGetValue(kind, out long at) && now - at < gap) return true;
         _lastSoundAt[kind] = now;
         return false;
     }
@@ -2151,7 +2152,7 @@ public sealed class PreviewManager : IDisposable
         if (s.NotifyToast) Toast?.Invoke(AppInfo.Name, message);
         if (s.NotifySound && kind.Length > 0 && SoundInBurst(kind))
         {
-            Log.Debug("ALERT", $"sound for '{kind}' skipped: one just played");
+            Log.Debug("ALERT", $"sound for '{kind}' skipped: one played less than {s.AlertSoundGapSeconds:0.#} s ago");
         }
         else if (s.NotifySound)
         {

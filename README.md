@@ -72,7 +72,7 @@ Read from EVE's own game logs (read only). **Enable Alerts** turns on log monito
 - Each alert has its own sound, volume, cooldown and **Test** button.
 - Built-in sounds: Chime, Ping, Double Beep, Klaxon, Rising, Falling, Alarm, Blip. The Windows sounds are listed too.
 - **Add your own:** pick one or more files. .wav, .mp3, .m4a, .wma or .aac. Max 5 MB each, plays up to 10 seconds.
-- The same alert on several clients plays one sound.
+- **Same Alert Sound Gap:** the same alert on several clients inside this many seconds plays one sound (default 1.5 s, 0 = every alert plays).
 - An alert that isn't shown says why in the normal log.
 
 ### Memory cleaner (Configuration > Performance)
