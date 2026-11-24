@@ -7,6 +7,12 @@ internal static class Changelog
 {
     public static readonly ChangelogEntry[] Entries =  
       {
+        new("0.19.25", "Fix: Next Client stuck on the last client", new[]
+        {
+            "Fixed: Next / Previous Client could get stuck, pressing again and again on the same client.",
+            "A switch now only counts once the client is really in front, and a client that is still in front is never minimised.",
+            "If Windows refuses one client, the press now moves on to the next one."
+        }),
         new("0.19.24", "Login screen hotkeys and Discord", new[]
         {
             "New: Next / Previous Login Screen hotkeys. They only go to clients that aren't logged in yet.",

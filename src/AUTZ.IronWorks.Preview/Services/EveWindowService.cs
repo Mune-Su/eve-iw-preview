@@ -251,8 +251,8 @@ public sealed class EveWindowService
                 bool ok1;
                 try { ok1 = NativeMethods.SetForegroundWindow(handle); }
                 finally { NativeMethods.AttachThreadInput(foregroundThread, targetThread, false); }
-                if (ok1) { Settled(handle, true); how = "attach foreground->target"; return true; }
-                Log.Debug("FOCUS", "  step 2 attach foreground->target: refused");
+                if (ok1 && Settled(handle, true)) { how = "attach foreground->target"; return true; }
+                Log.Debug("FOCUS", ok1 ? "  step 2 attach foreground->target: accepted but the client did not come to the front" : "  step 2 attach foreground->target: refused");
             }
 
             // fallback 2: join this app's input queue to the focused window's
@@ -262,8 +262,8 @@ public sealed class EveWindowService
                 bool ok2;
                 try { ok2 = NativeMethods.SetForegroundWindow(handle); }
                 finally { NativeMethods.AttachThreadInput(thisThread, foregroundThread, false); }
-                if (ok2) { Settled(handle, true); how = "attach this->foreground"; return true; }
-                Log.Debug("FOCUS", "  step 3 attach this->foreground: refused");
+                if (ok2 && Settled(handle, true)) { how = "attach this->foreground"; return true; }
+                Log.Debug("FOCUS", ok2 ? "  step 3 attach this->foreground: accepted but the client did not come to the front" : "  step 3 attach this->foreground: refused");
             }
         }
 
@@ -272,10 +272,22 @@ public sealed class EveWindowService
         NativeMethods.keybd_event(NativeMethods.VK_MENU, 0, 0, UIntPtr.Zero);
         NativeMethods.keybd_event(NativeMethods.VK_MENU, 0, NativeMethods.KEYEVENTF_KEYUP, UIntPtr.Zero);
         bool ok3 = NativeMethods.SetForegroundWindow(handle);
-        if (ok3) { Settled(handle, true); how = "alt tap"; return true; }
+        if (ok3 && Settled(handle, true)) { how = "alt tap"; return true; }
+        Log.Debug("FOCUS", ok3 ? "  step 4 alt tap: accepted but the client did not come to the front" : "  step 4 alt tap: refused");
+
+        // fallback 4: nudge the window's stacking order (only a window that is already open and not minimised needs this)
+        if (!NativeMethods.IsIconic(handle))
+        {
+            Log.Debug("FOCUS", "  step 5 stacking-order nudge");
+            const uint SWP_SHOWWINDOW = 0x0040;
+            NativeMethods.SetWindowPos(handle, new nint(-1), 0, 0, 0, 0, NativeMethods.SWP_NOMOVE | NativeMethods.SWP_NOSIZE | SWP_SHOWWINDOW);
+            NativeMethods.SetWindowPos(handle, new nint(-2), 0, 0, 0, 0, NativeMethods.SWP_NOMOVE | NativeMethods.SWP_NOSIZE | SWP_SHOWWINDOW);
+            bool ok4 = NativeMethods.SetForegroundWindow(handle);
+            if (Settled(handle, ok4)) { how = "stacking-order nudge"; return true; }
+        }
 
         // last resort
-        Log.Debug("FOCUS", "  step 5 SwitchToThisWindow (last resort)");
+        Log.Debug("FOCUS", "  step 6 SwitchToThisWindow (last resort)");
         NativeMethods.SwitchToThisWindow(handle, true);
         if (Settled(handle, true)) { how = "switch-to-this-window"; return true; }
 
@@ -300,3 +312,4 @@ public sealed class EveWindowService
         return fg == handle;
     }
 }
+

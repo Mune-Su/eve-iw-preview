@@ -860,6 +860,11 @@ public sealed class PreviewManager : IDisposable
         var c = _settings.TryGetCharacter(client.CharacterName);
         if (c is not null && c.MinimiseOnLeave && NativeMethods.IsWindow(previous) && !NativeMethods.IsIconic(previous))
         {
+            if (NativeMethods.GetForegroundWindow() == previous && !IsPending())
+            {
+                Log.Debug("WINDOW", $"minimise on leave skipped: {Log.Win(previous)} is still in front");
+                return;
+            }
             Log.Debug("WINDOW", $"minimise on leave (per-character setting) {Log.Win(previous)}");
             NativeMethods.ShowWindowAsync(previous, NativeMethods.SW_SHOWMINNOACTIVE);
         }
@@ -952,6 +957,7 @@ public sealed class PreviewManager : IDisposable
             var c = client.IsLoginScreen ? null : _settings.TryGetCharacter(client.CharacterName);
             if (c is not null && c.NeverMinimise) continue;
             if (!NativeMethods.IsWindow(client.Handle) || NativeMethods.IsIconic(client.Handle)) continue;
+            if (client.Handle == NativeMethods.GetForegroundWindow() && !IsPending()) continue;   // still in front: a failed switch must not minimise it
             Log.Debug("WINDOW", $"auto-minimise {Log.Win(client.Handle)} (keeping {Log.Win(keep)})");
             NativeMethods.ShowWindowAsync(client.Handle, NativeMethods.SW_SHOWMINNOACTIVE);
         }
@@ -1901,6 +1907,7 @@ public sealed class PreviewManager : IDisposable
         string way = (direction > 0 ? "next" : "previous") + (loginsOnly ? " login screen" : "");
         bool failed = false;
         bool switched = false;
+        int refused = 0;
 
         for (int tried = 0; tried < count; tried++)
         {
@@ -1927,12 +1934,16 @@ public sealed class PreviewManager : IDisposable
             failed = true;
             Log.Write($"Cycle {way}: switch to #{position + 1} '{client.CharacterName}' FAILED ({how})");   // failures always reach preview.log
 
-            // one press = one switch. Only a client that has closed or frozen is stepped over; if Windows refused,
-            // stop here instead of trying every other client in the same press.
+            // one press = one switch. A client that has closed or frozen is stepped over. If Windows refuses a client,
+            // the press steps over it once (so one stubborn client can't block the cycle), then stops.
             if (how != "window gone" && how != "not responding")
             {
-                Log.Debug("SWITCH", $"  Windows refused the switch ({how}): this press stops here on purpose");
-                break;
+                if (++refused >= 2)
+                {
+                    Log.Debug("SWITCH", $"  Windows refused the switch ({how}) twice: this press stops here on purpose");
+                    break;
+                }
+                Log.Debug("SWITCH", $"  Windows refused the switch ({how}): stepping over it");
             }
         }
 
