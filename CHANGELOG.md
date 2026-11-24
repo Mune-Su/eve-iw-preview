@@ -2,6 +2,11 @@
 
 Every version of EVE-IW-Preview, newest first. The app shows the same list under About > What's New.
 
+## v0.19.26 — Fix: mining stopped alerts missing
+- Fixed: mining stopped alerts could miss some characters when there were lots of EVE log files.
+- Only the newest log of each character is watched, newest first.
+- The detailed log now shows when mining is seen and the cycle learned.
+
 ## v0.19.25 — Fix: Next Client stuck on the last client
 - Fixed: Next / Previous Client could get stuck, pressing again and again on the same client.
 - A switch now only counts once the client is really in front, and a client that is still in front is never minimised.

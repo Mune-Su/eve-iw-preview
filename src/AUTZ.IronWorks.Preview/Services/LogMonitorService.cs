@@ -57,6 +57,8 @@ public sealed class LogMonitorService : IDisposable
     private readonly Dictionary<string, Tail> _tails = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, DateTime> _lastMining = new(StringComparer.OrdinalIgnoreCase);
     private readonly HashSet<string> _miningFired = new(StringComparer.OrdinalIgnoreCase);
+    private readonly HashSet<string> _olderLogs = new(StringComparer.OrdinalIgnoreCase);   // old logs of a character that has a newer one: not watched
+    private const int MaxLogFiles = 80;                                                    // per kind (game / chat)
     private readonly Dictionary<string, Queue<double>> _miningGaps = new(StringComparer.OrdinalIgnoreCase);   // recent seconds between mining lines, per character
     private Timer? _timer;
     private LogConfig _config = new(false, "", "", 1000, true, false, false, false, false, false, false, false, false, false, false, false, 60, Array.Empty<string>(), false);
@@ -99,6 +101,7 @@ public sealed class LogMonitorService : IDisposable
             _lastMining.Clear();
             _miningFired.Clear();
             _miningGaps.Clear();
+            _olderLogs.Clear();
             _initialScanDone = false;
             _lastScan = DateTime.MinValue;
 
@@ -157,12 +160,31 @@ public sealed class LogMonitorService : IDisposable
         if (!Directory.Exists(folder)) return;
 
         var since = DateTime.Now.AddHours(-12);
-        foreach (string path in RecentFiles(folder, since, chat))
+        var covered = new HashSet<string>(StringComparer.OrdinalIgnoreCase);   // characters whose newest log is already taken
+        foreach (string path in RecentFiles(folder, since, chat))              // newest first, so a new login is never the one skipped
         {
-            if (_tails.ContainsKey(path)) continue;
-            if (_tails.Count > 80) { Log.Trace("LOGMON", "file limit reached (80); remaining files skipped"); return; }
+            if (_tails.TryGetValue(path, out var existing))
+            {
+                if (!covered.Add(existing.Listener))
+                {
+                    _tails.Remove(path);                                       // a newer log of the same character exists now
+                    _olderLogs.Add(path);
+                    Log.Debug("LOGMON", $"stopped watching an older {(chat ? "chat" : "game")} log of '{existing.Listener}' (a newer one exists)");
+                }
+                continue;
+            }
+            if (_olderLogs.Contains(path)) continue;
+            if (_tails.Values.Count(t => t.IsChat == chat) >= MaxLogFiles)
+            {
+                Log.Debug("LOGMON", $"file limit reached ({MaxLogFiles} {(chat ? "chat" : "game")} logs); remaining files skipped");
+                return;
+            }
             var tail = OpenTail(new FileInfo(path), chat);
-            if (tail is not null) { _tails[path] = tail; Log.Trace("LOGMON", $"watching {(chat ? "chat" : "game")} log '{path}' for '{tail.Listener}', starting at byte {tail.Position}"); }
+            if (tail is null) continue;
+            if (!covered.Add(tail.Listener)) { _olderLogs.Add(path); continue; }   // only the newest log of each character is needed
+            _tails[path] = tail;
+            Log.Debug("LOGMON", $"watching {(chat ? "chat" : "game")} log for '{tail.Listener}', starting at byte {tail.Position}");
+            Log.Trace("LOGMON", $"  file '{path}'");
         }
 
         // drop files that haven't been written to for a long while
@@ -175,7 +197,7 @@ public sealed class LogMonitorService : IDisposable
     private static List<string> RecentFiles(string folder, DateTime sinceLocal, bool chat)
     {
         DateTime sinceUtc = sinceLocal.ToUniversalTime();
-        var query = new FileSystemEnumerable<string>(folder, (ref FileSystemEntry entry) => entry.ToFullPath())
+        var query = new FileSystemEnumerable<(string Path, DateTime Written)>(folder, (ref FileSystemEntry entry) => (entry.ToFullPath(), entry.LastWriteTimeUtc.UtcDateTime))
         {
             ShouldIncludePredicate = (ref FileSystemEntry entry) =>
                 !entry.IsDirectory &&
@@ -183,7 +205,7 @@ public sealed class LogMonitorService : IDisposable
                 (!chat || entry.FileName.StartsWith("Local_", StringComparison.OrdinalIgnoreCase)) &&
                 entry.LastWriteTimeUtc.UtcDateTime >= sinceUtc
         };
-        return query.ToList();
+        return query.OrderByDescending(f => f.Written).Select(f => f.Path).ToList();
     }
 
     private Tail? OpenTail(FileInfo file, bool chat)
@@ -306,12 +328,14 @@ public sealed class LogMonitorService : IDisposable
         if (kind == "mining")
         {
             var now = DateTime.UtcNow;
+            if (!_lastMining.ContainsKey(tail.Listener)) Log.Debug("ALERT", $"mining line seen for '{tail.Listener}': watching for it to stop");
             if (_lastMining.TryGetValue(tail.Listener, out var before) && !_miningFired.Contains(tail.Listener))
             {
                 // learn the mining cycle: the longest gap between the last few mining lines (lasers on the same ship can be staggered)
                 if (!_miningGaps.TryGetValue(tail.Listener, out var gaps)) _miningGaps[tail.Listener] = gaps = new Queue<double>();
                 gaps.Enqueue((now - before).TotalSeconds);
                 while (gaps.Count > 8) gaps.Dequeue();
+                if (gaps.Count == 2) Log.Debug("ALERT", $"mining cycle learned for '{tail.Listener}': about {gaps.Max():0} s");
             }
             else if (_miningFired.Contains(tail.Listener))
             {
@@ -407,3 +431,4 @@ public sealed class LogMonitorService : IDisposable
         }
     }
 }
+

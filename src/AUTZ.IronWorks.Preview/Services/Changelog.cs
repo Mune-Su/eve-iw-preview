@@ -7,6 +7,12 @@ internal static class Changelog
 {
     public static readonly ChangelogEntry[] Entries =  
       {
+        new("0.19.26", "Fix: mining stopped alerts missing", new[]
+        {
+            "Fixed: mining stopped alerts could miss some characters when there were lots of EVE log files.",
+            "Only the newest log of each character is watched, newest first.",
+            "The detailed log now shows when mining is seen and the cycle learned."
+        }),
         new("0.19.25", "Fix: Next Client stuck on the last client", new[]
         {
             "Fixed: Next / Previous Client could get stuck, pressing again and again on the same client.",
