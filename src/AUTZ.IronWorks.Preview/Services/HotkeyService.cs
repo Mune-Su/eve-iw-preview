@@ -7,7 +7,7 @@ namespace AUTZ.IronWorks.Preview.Services;
 
 /// <summary>
 /// Global hotkeys. Plain keys are registered with Windows. Everything else (mouse buttons, combos, modifier-only) uses keyboard and mouse hooks.
-/// The hooks only pass a match on to the UI thread.
+/// The hooks run on their own thread (HookThread) and only pass a match on to the UI thread.
 /// </summary>
 public sealed class HotkeyService : IDisposable
 {
@@ -17,15 +17,18 @@ public sealed class HotkeyService : IDisposable
         public string Text = "";
         public Action Action = () => { };
         public int Weight => Spec.Inputs.Count * 4 + Spec.Modifiers.Count;
-        public int SystemId;                 //  non-zero while registered with Windows (RegisterHotKey)
+        public volatile int SystemId;        //  non-zero while registered with Windows (RegisterHotKey)
     }
 
     private static readonly int[] MouseVk = { 0, 0x01, 0x02, 0x04, 0x05, 0x06 };
 
-    private readonly List<Binding> _bindings = new();
+    private readonly List<Binding> _bindings = new();                        // UI thread only
+    private volatile Binding[] _snapshot = Array.Empty<Binding>();          // what the hook thread matches against
     private readonly NativeMethods.HookProc _keyProc;
     private readonly NativeMethods.HookProc _mouseProc;
     private readonly Dispatcher _dispatcher = Dispatcher.CurrentDispatcher;
+
+    // hook thread only
     private readonly HashSet<int> _downKeys = new();
     private readonly HashSet<int> _downMouse = new();
     private readonly HashSet<int> _swallowedKeys = new();
@@ -33,11 +36,12 @@ public sealed class HotkeyService : IDisposable
     private Binding? _armed;
     private nint _keyHook;
     private nint _mouseHook;
+
     private HwndSource? _msgWindow;
     private int _nextId = 1;
-    private bool _suspended;
-    private bool _passThrough;
-    private Func<bool>? _gate;
+    private volatile bool _suspended;
+    private volatile bool _passThrough;
+    private volatile Func<bool>? _gate;
 
     /// <summary>While true nothing fires (used while the settings window is open and when the user suspends hotkeys).</summary>
     public bool Suspended { get => _suspended; set { _suspended = value; ApplySystemHotkeys(); } }
@@ -45,7 +49,7 @@ public sealed class HotkeyService : IDisposable
     /// <summary>True = the matched key or button is not swallowed: the program under it receives it as well.</summary>
     public bool PassThrough { get => _passThrough; set { _passThrough = value; ApplySystemHotkeys(); } }
 
-    /// <summary>When set, hotkeys only fire while this returns true.</summary>
+    /// <summary>When set, hotkeys only fire while this returns true. It runs on the hook thread, so it must only read.</summary>
     public Func<bool>? Gate { get => _gate; set { _gate = value; ApplySystemHotkeys(); } }
 
     public HotkeyService()
@@ -66,11 +70,15 @@ public sealed class HotkeyService : IDisposable
     {
         foreach (var b in _bindings) ReleaseSystem(b);
         _bindings.Clear();
-        _downKeys.Clear();
-        _downMouse.Clear();
-        _swallowedKeys.Clear();
-        _swallowedMouse.Clear();
-        _armed = null;
+        _snapshot = Array.Empty<Binding>();
+        HookThread.Run(() =>
+        {
+            _downKeys.Clear();
+            _downMouse.Clear();
+            _swallowedKeys.Clear();
+            _swallowedMouse.Clear();
+            _armed = null;
+        });
         UpdateHooks();
     }
 
@@ -79,39 +87,47 @@ public sealed class HotkeyService : IDisposable
     {
         bool needKeys = !_suspended && _bindings.Any(b => b.SystemId == 0);
         bool needMouse = !_suspended && _bindings.Any(b => b.Spec.UsesMouse);
-
-        if (needKeys && _keyHook == 0)
+        if (needKeys == (_keyHook != 0) && needMouse == (_mouseHook != 0)) return;
+        HookThread.Run(() =>
         {
-            _keyHook = NativeMethods.SetWindowsHookEx(NativeMethods.WH_KEYBOARD_LL, _keyProc, NativeMethods.GetModuleHandle(null), 0);
-            if (_keyHook == 0) Log.Write("Couldn't install the keyboard hook (error " + Marshal.GetLastWin32Error() + ")");
-            else Log.Debug("HOTKEY", "keyboard hook installed");
-        }
-        else if (!needKeys && _keyHook != 0)
-        {
-            NativeMethods.UnhookWindowsHookEx(_keyHook);
-            _keyHook = 0;
-            _downKeys.Clear();                 // nothing is watching the keys any more, so what was remembered is stale
-            _swallowedKeys.Clear();
-            _armed = null;
-            Log.Debug("HOTKEY", "keyboard hook removed (not needed)");
-        }
-
-        if (needMouse && _mouseHook == 0)
-        {
-            _mouseHook = NativeMethods.SetWindowsHookEx(NativeMethods.WH_MOUSE_LL, _mouseProc, NativeMethods.GetModuleHandle(null), 0);
-            if (_mouseHook == 0) Log.Write("Couldn't install the mouse hook (error " + Marshal.GetLastWin32Error() + ")");
-            else Log.Debug("HOTKEY", "mouse hook installed");
-        }
-        else if (!needMouse && _mouseHook != 0)
-        {
-            NativeMethods.UnhookWindowsHookEx(_mouseHook);
-            _mouseHook = 0;
-            _downMouse.Clear();
-            _swallowedMouse.Clear();
-        }
+            if (needKeys && _keyHook == 0)
+            {
+                _keyHook = NativeMethods.SetWindowsHookEx(NativeMethods.WH_KEYBOARD_LL, _keyProc, NativeMethods.GetModuleHandle(null), 0);
+                if (_keyHook == 0) Log.Write("Couldn't install the keyboard hook (error " + Marshal.GetLastWin32Error() + ")");
+                else Log.Debug("HOTKEY", "keyboard hook installed (hotkey thread)");
+            }
+            else if (!needKeys && _keyHook != 0)
+            {
+                NativeMethods.UnhookWindowsHookEx(_keyHook);
+                _keyHook = 0;
+                _downKeys.Clear();                 // nothing is watching the keys any more, so what was remembered is stale
+                _swallowedKeys.Clear();
+                _armed = null;
+                Log.Debug("HOTKEY", "keyboard hook removed (not needed)");
+            }
+            if (needMouse && _mouseHook == 0)
+            {
+                _mouseHook = NativeMethods.SetWindowsHookEx(NativeMethods.WH_MOUSE_LL, _mouseProc, NativeMethods.GetModuleHandle(null), 0);
+                if (_mouseHook == 0) Log.Write("Couldn't install the mouse hook (error " + Marshal.GetLastWin32Error() + ")");
+                else Log.Debug("HOTKEY", "mouse hook installed (hotkey thread)");
+            }
+            else if (!needMouse && _mouseHook != 0)
+            {
+                NativeMethods.UnhookWindowsHookEx(_mouseHook);
+                _mouseHook = 0;
+                _downMouse.Clear();
+                _swallowedMouse.Clear();
+            }
+        });
     }
 
-    private bool Allowed() => !Suspended && (Gate?.Invoke() ?? true);
+    private bool Allowed()
+    {
+        if (_suspended) return false;
+        var gate = _gate;
+        try { return gate?.Invoke() ?? true; }
+        catch { return true; }
+    }
 
     private long _lastBlockedLog = -10000;
 
@@ -132,13 +148,9 @@ public sealed class HotkeyService : IDisposable
         }
     }
 
-    // ---------- Windows hotkeys (v0.9.7) ----------
-    // Windows only lets a program bring another window to the front if that program received the last input.
-    // A key swallowed by the low-level hook never reaches this app, so every switch was "refused" and had to be
-    // forced, and forcing it doesn't always stick (the switch back to client #1 bounced every time). A hotkey
-    // registered with Windows (RegisterHotKey) arrives as this app's own input, so the switch is allowed straight
-    // away. Used for a plain key with optional Ctrl/Alt/Shift/Win, while
-    // "pass the key through" and "only while EVE is in front" are off; everything else stays on the hook.
+    // ---------- Windows hotkeys ----------
+    // A hotkey registered with Windows arrives as this app's own input, so the switch is allowed straight away.
+    // Hook-matched hotkeys get the same right through FocusGrant.
 
     private const int WM_HOTKEY = 0x0312;
     private const uint MOD_ALT = 0x1, MOD_CONTROL = 0x2, MOD_SHIFT = 0x4, MOD_WIN = 0x8;
@@ -158,21 +170,17 @@ public sealed class HotkeyService : IDisposable
         {
             if (!SystemEligible(b)) { ReleaseSystem(b); continue; }
             if (b.SystemId != 0) continue;
-
             if (_msgWindow is null)
             {
                 var p = new HwndSourceParameters("EVE-IW-Preview hotkeys") { ParentWindow = new nint(-3), Width = 0, Height = 0, WindowStyle = 0 };
                 _msgWindow = new HwndSource(p);
                 _msgWindow.AddHook(WndProc);
             }
-
-            // Allow Windows to deliver WM_HOTKEY for the keyboard auto-repeat while the key is held.
             uint mods = 0;
             foreach (var m in b.Spec.Modifiers)
                 mods |= m.Group switch { 0 => MOD_CONTROL, 1 => MOD_ALT, 2 => MOD_SHIFT, _ => MOD_WIN };
-
             int id = _nextId++;
-            if (_nextId > 0xBFFF) _nextId = 1;
+            if (_nextId > 0xAFFF) _nextId = 1;            // FocusGrant uses 0xB000 and up
             if (RegisterHotKey(_msgWindow.Handle, id, mods, (uint)b.Spec.Inputs[0].Code))
             {
                 b.SystemId = id;
@@ -183,7 +191,7 @@ public sealed class HotkeyService : IDisposable
                 Log.Debug("HOTKEY", $"'{b.Text}' couldn't be registered with Windows (error {Marshal.GetLastWin32Error()}, another program may own it): using the hook");
             }
         }
-
+        _snapshot = _bindings.ToArray();
         UpdateHooks();
     }
 
@@ -210,11 +218,11 @@ public sealed class HotkeyService : IDisposable
         return 0;
     }
 
+    /// <summary>Hook thread: hands a match to the UI thread at the highest priority.</summary>
     private void Fire(Binding binding)
     {
         long pressed = Log.Ms;
-        Log.Debug("HOTKEY", $"'{binding.Text}' matched (swallowed: {!PassThrough})");
-        // v0.19.30: highest priority, so a switch never waits behind thumbnail drawing or other queued work
+        Log.Debug("HOTKEY", $"'{binding.Text}' matched (swallowed: {!_passThrough})");
         _dispatcher.BeginInvoke(DispatcherPriority.Send, new Action(() =>
         {
             Log.Debug("HOTKEY", $"'{binding.Text}' running ({Log.Ms - pressed} ms after the key)");
@@ -223,7 +231,7 @@ public sealed class HotkeyService : IDisposable
         }));
     }
 
-    // ---------- keyboard ----------
+    // ---------- keyboard (hook thread) ----------
 
     private nint KeyboardProc(int nCode, nint wParam, nint lParam)
     {
@@ -244,28 +252,27 @@ public sealed class HotkeyService : IDisposable
     private bool HandleKey(int msg, nint lParam)
     {
         // KBDLLHOOKSTRUCT: vkCode at offset 0, flags at offset 8 (read directly: this runs for every key press on the PC)
-        int flags = Marshal.ReadInt32(lParam, 8);
-        if ((flags & 0x10) != 0) return false;                                  // injected by another program (including our own Alt tap)
-
         int vk = Marshal.ReadInt32(lParam, 0);
-        int code = HotkeyParser.KeyCode(vk, (flags & 0x01) != 0);              // v0.19.31: numpad arrows etc. get their own code
+        int flags = Marshal.ReadInt32(lParam, 8);
         bool down = msg == 0x100 || msg == 0x104;
         bool up = msg == 0x101 || msg == 0x105;
+        // v0.19.32: the focus grant key. Its press must reach Windows (that is the hotkey). Its release must not reach the
+        // client just switched to, or the client drops the modifiers you are holding.
+        if (vk == FocusGrant.Vk) return up;
+        if ((flags & 0x10) != 0) return false;                                  // injected by another program (including our own)
         if (!down && !up) return false;
-        Log.Trace("KEYINPUT", $"keyboard {(down ? "down" : "up")} vk=0x{vk:X2}; suspended={_suspended}; allowed={Allowed()}; passThrough={PassThrough}");
-
+        int code = HotkeyParser.KeyCode(vk, (flags & 0x01) != 0);              // v0.19.31: numpad arrows etc. get their own code
+        Log.Trace("KEYINPUT", $"keyboard {(down ? "down" : "up")} vk=0x{vk:X2}; suspended={_suspended}; passThrough={_passThrough}");
         if (down)
         {
             bool repeat = !_downKeys.Add(code);
             if (repeat) return _swallowedKeys.Contains(code);
-
             if (IsModifierVk(vk))
             {
                 SyncModifiers();
                 _armed = Allowed() ? FindModifierOnly() : null;
                 return false;
             }
-
             _armed = null;
             if (!Allowed())
             {
@@ -275,16 +282,14 @@ public sealed class HotkeyService : IDisposable
             SyncModifiers();
             var binding = Match(new HotkeyToken(HotkeyInputKind.Key, code));
             if (binding is null) return false;
-
             Fire(binding);
-            if (PassThrough) return false;
+            if (_passThrough) return false;
             _swallowedKeys.Add(code);
             return true;
         }
-
         _downKeys.Remove(code);
+        // a swallowed press swallows its release too, so the client never sees a key-up without its key-down
         if (_swallowedKeys.Remove(code)) return true;
-
         if (IsModifierVk(vk) && _armed is not null)
         {
             var armed = _armed;
@@ -294,7 +299,7 @@ public sealed class HotkeyService : IDisposable
         return false;
     }
 
-    // ---------- mouse ----------
+    // ---------- mouse (hook thread) ----------
 
     private nint MouseProc(int nCode, nint wParam, nint lParam)
     {
@@ -317,13 +322,10 @@ public sealed class HotkeyService : IDisposable
         // MSLLHOOKSTRUCT: mouseData at offset 8, flags at offset 12
         int mouseData = Marshal.ReadInt32(lParam, 8);
         if ((Marshal.ReadInt32(lParam, 12) & 1) != 0) return false;             // injected
-
         int code = 0;
         bool down = false, up = false, wheel = false;
         int delta = 0;
         int high = (int)(((uint)mouseData >> 16) & 0xFFFF);
-
-        Log.Trace("MOUSEINPUT", $"mouse msg=0x{msg:X}; data=0x{mouseData:X8}; suspended={_suspended}; allowed={Allowed()}; passThrough={PassThrough}");
         switch (msg)
         {
             case 0x201: code = 1; down = true; break;
@@ -337,7 +339,7 @@ public sealed class HotkeyService : IDisposable
             case 0x20A: wheel = true; delta = (short)high; break;
             default: return false;
         }
-
+        Log.Trace("MOUSEINPUT", $"mouse msg=0x{msg:X}; data=0x{mouseData:X8}; suspended={_suspended}; passThrough={_passThrough}");
         if (wheel)
         {
             if (!Allowed() || delta == 0) return false;
@@ -345,9 +347,8 @@ public sealed class HotkeyService : IDisposable
             var hit = Match(new HotkeyToken(HotkeyInputKind.Wheel, delta > 0 ? 1 : -1));
             if (hit is null) return false;
             Fire(hit);
-            return !PassThrough;
+            return !_passThrough;
         }
-
         if (down)
         {
             _downMouse.Add(code);
@@ -356,18 +357,17 @@ public sealed class HotkeyService : IDisposable
             SyncModifiers();
             var binding = Match(new HotkeyToken(HotkeyInputKind.Mouse, code));
             if (binding is null) return false;
-
             Fire(binding);
-            if (PassThrough) return false;
+            if (_passThrough) return false;
             _swallowedMouse.Add(code);
             return true;
         }
-
         _downMouse.Remove(code);
+        // only a swallowed press's release, so the client never sees a button-up without its button-down
         return up && _swallowedMouse.Remove(code);
     }
 
-    // ---------- matching ----------
+    // ---------- matching (hook thread) ----------
 
     private static bool IsModifierVk(int vk) =>
         vk is 0xA0 or 0xA1 or 0xA2 or 0xA3 or 0xA4 or 0xA5 or 0x5B or 0x5C or 0x10 or 0x11 or 0x12;
@@ -401,7 +401,6 @@ public sealed class HotkeyService : IDisposable
             bool left = _downKeys.Contains(HotkeyParser.ModifierVk[group, 0]);
             bool right = _downKeys.Contains(HotkeyParser.ModifierVk[group, 1]);
             var required = spec.Modifiers.Where(m => m.Group == group).ToList();
-
             if (required.Count == 0)
             {
                 if (left || right) return false;               // an extra modifier is held: not this hotkey
@@ -420,12 +419,11 @@ public sealed class HotkeyService : IDisposable
     private Binding? Match(HotkeyToken trigger)
     {
         Binding? best = null;
-        foreach (var binding in _bindings)
+        foreach (var binding in _snapshot)
         {
             var inputs = binding.Spec.Inputs;
             if (binding.SystemId != 0) continue;                  // Windows delivers this one (WM_HOTKEY)
             if (inputs.Count == 0 || !inputs.Contains(trigger)) continue;
-
             bool others = true;
             foreach (var token in inputs)
             {
@@ -440,7 +438,7 @@ public sealed class HotkeyService : IDisposable
 
     private Binding? FindModifierOnly()
     {
-        foreach (var binding in _bindings)
+        foreach (var binding in _snapshot)
         {
             if (binding.Spec.ModifierOnly && ModifiersMatch(binding.Spec)) return binding;
         }
@@ -453,10 +451,13 @@ public sealed class HotkeyService : IDisposable
         _msgWindow?.Dispose();
         _msgWindow = null;
         _bindings.Clear();
-        if (_keyHook != 0) NativeMethods.UnhookWindowsHookEx(_keyHook);
-        if (_mouseHook != 0) NativeMethods.UnhookWindowsHookEx(_mouseHook);
-        _keyHook = 0;
-        _mouseHook = 0;
+        _snapshot = Array.Empty<Binding>();
+        HookThread.Run(() =>
+        {
+            if (_keyHook != 0) NativeMethods.UnhookWindowsHookEx(_keyHook);
+            if (_mouseHook != 0) NativeMethods.UnhookWindowsHookEx(_mouseHook);
+            _keyHook = 0;
+            _mouseHook = 0;
+        });
     }
 }
-

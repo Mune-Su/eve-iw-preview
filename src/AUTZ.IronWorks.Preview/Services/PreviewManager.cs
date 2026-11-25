@@ -41,6 +41,7 @@ public sealed class PreviewManager : IDisposable
     private readonly Dictionary<ThumbnailWindow, Meta> _meta = new();
     private readonly Dictionary<nint, SavedBox> _inherit = new();
     private readonly HashSet<nint> _clientHandles = new();
+    private volatile nint[] _clientSnap = Array.Empty<nint>();   // v0.19.32: a copy the hotkey thread can read safely
     private readonly HashSet<nint> _everFocused = new();
     private readonly Dictionary<string, string> _systems = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, DateTime> _lastNotified = new();
@@ -130,6 +131,7 @@ public sealed class PreviewManager : IDisposable
 
     public void Start()
     {
+        FocusGrant.Install();                                // v0.19.32: lets hook hotkeys switch clients without fallbacks
         _scanTimer.Tick += (_, _) => Scan();
         _hideTimer.Tick += (_, _) =>
         {
@@ -285,6 +287,7 @@ public sealed class PreviewManager : IDisposable
             _clientHandles.Add(c.Handle);
             _lastActiveAt.TryAdd(c.Handle, DateTime.UtcNow);
         }
+        _clientSnap = _clientHandles.ToArray();
         var live = _clients.ToDictionary(c => c.Handle);
 
         foreach (nint stale in _inherit.Keys.Where(h => !live.ContainsKey(h)).ToList()) _inherit.Remove(stale);
@@ -1758,7 +1761,7 @@ public sealed class PreviewManager : IDisposable
         _hotkeys.UnregisterAll();
         _hotkeys.PassThrough = _settings.HotkeyPassThrough;
         _hotkeys.Gate = _settings.HotkeysOnlyInEve
-            ? () => (_pendingTarget != 0 && Log.Ms <= _pendingUntil) || _clientHandles.Contains(NativeMethods.GetForegroundWindow())   // read-only: runs on the hook thread
+            ? () => (_pendingTarget != 0 && Log.Ms <= _pendingUntil) || Array.IndexOf(_clientSnap, NativeMethods.GetForegroundWindow()) >= 0   // read-only: runs on the hotkey thread
             : null;
         UpdateHotkeySuspension();
 
@@ -2240,6 +2243,7 @@ public sealed class PreviewManager : IDisposable
             // _clients is IReadOnlyList; closing thumbnail windows and disabling Scan is sufficient.
             _clients = Array.Empty<EveClientWindow>();
             _clientHandles.Clear();
+            _clientSnap = Array.Empty<nint>();
             UpdatePerformance();
         }
         else
@@ -2460,11 +2464,13 @@ public sealed class PreviewManager : IDisposable
         _watcher.Dispose();
         _logs.Dispose();
         _hotkeys.Dispose();
+        FocusGrant.Uninstall();
         foreach (var w in _windows.Values.ToList()) w.Close();
         _windows.Clear();
         _meta.Clear();
     }
 }
+
 
 
 

@@ -218,27 +218,30 @@ public sealed class EveWindowService
             return false;
         }
         Log.Debug("FOCUS", $"  start: target {Log.Win(handle)}, foreground {Log.Win(NativeMethods.GetForegroundWindow())}");
-        // asynchronous: a busy client can never block this app
-        if (NativeMethods.IsIconic(handle))
-        {
-            LastTargetWasMinimised = true;
-            Log.Debug("WINDOW", $"  target is minimised -> ShowWindowAsync(RESTORE) {Log.Win(handle)}");
-            NativeMethods.ShowWindowAsync(handle, NativeMethods.SW_RESTORE);
-        }
-        // fast path
+        bool wasMinimised = NativeMethods.IsIconic(handle);
+        LastTargetWasMinimised = wasMinimised;
+        // fast path: works whenever this app had the last input (thumbnail clicks, Windows-registered hotkeys)
         bool set = NativeMethods.SetForegroundWindow(handle);
         Log.Debug("FOCUS", $"  step 1 SetForegroundWindow returned {set}");
         if (set)
         {
-            // Windows said yes. The switch can take a few ms to land (nothing, or still the old client, in front);
-            // that is NOT a refusal, so no fallback runs. The manager treats this client as active until Windows
-            // confirms it (v0.9.6).
-            // Return immediately. PreviewManager treats the target as active until Windows confirms it, so waiting
-            // here only throttles held-key cycling. This keeps each repeat free to start the next switch at once.
+            // Windows said yes. The switch can take a few ms to land; that is NOT a refusal, so no fallback runs.
+            // PreviewManager treats this client as active until Windows confirms it.
+            if (wasMinimised) RestoreAsync(handle);       // in front first, then restore
             how = NativeMethods.GetForegroundWindow() == handle ? "direct" : "direct (Windows finishing the switch)";
             return true;
         }
-
+        // v0.19.32: hook-matched hotkeys (mouse buttons, combos) aren't input Windows credits to this app, so it refuses.
+        // Press the hidden hotkey: Windows then lets this app switch. No Alt tap, no input attach, no waiting.
+        if (FocusGrant.Ready)
+        {
+            FocusGrant.Request(handle);
+            if (wasMinimised) RestoreAsync(handle);
+            how = "focus grant";
+            return true;
+        }
+        if (wasMinimised) RestoreAsync(handle);
+        // the old fallbacks below only run if the focus grant couldn't be set up
         nint foreground = NativeMethods.GetForegroundWindow();
         bool foregroundHung = foreground != 0 && NativeMethods.IsHungAppWindow(foreground);
         uint foregroundThread = foreground == 0 ? 0 : NativeMethods.GetWindowThreadProcessId(foreground, out _);
@@ -301,6 +304,13 @@ public sealed class EveWindowService
         return false;
     }
 
+    /// <summary>Restores a minimised client without waiting on it.</summary>
+    private static void RestoreAsync(nint handle)
+    {
+        Log.Debug("WINDOW", $"  target is minimised -> ShowWindowAsync(RESTORE) {Log.Win(handle)}");
+        NativeMethods.ShowWindowAsync(handle, NativeMethods.SW_RESTORE);
+    }
+
     private const int SettleBudgetMs = 80;
     private long _settleUntil;
 
@@ -324,5 +334,6 @@ public sealed class EveWindowService
         return fg == handle;
     }
 }
+
 
 

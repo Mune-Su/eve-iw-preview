@@ -2,6 +2,11 @@
 
 Every version of EVE-IW-Preview, newest first. The app shows the same list under About > What's New.
 
+## v0.19.32 — Switching that keeps up
+- Hotkeys now run on their own thread. Keys and clicks never wait on the app.
+- Mouse-button and combo hotkeys switch at once. No Alt tap, no waiting on Windows.
+- A hotkey's key-up never reaches the client you switch to.
+
 ## v0.19.31 — Minimised client timing, numpad keys
 - Switching to a minimised client is now timed in the detailed log.
 - Next / Previous wait until that client is back: at least 0.15 s, at most 1 s.
@@ -487,6 +492,7 @@ Every version of EVE-IW-Preview, newest first. The app shows the same list under
 
 - AUTZ IronWorks emblem for the exe, tray and windows.
 - Drag the bottom-right corner to resize, colour pickers, and updates that never touch a running app.
+
 
 
 

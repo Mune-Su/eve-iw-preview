@@ -7,6 +7,12 @@ internal static class Changelog
 {
     public static readonly ChangelogEntry[] Entries =  
       {
+        new("0.19.32", "Switching that keeps up", new[]
+        {
+            "Hotkeys now run on their own thread. Keys and clicks never wait on the app.",
+            "Mouse-button and combo hotkeys switch at once. No Alt tap, no waiting on Windows.",
+            "A hotkey's key-up never reaches the client you switch to."
+        }),
         new("0.19.31", "Minimised client timing, numpad keys", new[]
         {
             "Switching to a minimised client is now timed in the detailed log.",
@@ -503,6 +509,7 @@ internal static class Changelog
         })
     };
 }
+
 
 
 
