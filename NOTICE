@@ -1,0 +1,15 @@
+EVE-IW-Preview
+Copyright (C) 2026 Mune-Su
+
+This program is free software, licensed under the GNU General Public License
+version 3 only (GPL-3.0-only). See the LICENSE file. It comes with NO WARRANTY.
+
+Third-party code
+----------------
+The focus-grant, hook-thread and key-release handling in
+  Services/FocusGrant.cs
+  Services/HookThread.cs
+  Services/HotkeyService.cs
+is adapted (ported from Zig to C#) from EVE-Maj Preview by mrmjstc,
+which is licensed under the GNU General Public License version 3.
+https://github.com/mrmjstc/eve-maj-preview

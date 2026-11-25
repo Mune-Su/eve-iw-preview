@@ -1,3 +1,7 @@
+// EVE-IW-Preview
+// Copyright (C) 2026 Mune-Su
+// SPDX-License-Identifier: GPL-3.0-only
+// This program is free software, licensed under the GNU GPL version 3. It comes with NO WARRANTY. See the LICENSE file.
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -154,6 +158,7 @@ internal sealed class Win32Owner : System.Windows.Forms.IWin32Window
     public Win32Owner(nint handle) => Handle = handle;
     public nint Handle { get; }
 }
+
 
 
 

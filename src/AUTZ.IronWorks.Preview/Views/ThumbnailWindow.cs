@@ -1,3 +1,7 @@
+// EVE-IW-Preview
+// Copyright (C) 2026 Mune-Su
+// SPDX-License-Identifier: GPL-3.0-only
+// This program is free software, licensed under the GNU GPL version 3. It comes with NO WARRANTY. See the LICENSE file.
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
@@ -385,4 +389,5 @@ public sealed class ThumbnailWindow : Window
         }
     }
 }
+
 

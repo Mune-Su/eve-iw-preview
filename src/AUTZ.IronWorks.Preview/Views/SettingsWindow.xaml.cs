@@ -1,3 +1,7 @@
+// EVE-IW-Preview
+// Copyright (C) 2026 Mune-Su
+// SPDX-License-Identifier: GPL-3.0-only
+// This program is free software, licensed under the GNU GPL version 3. It comes with NO WARRANTY. See the LICENSE file.
 using System.ComponentModel;
 using System.Diagnostics;
 using System.IO;
@@ -1637,6 +1641,10 @@ public partial class SettingsWindow : Window
 
     private void GitHub_Click(object sender, RoutedEventArgs e) => OpenPath(this, AppInfo.GitHub);
 
+    private void License_Click(object sender, RoutedEventArgs e) => OpenPath(this, AppInfo.License);
+
+    private void Credit_Click(object sender, RoutedEventArgs e) => OpenPath(this, AppInfo.SwitchingCredit);
+
     private void OpenTaskbarSettings_Click(object sender, RoutedEventArgs e) => OpenPath(this, "ms-settings:taskbar");
 
     private void OpenFolder_Click(object sender, RoutedEventArgs e)
@@ -2990,6 +2998,7 @@ public partial class SettingsWindow : Window
         return true;
     }
 }
+
 
 
 

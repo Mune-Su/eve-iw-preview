@@ -44,10 +44,12 @@ OutputBaseFilename=EVE-IW-Preview-Setup
 Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern
+LicenseFile=..\LICENSE
 
 [Files]
 Source: "{#SourceExe}"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\README.md"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\LICENSE"; DestDir: "{app}"; Flags: ignoreversion
 
 [Tasks]
 ; Unticked on a first install. An update keeps what was chosen the first time (Setup remembers it), so a silent update never adds or removes the icon.
@@ -89,4 +91,5 @@ begin
   if CurUninstallStep = usPostUninstall then
     RegDeleteValue(HKCU, 'Software\Microsoft\Windows\CurrentVersion\Run', 'EVE-IronWorks-Preview');
 end;
+
 

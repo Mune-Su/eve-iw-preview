@@ -127,5 +127,10 @@ dotnet build -c Release
 
 See [CHANGELOG.md](CHANGELOG.md).
 
+## License
 
+Free software under the [GNU GPL v3](LICENSE). It comes with no warranty.
 
+## Credits
+
+The instant-switching code (the focus grant, the hook thread and the key-release handling) is adapted from [EVE-Maj Preview](https://github.com/mrmjstc/eve-maj-preview) by mrmjstc, which is also licensed under the GPL v3. Thank you. See [NOTICE](NOTICE).

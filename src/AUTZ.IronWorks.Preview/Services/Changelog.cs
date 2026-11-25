@@ -1,3 +1,7 @@
+// EVE-IW-Preview
+// Copyright (C) 2026 Mune-Su
+// SPDX-License-Identifier: GPL-3.0-only
+// This program is free software, licensed under the GNU GPL version 3. It comes with NO WARRANTY. See the LICENSE file.
 namespace AUTZ.IronWorks.Preview.Services;
 
 internal sealed record ChangelogEntry(string Version, string Title, string[] Items);
@@ -7,6 +11,14 @@ internal static class Changelog
 {
     public static readonly ChangelogEntry[] Entries =  
       {
+        new("0.19.34", "Credits", new[]
+        {
+            "Credit added for the instant-switching code. See About."
+        }),
+        new("0.19.33", "Open source", new[]
+        {
+            "Now free software under the GPL-3.0. See About > View license."
+        }),
         new("0.19.32", "Switching that keeps up", new[]
         {
             "Hotkeys now run on their own thread. Keys and clicks never wait on the app.",

@@ -1,3 +1,7 @@
+// EVE-IW-Preview
+// Copyright (C) 2026 Mune-Su
+// SPDX-License-Identifier: GPL-3.0-only
+// This program is free software, licensed under the GNU GPL version 3. It comes with NO WARRANTY. See the LICENSE file.
 using System.Globalization;
 using System.IO;
 using System.Text.Json;
@@ -370,5 +374,6 @@ public static class ProfileImportService
     private static string Colour(string text, string fallback) => Colour(text, fallback, out _);
     private static string Colour(string text, string fallback, out int alpha) { alpha = 100; text = text.Trim(); if (Regex.IsMatch(text, @"^0x[0-9A-Fa-f]{8}$")) { alpha = (int)Math.Round(Convert.ToInt32(text.Substring(2, 2), 16) * 100 / 255d); return "#" + text[4..].ToUpperInvariant(); } if (Regex.IsMatch(text, @"^#[0-9A-Fa-f]{8}$")) { alpha = (int)Math.Round(Convert.ToInt32(text.Substring(1, 2), 16) * 100 / 255d); return "#" + text[3..].ToUpperInvariant(); } return Regex.IsMatch(text, @"^#[0-9A-Fa-f]{6}$") ? text.ToUpperInvariant() : fallback; }
 }
+
 
 

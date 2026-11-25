@@ -1,3 +1,7 @@
+// EVE-IW-Preview
+// Copyright (C) 2026 Mune-Su
+// SPDX-License-Identifier: GPL-3.0-only
+// This program is free software, licensed under the GNU GPL version 3. It comes with NO WARRANTY. See the LICENSE file.
 using System.IO;
 using System.Reflection;
 using AUTZ.IronWorks.Preview.Core;
@@ -190,4 +194,5 @@ internal static class SoundLibrary
         return File.Exists(value) ? value : null;
     }
 }
+
 

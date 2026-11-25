@@ -2,6 +2,12 @@
 
 Every version of EVE-IW-Preview, newest first. The app shows the same list under About > What's New.
 
+## v0.19.34 — Credits
+- Credit added for the instant-switching code. See About.
+
+## v0.19.33 — Open source
+- Now free software under the GPL-3.0. See About > View license.
+
 ## v0.19.32 — Switching that keeps up
 - Hotkeys now run on their own thread. Keys and clicks never wait on the app.
 - Mouse-button and combo hotkeys switch at once. No Alt tap, no waiting on Windows.

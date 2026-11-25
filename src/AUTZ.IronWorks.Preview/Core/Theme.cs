@@ -1,3 +1,7 @@
+// EVE-IW-Preview
+// Copyright (C) 2026 Mune-Su
+// SPDX-License-Identifier: GPL-3.0-only
+// This program is free software, licensed under the GNU GPL version 3. It comes with NO WARRANTY. See the LICENSE file.
 using System.IO;
 using System.Reflection;
 using System.Windows;
@@ -49,6 +53,12 @@ internal static class AppInfo
     /// <summary>The project page on GitHub.</summary>
     public const string GitHub = "https://github.com/Mune-Su/eve-iw-preview";
 
+    /// <summary>Where the credit for the adapted switching code links to.</summary>
+    public const string SwitchingCredit = "https://github.com/mrmjstc/eve-maj-preview";
+
+    /// <summary>The licence text (GPL-3.0) on GitHub.</summary>
+    public const string License = "https://github.com/Mune-Su/eve-iw-preview/blob/HEAD/LICENSE";
+
     /// <summary>The Discord invite for suggestions and bug reports (AUTZ IronWorks and EVE-IW-Preview).</summary>
     public const string Discord = "https://discord.com/invite/TseFqVu6GF";
 
@@ -69,6 +79,7 @@ internal static class AppInfo
         }
     }
 }
+
 
 
 
