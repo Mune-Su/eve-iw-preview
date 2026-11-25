@@ -40,3 +40,4 @@ $signature = $rsa.SignData($bytes, [System.Security.Cryptography.HashAlgorithmNa
 New-Item -ItemType Directory -Force $appFolder | Out-Null
 Set-Content -Path (Join-Path $appFolder 'admin.key') -Value ([Convert]::ToBase64String($signature)) -Encoding ASCII
 Write-Host 'admin.key written for this PC. Restart EVE-IW-Preview to see the Admin menu.' -ForegroundColor Green
+

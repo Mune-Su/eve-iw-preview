@@ -1,6 +1,7 @@
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
+using System.Windows.Interop;
 using AUTZ.IronWorks.Preview.Services;
 
 namespace AUTZ.IronWorks.Preview.Views;
@@ -31,8 +32,35 @@ public sealed class HotkeyField : UserControl
 
     public bool IsValid => HotkeyParser.IsValid(Text);
 
+    // v0.19.31: WPF doesn't say whether a key came from the numpad. The raw key message does (the "extended" bit), so it is noted here.
+    private static int _lastVk;
+    private static bool _lastExtended;
+    private static bool _watching;
+
+    private static void WatchRawKeys()
+    {
+        if (_watching) return;
+        _watching = true;
+        ComponentDispatcher.ThreadPreprocessMessage += (ref MSG msg, ref bool handled) =>
+        {
+            if (msg.message is 0x100 or 0x101 or 0x104 or 0x105)        // key down / up, system key down / up
+            {
+                _lastVk = (int)msg.wParam;
+                _lastExtended = (((long)msg.lParam >> 24) & 1) != 0;
+            }
+        };
+    }
+
+    private static string Token(Key key)
+    {
+        int vk = KeyInterop.VirtualKeyFromKey(key);
+        if (!HotkeyParser.IsDualKey(vk) || vk != _lastVk) return HotkeyParser.TokenForKey(key);
+        return HotkeyParser.TokenForKey(key, HotkeyParser.KeyCode(vk, _lastExtended) != vk);
+    }
+
     public HotkeyField()
     {
+        WatchRawKeys();
         var grid = new Grid { Margin = new Thickness(0, 0, 0, 8) };
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
@@ -115,7 +143,7 @@ public sealed class HotkeyField : UserControl
 
         e.Handled = true;
         if (e.IsRepeat) return;
-        Press(HotkeyParser.TokenForKey(key));
+        Press(Token(key));
     }
 
     private void OnKeyUp(object sender, KeyEventArgs e)
@@ -123,7 +151,7 @@ public sealed class HotkeyField : UserControl
         Key key = RealKey(e);
         if (key == Key.None) return;
         e.Handled = true;
-        Release(HotkeyParser.TokenForKey(key));
+        Release(Token(key));
     }
 
     private void OnMouseDown(object sender, MouseButtonEventArgs e)
@@ -156,3 +184,4 @@ public sealed class HotkeyField : UserControl
         Release(token);
     }
 }
+

@@ -107,3 +107,4 @@ jobs:
           files: |
             installer-output/EVE-IW-Preview-Setup.exe
             installer-output/SHA256SUMS.txt
+

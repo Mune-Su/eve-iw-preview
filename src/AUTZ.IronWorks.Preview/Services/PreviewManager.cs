@@ -33,6 +33,7 @@ public sealed class PreviewManager : IDisposable
     private readonly LogMonitorService _logs = new();
     private readonly NotificationService _notify = new();
     private readonly PerformanceService _perf = new();
+    private readonly RestoreWatch _restore = new();            // times clients coming back from minimised, and holds the cycle keys until they are back
     private readonly HotkeyService _toggleKeys = new();      // only the pause / resume hotkeys hotkey, so it still works while the others are paused
     private StatusBadgeWindow? _pausedBadge;
     private IReadOnlyList<EveClientWindow> _allClients = Array.Empty<EveClientWindow>();   // every client found, including ones the switcher leaves alone
@@ -169,6 +170,7 @@ public sealed class PreviewManager : IDisposable
         {
             Log.Debug("WINEVENT", $"foreground -> {Log.Win(hwnd)}");
             if (hwnd == 0) return;                                  // mid-switch gap: nothing to learn from it
+            _restore.NoteForeground(hwnd);
             if (IsPending())
             {
                 if (hwnd == _pendingTarget)
@@ -1881,6 +1883,13 @@ public sealed class PreviewManager : IDisposable
     /// </summary>
     private void Cycle(int direction, bool loginsOnly = false)
     {
+        // v0.19.31: right after a switch to a minimised client, the cycle keys wait until it is back (hard minimum, capped)
+        long wait = _restore.CycleWaitMs();
+        if (wait > 0)
+        {
+            Log.Debug("SWITCH", $"cycle press ignored: client still coming back from minimised ({wait} ms left)");
+            return;
+        }
         var all = CurrentClients();
         int count = all.Count;
         if (count == 0)
@@ -1984,6 +1993,7 @@ public sealed class PreviewManager : IDisposable
         bool ok = _eve.Activate(client.Handle, out how);
         _lastActivated = client.Handle;
         if (!ok) return false;
+        if (_eve.LastTargetWasMinimised) _restore.Begin(client.Handle);
         _staleUntil = Log.Ms + StaleMs;
 
         // Windows has accepted the switch. Until it confirms (or 400 ms pass) this client counts as the active one.
@@ -2456,4 +2466,5 @@ public sealed class PreviewManager : IDisposable
     }
 }
 
-
+
+

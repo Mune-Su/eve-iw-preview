@@ -227,3 +227,4 @@ internal sealed class UpdateWindow : Window
         Close();
     }
 }
+

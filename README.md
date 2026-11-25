@@ -38,7 +38,8 @@ It only shows pictures of your clients and brings windows to the front. It never
 - Next / previous client, a hotkey for the 1st, 2nd, 3rd client, and a jump-to key per character.
 - Separate next / previous **login screen** hotkeys. They only go to clients that aren't logged in yet.
 - Next / previous follow the client order (see Order, groups and layouts). Skipped clients are passed over.
-- Any key, mouse button or combination.
+- After switching to a minimised client, next / previous wait until it's back (0.15 s to 1 s).
+- Any key, mouse button or combination. Numpad arrows, Home, End, PgUp, PgDn, Ins, Del and Enter are separate keys.
 - **Pause / Resume Hotkeys:** stops every other hotkey so you can type. A "HOTKEYS PAUSED" badge shows while paused.
 - **Next / Previous Desktop:** switches Windows virtual desktops.
 - Profile hotkeys: next, previous, or straight to one profile.
@@ -118,7 +119,7 @@ dotnet build -c Release
 - Installed copies pick up the new **Latest** release the next time they start.
 
 ## Suggestions and bug reports
-- [Join the Discord](https://discord.gg/TseFqVu6GF) for suggestions, bug reports and help.
+- [Join the Discord](https://discord.com/invite/TseFqVu6GF) for suggestions, bug reports and help.
 - Or open an issue on [GitHub](https://github.com/Mune-Su/eve-iw-preview/issues).
 - For a bug, turn on Detailed logging (Configuration > Diagnostics > Logs), repeat the problem, and attach the log. Names show as codes, so it's safe to share.
 
@@ -126,4 +127,5 @@ dotnet build -c Release
 
 See [CHANGELOG.md](CHANGELOG.md).
 
-
+
+

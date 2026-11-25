@@ -67,3 +67,4 @@ jobs:
         run: |
           .\installer\build-installer.ps1 -InstallInnoIfMissing
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+

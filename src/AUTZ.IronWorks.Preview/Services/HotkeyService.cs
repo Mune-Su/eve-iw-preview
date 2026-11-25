@@ -149,6 +149,7 @@ public sealed class HotkeyService : IDisposable
     private bool SystemEligible(Binding b) =>
         !_suspended && !_passThrough && _gate is null &&
         b.Spec.Inputs.Count == 1 && b.Spec.Inputs[0].Kind == HotkeyInputKind.Key &&
+        !HotkeyParser.IsDualKey(HotkeyParser.Vk(b.Spec.Inputs[0].Code)) &&      // v0.19.31: Windows can't tell numpad arrows from the main ones, the hook can
         b.Spec.Modifiers.All(m => m.Side == 0);
 
     private void ApplySystemHotkeys()
@@ -243,9 +244,11 @@ public sealed class HotkeyService : IDisposable
     private bool HandleKey(int msg, nint lParam)
     {
         // KBDLLHOOKSTRUCT: vkCode at offset 0, flags at offset 8 (read directly: this runs for every key press on the PC)
-        if ((Marshal.ReadInt32(lParam, 8) & 0x10) != 0) return false;          // injected by another program (including our own Alt tap)
+        int flags = Marshal.ReadInt32(lParam, 8);
+        if ((flags & 0x10) != 0) return false;                                  // injected by another program (including our own Alt tap)
 
         int vk = Marshal.ReadInt32(lParam, 0);
+        int code = HotkeyParser.KeyCode(vk, (flags & 0x01) != 0);              // v0.19.31: numpad arrows etc. get their own code
         bool down = msg == 0x100 || msg == 0x104;
         bool up = msg == 0x101 || msg == 0x105;
         if (!down && !up) return false;
@@ -253,8 +256,8 @@ public sealed class HotkeyService : IDisposable
 
         if (down)
         {
-            bool repeat = !_downKeys.Add(vk);
-            if (repeat) return _swallowedKeys.Contains(vk);
+            bool repeat = !_downKeys.Add(code);
+            if (repeat) return _swallowedKeys.Contains(code);
 
             if (IsModifierVk(vk))
             {
@@ -266,21 +269,21 @@ public sealed class HotkeyService : IDisposable
             _armed = null;
             if (!Allowed())
             {
-                NoteBlocked(vk);
+                NoteBlocked(code);
                 return false;
             }
             SyncModifiers();
-            var binding = Match(new HotkeyToken(HotkeyInputKind.Key, vk));
+            var binding = Match(new HotkeyToken(HotkeyInputKind.Key, code));
             if (binding is null) return false;
 
             Fire(binding);
             if (PassThrough) return false;
-            _swallowedKeys.Add(vk);
+            _swallowedKeys.Add(code);
             return true;
         }
 
-        _downKeys.Remove(vk);
-        if (_swallowedKeys.Remove(vk)) return true;
+        _downKeys.Remove(code);
+        if (_swallowedKeys.Remove(code)) return true;
 
         if (IsModifierVk(vk) && _armed is not null)
         {
@@ -386,7 +389,7 @@ public sealed class HotkeyService : IDisposable
 
     private bool IsHeld(HotkeyToken token) => token.Kind switch
     {
-        HotkeyInputKind.Key => _downKeys.Contains(token.Code) && PhysicallyDown(token.Code),
+        HotkeyInputKind.Key => _downKeys.Contains(token.Code) && PhysicallyDown(HotkeyParser.Vk(token.Code)),
         HotkeyInputKind.Mouse => _downMouse.Contains(token.Code) && token.Code < MouseVk.Length && PhysicallyDown(MouseVk[token.Code]),
         _ => false
     };
@@ -455,4 +458,5 @@ public sealed class HotkeyService : IDisposable
         _keyHook = 0;
         _mouseHook = 0;
     }
-}
+}
+

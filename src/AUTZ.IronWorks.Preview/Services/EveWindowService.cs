@@ -192,6 +192,9 @@ public sealed class EveWindowService
 
     public bool Activate(nint handle) => Activate(handle, out _);
 
+    /// <summary>True when the client the last Activate went to was minimised at the time.</summary>
+    public bool LastTargetWasMinimised { get; private set; }
+
     /// <summary>
     /// Brings a client to the front without ever waiting on it.
     /// Frozen clients are refused. Tries the quick way first, then fallbacks. <paramref name="how"/> says what worked.
@@ -199,6 +202,7 @@ public sealed class EveWindowService
     public bool Activate(nint handle, out string how)
     {
         long t0 = Log.Ms;
+        LastTargetWasMinimised = false;
         bool ok = ActivateCore(handle, out how);
         Log.Debug("FOCUS", $"activate {Log.Win(handle)} -> {(ok ? "OK" : "FAILED")} via '{how}' in {Log.Ms - t0} ms; foreground now {Log.Win(NativeMethods.GetForegroundWindow())}");
         return ok;
@@ -217,6 +221,7 @@ public sealed class EveWindowService
         // asynchronous: a busy client can never block this app
         if (NativeMethods.IsIconic(handle))
         {
+            LastTargetWasMinimised = true;
             Log.Debug("WINDOW", $"  target is minimised -> ShowWindowAsync(RESTORE) {Log.Win(handle)}");
             NativeMethods.ShowWindowAsync(handle, NativeMethods.SW_RESTORE);
         }
@@ -319,4 +324,5 @@ public sealed class EveWindowService
         return fg == handle;
     }
 }
-
+
+

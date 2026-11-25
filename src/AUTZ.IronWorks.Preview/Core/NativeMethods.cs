@@ -21,6 +21,7 @@ internal static class NativeMethods
     [DllImport("user32.dll")] internal static extern bool ShowWindow(nint hWnd, int command);
     [DllImport("user32.dll")] internal static extern bool ShowWindowAsync(nint hWnd, int command);
     [DllImport("user32.dll")] internal static extern bool IsIconic(nint hWnd);
+    [DllImport("user32.dll")] internal static extern nint SendMessageTimeout(nint hWnd, uint msg, nint wParam, nint lParam, uint flags, uint timeout, out nint result);
     [DllImport("user32.dll")] internal static extern bool IsZoomed(nint hWnd);
     [DllImport("user32.dll")] internal static extern bool GetClientRect(nint hWnd, out RECT rect);
     [DllImport("user32.dll")] internal static extern bool GetWindowRect(nint hWnd, out RECT rect);
@@ -53,6 +54,8 @@ internal static class NativeMethods
     internal const int SW_MINIMIZE = 6;
     internal const int SW_SHOWMINNOACTIVE = 7;
     internal const int SW_RESTORE = 9;
+    internal const uint WM_NULL = 0x0000;
+    internal const uint SMTO_ABORTIFHUNG = 0x0002;
 
     internal const int VK_SHIFT = 0x10;
     internal const byte VK_MENU = 0x12;
@@ -117,5 +120,6 @@ internal static class NativeMethods
         [MarshalAs(UnmanagedType.Bool)] public bool SourceClientAreaOnly;
     }
 }
+
 
 

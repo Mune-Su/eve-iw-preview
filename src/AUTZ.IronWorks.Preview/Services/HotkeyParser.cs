@@ -4,7 +4,7 @@ namespace AUTZ.IronWorks.Preview.Services;
 
 public enum HotkeyInputKind { Key, Mouse, Wheel }
 
-/// <summary>One non-modifier input: a key (Code = virtual key), a mouse button (1 left, 2 right, 3 middle, 4 and 5 side buttons) or a wheel notch (1 up, -1 down).</summary>
+/// <summary>One non-modifier input: a key (Code = virtual key, plus HotkeyParser.NumpadFlag for the numpad copy of a key), a mouse button (1 left, 2 right, 3 middle, 4 and 5 side buttons) or a wheel notch (1 up, -1 down).</summary>
 public readonly record struct HotkeyToken(HotkeyInputKind Kind, int Code);
 
 /// <summary>A required modifier. Group: 0 Ctrl, 1 Alt, 2 Shift, 3 Win. Side: 0 either, 1 left only, 2 right only.</summary>
@@ -47,6 +47,34 @@ public static class HotkeyParser
         ["wheelup"] = new(HotkeyInputKind.Wheel, 1),
         ["wheeldown"] = new(HotkeyInputKind.Wheel, -1)
     };
+
+    /// <summary>Added to a key's code for its numpad copy (NumLeft, NumEnter...), so it doesn't match the main key.</summary>
+    public const int NumpadFlag = 0x10000;
+
+    // keys that exist twice: on the main keyboard and on the numpad (with Num Lock off). name -> virtual key
+    private static readonly Dictionary<string, int> NumpadNames = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["NumLeft"] = 0x25, ["NumUp"] = 0x26, ["NumRight"] = 0x27, ["NumDown"] = 0x28,
+        ["NumHome"] = 0x24, ["NumEnd"] = 0x23, ["NumPgUp"] = 0x21, ["NumPgDn"] = 0x22,
+        ["NumIns"] = 0x2D, ["NumDel"] = 0x2E, ["NumEnter"] = 0x0D
+    };
+
+    /// <summary>True for a key that has a numpad copy with the same virtual key.</summary>
+    public static bool IsDualKey(int vk) => vk is (>= 0x21 and <= 0x28) or 0x2D or 0x2E or 0x0D;
+
+    /// <summary>
+    /// The code for a key press. Windows marks the main arrows / Home / End etc. as "extended" and their numpad copies not;
+    /// for Enter it is the other way round.
+    /// </summary>
+    public static int KeyCode(int vk, bool extended)
+    {
+        if (!IsDualKey(vk)) return vk;
+        bool numpad = vk == 0x0D ? extended : !extended;
+        return numpad ? vk | NumpadFlag : vk;
+    }
+
+    /// <summary>The plain virtual key of a code (numpad flag removed).</summary>
+    public static int Vk(int code) => code & 0xFFFF;
 
     // punctuation keys can be typed as the character itself
     private static readonly Dictionary<string, Key> Aliases = new(StringComparer.OrdinalIgnoreCase)
@@ -102,6 +130,12 @@ public static class HotkeyParser
                 continue;
             }
 
+            if (NumpadNames.TryGetValue(part, out int numVk))
+            {
+                var numToken = new HotkeyToken(HotkeyInputKind.Key, numVk | NumpadFlag);
+                if (!spec.Inputs.Contains(numToken)) spec.Inputs.Add(numToken);
+                continue;
+            }
             Key key;
             if (!Aliases.TryGetValue(part, out key))
             {
@@ -135,6 +169,20 @@ public static class HotkeyParser
             or Key.LeftShift or Key.RightShift or Key.LWin or Key.RWin;
 
     /// <summary>The text for one pressed key: left-side modifiers are saved as plain Ctrl / Alt / Shift / Win, right-side ones as RCtrl etc.</summary>
+    /// <summary>Same, but a numpad press of a key that exists twice is saved as NumLeft, NumEnter...</summary>
+    public static string TokenForKey(Key key, bool numpad)
+    {
+        if (numpad)
+        {
+            int vk = KeyInterop.VirtualKeyFromKey(key);
+            foreach (var pair in NumpadNames)
+            {
+                if (pair.Value == vk) return pair.Key;
+            }
+        }
+        return TokenForKey(key);
+    }
+
     public static string TokenForKey(Key key) => key switch
     {
         Key.LeftCtrl => "Ctrl",
@@ -168,3 +216,4 @@ public static class HotkeyParser
         return string.Join("+", modifiers.Concat(others));
     }
 }
+

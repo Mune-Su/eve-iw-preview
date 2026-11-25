@@ -50,7 +50,7 @@ internal static class AppInfo
     public const string GitHub = "https://github.com/Mune-Su/eve-iw-preview";
 
     /// <summary>The Discord invite for suggestions and bug reports (AUTZ IronWorks and EVE-IW-Preview).</summary>
-    public const string Discord = "https://discord.gg/TseFqVu6GF";
+    public const string Discord = "https://discord.com/invite/TseFqVu6GF";
 
     private static string LocalAppData => Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
 
@@ -71,4 +71,5 @@ internal static class AppInfo
 }
 
 
-
+
+

@@ -2,6 +2,14 @@
 
 Every version of EVE-IW-Preview, newest first. The app shows the same list under About > What's New.
 
+## v0.19.31 — Minimised client timing, numpad keys
+- Switching to a minimised client is now timed in the detailed log.
+- Next / Previous wait until that client is back: at least 0.15 s, at most 1 s.
+- Presses in that time are ignored, so clicks aren't lost on a half-restored client.
+- Numpad arrows, Home, End, PgUp, PgDn, Ins, Del and Enter are now their own keys (NumLeft, NumEnter...).
+- A hotkey set to the main arrow keys no longer fires from the numpad. Set it again if you want the numpad one.
+- New Discord link.
+
 ## v0.19.30 — Faster switching
 - Faster switching: a client slowed down by Client Speed gets full speed back before it comes to the front, not after.
 - Rapid cycling no longer waits on priority changes. The client you left is slowed down only once you stop switching.
@@ -480,4 +488,5 @@ Every version of EVE-IW-Preview, newest first. The app shows the same list under
 - AUTZ IronWorks emblem for the exe, tray and windows.
 - Drag the bottom-right corner to resize, colour pickers, and updates that never touch a running app.
 
-
+
+

@@ -52,3 +52,4 @@ internal static class TrayPinService
         return false;
     }
 }
+

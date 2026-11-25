@@ -232,4 +232,5 @@ internal sealed class PerformanceService
             return false;
         }
     }
-}
+}
+

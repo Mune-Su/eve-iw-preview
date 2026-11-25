@@ -51,3 +51,4 @@ internal static class AdminAccess
         return (key?.GetValue("MachineGuid") as string ?? "").Trim().ToLowerInvariant();
     }
 }
+

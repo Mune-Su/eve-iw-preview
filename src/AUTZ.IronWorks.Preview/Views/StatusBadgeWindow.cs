@@ -55,3 +55,4 @@ public sealed class StatusBadgeWindow : Window
         Top = area.Top + 6;
     }
 }
+
