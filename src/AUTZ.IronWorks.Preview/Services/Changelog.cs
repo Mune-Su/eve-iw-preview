@@ -11,6 +11,8 @@ internal static class Changelog
 {
     public static readonly ChangelogEntry[] Entries =  
       {
+        new("0.19.37", "Settings build fix", new[] { "Fixed missing settings control references." }),
+        new("0.19.36", "Settings navigation", new[] { "Clients moved into Switcher.", "Expandable Switcher and Intel menus; map, intel and pings are not active yet." }),
         new("0.19.35", "Per-client switching", new[]
         {
             "Numbered clients now have their own switching options.",

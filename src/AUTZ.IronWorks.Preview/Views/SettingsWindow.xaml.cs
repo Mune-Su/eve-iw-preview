@@ -21,11 +21,12 @@ public partial class SettingsWindow : Window
 {
     // order matches the left-hand menu
     private const int PageGeneral_ = 0;
-    private const int PageThumbs_ = 1;          // appearance and behaviour of the thumbnails, together
-    private const int PageGroups_ = 2;          // the character groups and Find Running Clients
-    private const int PageHotkeys_ = 3;
-    private const int PageAlerts_ = 4;          // notifications and log monitoring
-    private const int PageMemory_ = 5;          // the Performance page: features, memory, client speed, top programs, exclusions
+    private const int PageClients_ = 1;
+    private const int PageThumbs_ = 2;          // appearance and behaviour of the thumbnails, together
+    private const int PageGroups_ = 3;          // the character groups and Find Running Clients
+    private const int PageHotkeys_ = 4;
+    private const int PageAlerts_ = 5;          // notifications and log monitoring
+    private const int PageMemory_ = 9;          // the Performance page: features, memory, client speed, top programs, exclusions
 
     private const int MaxSlotRows = 20;
     private const int MaxThumbRows = 60;
@@ -75,6 +76,8 @@ public partial class SettingsWindow : Window
     private readonly List<Border> _navItems = new();
     private readonly List<Border> _navBars = new();
     private readonly List<TextBlock> _navTexts = new();
+    private readonly Dictionary<string, StackPanel> _navGroups = new();
+    private readonly Dictionary<string, TextBlock> _navGroupArrows = new();
     private int _pageIndex = -1;
 
     private readonly Dictionary<string, AppSettings> _edited = new(StringComparer.OrdinalIgnoreCase);
@@ -221,73 +224,95 @@ public partial class SettingsWindow : Window
 
     // ---------- left-hand menu ----------
 
+    // Resolve newly introduced XAML controls by name, avoiding stale generated field references.
+    private ScrollViewer NewPage(string name) =>
+        FindName(name) as ScrollViewer ?? throw new InvalidOperationException("Missing settings page: " + name);
+
+    private Control NewControl(string name) =>
+        FindName(name) as Control ?? throw new InvalidOperationException("Missing settings card: " + name);
+
     private void BuildNav()
     {
-        _pages.Add(new PageDef("General", PageGeneral, new Control[] { CardStartup, CardClients }));
+        _pages.Add(new PageDef("General", PageGeneral, new Control[] { CardStartup }));
+        _pages.Add(new PageDef("Clients", NewPage("PageClients"), new Control[] { NewControl("CardClients") }));
         _pages.Add(new PageDef("Thumbnails", PageThumbs, new Control[] { CardSize, CardLabel, CardActiveBorder, CardCharacter, CardInteraction }));
         _pages.Add(new PageDef("Grouping", PageGroups, new Control[] { CardRoster, CardScan, CardClientOrder }));
         _pages.Add(new PageDef("Hotkeys", PageHotkeys, new Control[] { CardCycling, CardHotkeyOptions, CardSlotKeys, CardCharActions, CardSkipped, CardProfileKeys, CardOtherKeys }));
         _pages.Add(new PageDef("Alerts", PageAlerts, new Control[] { CardNotifyMain, CardLogEvents, CardLogMain }));
+        _pages.Add(new PageDef("Map", NewPage("PageMap"), new Control[] { NewControl("CardMapSetup") }));
+        _pages.Add(new PageDef("Intel", NewPage("PageIntel"), new Control[] { NewControl("CardIntelSetup") }));
+        _pages.Add(new PageDef("Pings", NewPage("PagePings"), new Control[] { NewControl("CardPingsSetup") }));
         _pages.Add(new PageDef("Performance", PageMemory, new Control[] { CardComponents, CardMemoryNow, CardPerformance, CardMemoryTop, CardMemoryKeep }));
         _pages.Add(new PageDef("Diagnostics", PageDiagnostics, new Control[] { CardFiles, CardDiagnostics }));
         if (AdminAccess.IsOwner) _pages.Add(new PageDef("Admin", PageAdmin, new Control[] { CardAdmin, CardAdminTools }));
-        _pages.Add(new PageDef("About", PageAbout, new Control[] { CardAbout, CardCommunity, CardWhatsNew }));          // About is always last
-
-        for (int i = 0; i < _pages.Count; i++)
-        {
-            int index = i;
-            var bar = new Border { Width = 3, CornerRadius = new CornerRadius(2, 0, 0, 2), Background = Brushes.Transparent };
-            var text = new TextBlock
-            {
-                Text = _pages[i].Title,
-                FontSize = 13.5,
-                FontWeight = FontWeights.Bold,
-                Margin = new Thickness(11, 9, 10, 9),
-                VerticalAlignment = VerticalAlignment.Center
-            };
-            var grid = new Grid();
-            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            Grid.SetColumn(text, 1);
-            grid.Children.Add(bar);
-            grid.Children.Add(text);
-
-            var item = new Border
-            {
-                Child = grid,
-                Background = Brushes.Transparent,
-                BorderBrush = Brushes.Transparent,
-                BorderThickness = new Thickness(1),
-                CornerRadius = new CornerRadius(3),
-                Margin = new Thickness(0, 0, 0, 4),
-                Cursor = Cursors.Hand
-            };
-            item.MouseLeftButtonUp += (_, _) => SelectPage(index);
-            item.MouseEnter += (_, _) =>
-            {
-                if (index == _pageIndex) return;
-                item.Background = Theme.Card;
-                _navTexts[index].Foreground = Theme.Text;
-            };
-            item.MouseLeave += (_, _) =>
-            {
-                if (index == _pageIndex) return;
-                item.Background = Brushes.Transparent;
-                _navTexts[index].Foreground = Theme.Muted;
-            };
-            NavPanel.Children.Add(item);
-
-            _navItems.Add(item);
-            _navBars.Add(bar);
-            _navTexts.Add(text);
-        }
+        _pages.Add(new PageDef("About", PageAbout, new Control[] { CardAbout, CardCommunity, CardWhatsNew }));
+        AddNavPage(0, NavPanel, false);
+        AddNavGroup("Switcher", 1, 5);
+        AddNavGroup("Intel", 6, 8);
+        for (int i = 9; i < _pages.Count; i++) AddNavPage(i, NavPanel, false);
     }
 
+    private void AddNavGroup(string title, int first, int last)
+    {
+        var holder = new StackPanel();
+        var head = new Grid { Cursor = Cursors.Hand, Margin = new Thickness(0, 2, 0, 4), Background = Brushes.Transparent };
+        head.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        head.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        var label = new TextBlock { Text = title, FontSize = 13.5, FontWeight = FontWeights.Bold,
+            Foreground = Theme.Text, Margin = new Thickness(12, 9, 0, 9) };
+        var arrow = new TextBlock { Text = "▾", Foreground = Theme.Accent, Margin = new Thickness(0, 9, 10, 9) };
+        Grid.SetColumn(arrow, 1);
+        head.Children.Add(label);
+        head.Children.Add(arrow);
+        var children = new StackPanel { Visibility = Visibility.Visible };
+        head.MouseLeftButtonUp += (_, _) =>
+        {
+            bool open = children.Visibility != Visibility.Visible;
+            children.Visibility = open ? Visibility.Visible : Visibility.Collapsed;
+            arrow.Text = open ? "▾" : "▸";
+        };
+        holder.Children.Add(head);
+        holder.Children.Add(children);
+        NavPanel.Children.Add(holder);
+        _navGroups[title] = children;
+        _navGroupArrows[title] = arrow;
+        for (int i = first; i <= last; i++) AddNavPage(i, children, true);
+    }
+
+    private void AddNavPage(int index, Panel parent, bool nested)
+    {
+        var bar = new Border { Width = 3, CornerRadius = new CornerRadius(2, 0, 0, 2), Background = Brushes.Transparent };
+        var text = new TextBlock { Text = _pages[index].Title, FontSize = 13.5,
+            FontWeight = FontWeights.Bold, Margin = new Thickness(nested ? 23 : 11, 9, 10, 9),
+            VerticalAlignment = VerticalAlignment.Center };
+        var grid = new Grid();
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        Grid.SetColumn(text, 1);
+        grid.Children.Add(bar);
+        grid.Children.Add(text);
+        var item = new Border { Child = grid, Background = Brushes.Transparent, BorderBrush = Brushes.Transparent,
+            BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(3),
+            Margin = new Thickness(0, 0, 0, 3), Cursor = Cursors.Hand };
+        item.MouseLeftButtonUp += (_, _) => SelectPage(index);
+        item.MouseEnter += (_, _) => { if (index != _pageIndex) { item.Background = Theme.Card; text.Foreground = Theme.Text; } };
+        item.MouseLeave += (_, _) => { if (index != _pageIndex) { item.Background = Brushes.Transparent; text.Foreground = Theme.Muted; } };
+        parent.Children.Add(item);
+        _navItems.Add(item);
+        _navBars.Add(bar);
+        _navTexts.Add(text);
+    }
     private void SelectPage(int index)
     {
         if (index < 0 || index >= _pages.Count) return;
         bool leavingThumbs = _pageIndex == PageGroups_ && index != PageGroups_;     // the character list is on this page
         _pageIndex = index;
+        string? group = index >= 1 && index <= 5 ? "Switcher" : index >= 6 && index <= 8 ? "Intel" : null;
+        if (group is not null && _navGroups.TryGetValue(group, out var children))
+        {
+            children.Visibility = Visibility.Visible;
+            _navGroupArrows[group].Text = "▾";
+        }
 
         for (int i = 0; i < _pages.Count; i++)
         {
@@ -2882,7 +2907,7 @@ public partial class SettingsWindow : Window
         if (!InRange(SnapDistBox.Text, 1, 100, out int snap))
             return Fail(PageThumbs_, "Snap distance must be 1 to 100 pixels.");
         if (!InRange(RefreshBox.Text, 500, 10000, out int refresh))
-            return Fail(PageGeneral_, "Scan interval must be 500 to 10000 ms.");
+            return Fail(PageClients_, "Scan interval must be 500 to 10000 ms.");
 
         // Appearance
         if (!InRange(FontSizeBox.Text, 6, 72, out int fontSize))
@@ -2898,7 +2923,7 @@ public partial class SettingsWindow : Window
         if (!InRange(HideDelayBox.Text, 0, 5000, out int hideDelay))
             return Fail(PageThumbs_, "The hide delay must be 0 to 5000 ms.");
         if (!InRange(AutoMinDelayBox.Text, 0, 600, out int minDelay))
-            return Fail(PageGeneral_, "The minimise delay must be 0 to 600 seconds.");
+            return Fail(PageClients_, "The minimise delay must be 0 to 600 seconds.");
 
         // Hotkeys
         if (!ForwardBox.IsValid || !BackBox.IsValid || !LoginForwardBox.IsValid || !LoginBackBox.IsValid || _slotFields.Any(f => !f.IsValid))

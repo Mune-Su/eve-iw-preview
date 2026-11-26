@@ -2,6 +2,14 @@
 
 Every version of EVE-IW-Preview, newest first. The app shows the same list under About > What's New.
 
+## v0.19.37 - Settings build fix
+- Resolve the new settings pages and cards by their XAML names.
+
+## v0.19.36 - Settings navigation
+- Moved Clients out of General into Switcher.
+- Added expandable Switcher and Intel navigation.
+- Map, Intel and Pings are inactive placeholders.
+
 ## v0.19.35 - Per-client switching
 - Numbered clients now have their own switch-to and switch-away settings.
 - Per-client options can inherit per-character settings.
