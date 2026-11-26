@@ -194,5 +194,3 @@ internal static class SoundLibrary
         return File.Exists(value) ? value : null;
     }
 }
-
-

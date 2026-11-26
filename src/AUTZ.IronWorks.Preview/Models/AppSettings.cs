@@ -37,12 +37,20 @@ public sealed class CharacterSettings
     public bool MinimiseOnLeave { get; set; }
 }
 
-/// <summary>A named set of client hotkeys: line 1 = the hotkey for the 1st client in the client order, line 2 = the 2nd, and so on.</summary>
+/// <summary>Optional switching overrides for a numbered client. Null inherits the character setting.</summary>
+public sealed class ClientSwitchSettings
+{
+    public string? ActivateAction { get; set; }
+    public bool? MinimiseOnLeave { get; set; }
+}
+
+/// <summary>A named set of hotkeys and switching overrides for numbered clients.</summary>
 public sealed class SlotHotkeyGroup
 {
     public string Name { get; set; } = "Default";
     /// <summary>"1" = hotkey for the 1st client, "2" = the 2nd, and so on.</summary>
     public Dictionary<string, string> Hotkeys { get; set; } = new();
+    public Dictionary<string, ClientSwitchSettings> Switching { get; set; } = new();
     /// <summary>How many client lines the group shows (at least 1).</summary>
     public int Rows { get; set; } = 1;
 }
@@ -295,8 +303,16 @@ public sealed class AppSettings
         ThumbnailGroups.FirstOrDefault(g => g.Name.Equals(name ?? "", StringComparison.OrdinalIgnoreCase));
 
     /// <summary>The client hotkeys of the group in use.</summary>
-    public IReadOnlyDictionary<string, string> ActiveSlotHotkeys() =>
-        (FindSlotGroup(ActiveClientHotkeyGroup) ?? ClientHotkeyGroups.FirstOrDefault())?.Hotkeys ?? ClientSlotHotkeys;
+    private SlotHotkeyGroup? ActiveSlotGroup() =>
+        FindSlotGroup(ActiveClientHotkeyGroup) ?? ClientHotkeyGroups.FirstOrDefault();
+
+    public IReadOnlyDictionary<string, string> ActiveSlotHotkeys() => ActiveSlotGroup()?.Hotkeys ?? ClientSlotHotkeys;
+
+    public ClientSwitchSettings? TryGetClientSwitchSettings(int slot)
+    {
+        var group = ActiveSlotGroup();
+        return group is not null && group.Switching.TryGetValue(slot.ToString(), out var settings) ? settings : null;
+    }
 
     /// <summary>The thumbnail group in use (null only for a profile that hasn't been through EnsureGroups yet).</summary>
     public ThumbnailGroup? ActiveThumbGroup() =>
@@ -466,7 +482,3 @@ public sealed class AppState
     public AppState Clone() =>
         JsonSerializer.Deserialize<AppState>(JsonSerializer.Serialize(this)) ?? new AppState();
 }
-
-
-
-

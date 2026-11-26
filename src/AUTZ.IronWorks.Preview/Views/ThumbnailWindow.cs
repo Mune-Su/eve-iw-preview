@@ -389,5 +389,3 @@ public sealed class ThumbnailWindow : Window
         }
     }
 }
-
-

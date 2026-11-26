@@ -11,6 +11,11 @@ internal static class Changelog
 {
     public static readonly ChangelogEntry[] Entries =  
       {
+        new("0.19.35", "Per-client switching", new[]
+        {
+            "Numbered clients now have their own switching options.",
+            "Each option can inherit the character setting."
+        }),
         new("0.19.34", "Credits", new[]
         {
             "Credit added for the instant-switching code. See About."
@@ -521,7 +526,3 @@ internal static class Changelog
         })
     };
 }
-
-
-
-

@@ -237,5 +237,3 @@ internal sealed class PerformanceService
         }
     }
 }
-
-

@@ -403,6 +403,8 @@ public sealed class PreviewManager : IDisposable
 
         var ordered = ClientOrdering.Apply(openOrder, _settings, out var assign, out var slots);
         _loginAssign = assign;
+        // Automatic order has no explicit slot map. Use the same fallback as the client hotkeys.
+        for (int i = 0; i < ordered.Count; i++) slots.TryAdd(ordered[i].Handle, i + 1);
         _slots = slots;
         return ordered;
     }
@@ -869,20 +871,24 @@ public sealed class PreviewManager : IDisposable
         if (changed || force) SchedulePerformance(changed);
     }
 
+    private ClientSwitchSettings? ClientSwitchOverride(EveClientWindow client) =>
+        _slots.TryGetValue(client.Handle, out int slot) ? _settings.TryGetClientSwitchSettings(slot) : null;
+
     /// <summary>Minimise a client as soon as you switch away from it, if that is set for it.</summary>
     private void HandleLeave(nint previous)
     {
         var client = _clients.FirstOrDefault(c => c.Handle == previous);
-        if (client is null || client.IsLoginScreen) return;
-        var c = _settings.TryGetCharacter(client.CharacterName);
-        if (c is not null && c.MinimiseOnLeave && NativeMethods.IsWindow(previous) && !NativeMethods.IsIconic(previous))
+        if (client is null) return;
+        var c = client.IsLoginScreen ? null : _settings.TryGetCharacter(client.CharacterName);
+        bool minimise = ClientSwitchOverride(client)?.MinimiseOnLeave ?? c?.MinimiseOnLeave ?? false;
+        if (minimise && NativeMethods.IsWindow(previous) && !NativeMethods.IsIconic(previous))
         {
             if (NativeMethods.GetForegroundWindow() == previous && !IsPending())
             {
                 Log.Debug("WINDOW", $"minimise on leave skipped: {Log.Win(previous)} is still in front");
                 return;
             }
-            Log.Debug("WINDOW", $"minimise on leave (per-character setting) {Log.Win(previous)}");
+            Log.Debug("WINDOW", $"minimise on leave (switching setting) {Log.Win(previous)}");
             NativeMethods.ShowWindowAsync(previous, NativeMethods.SW_SHOWMINNOACTIVE);
         }
     }
@@ -2008,18 +2014,16 @@ public sealed class PreviewManager : IDisposable
         else SetPending(client.Handle);
 
         var c = client.IsLoginScreen ? null : _settings.TryGetCharacter(client.CharacterName);
-        if (c is not null)
+        string? action = ClientSwitchOverride(client)?.ActivateAction ?? c?.ActivateAction;
+        if (action == "Maximise")
         {
-            if (c.ActivateAction == "Maximise")
-            {
-                Log.Debug("WINDOW", $"switch-to action: ShowWindowAsync(MAXIMIZE) {Log.Win(client.Handle)}");
-                NativeMethods.ShowWindowAsync(client.Handle, NativeMethods.SW_MAXIMIZE);
-            }
-            else if (c.ActivateAction == "Restore" && NativeMethods.IsZoomed(client.Handle))
-            {
-                Log.Debug("WINDOW", $"switch-to action: ShowWindowAsync(RESTORE) {Log.Win(client.Handle)}");
-                NativeMethods.ShowWindowAsync(client.Handle, NativeMethods.SW_RESTORE);
-            }
+            Log.Debug("WINDOW", $"switch-to action: ShowWindowAsync(MAXIMIZE) {Log.Win(client.Handle)}");
+            NativeMethods.ShowWindowAsync(client.Handle, NativeMethods.SW_MAXIMIZE);
+        }
+        else if (action == "Restore" && NativeMethods.IsZoomed(client.Handle))
+        {
+            Log.Debug("WINDOW", $"switch-to action: ShowWindowAsync(RESTORE) {Log.Win(client.Handle)}");
+            NativeMethods.ShowWindowAsync(client.Handle, NativeMethods.SW_RESTORE);
         }
 
         SyncForeground(client.Handle);
@@ -2474,7 +2478,3 @@ public sealed class PreviewManager : IDisposable
         _meta.Clear();
     }
 }
-
-
-
-

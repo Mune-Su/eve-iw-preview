@@ -135,7 +135,3 @@ public sealed class ChangelogWindow : Window
         Content = grid;
     }
 }
-
-
-
-

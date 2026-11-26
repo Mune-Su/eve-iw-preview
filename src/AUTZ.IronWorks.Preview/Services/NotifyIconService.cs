@@ -223,5 +223,3 @@ public sealed class NotifyIconService : IDisposable
         _icon.Dispose();
     }
 }
-
-

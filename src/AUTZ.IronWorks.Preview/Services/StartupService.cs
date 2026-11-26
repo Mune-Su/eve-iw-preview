@@ -54,7 +54,3 @@ internal static class StartupService
         if (enabled || IsEnabled()) Set(true);
     }
 }
-
-
-
-

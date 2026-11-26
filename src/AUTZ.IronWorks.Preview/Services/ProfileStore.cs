@@ -215,5 +215,3 @@ public static class ProfileStore
 
     private static string PathFor(string name) => Path.Combine(ProfilesFolder, name + ".json");
 }
-
-

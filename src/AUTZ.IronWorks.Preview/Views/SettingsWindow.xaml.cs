@@ -39,6 +39,8 @@ public partial class SettingsWindow : Window
     private static readonly string[] BorderStyles = { "Solid", "Dashed", "Dotted", "DashDot", "Double", "CornerBrackets" };
     private static readonly string[] ActionTexts = { "Do nothing", "Maximise it", "Restore it (un-maximise)" };
     private static readonly string[] ActionValues = { "None", "Maximise", "Restore" };
+    private static readonly string[] SlotActionTexts = { "Use character setting", "Do nothing", "Maximise it", "Restore it" };
+    private static readonly string[] SlotLeaveTexts = { "Use character setting", "Minimise", "Do not minimise" };
     private static readonly string[] WhatsNewTexts = { "When the app has been updated", "Every time it starts", "Never" };
     private static readonly string[] StackTexts = { "Down the left edge", "Along the top" };
 
@@ -90,6 +92,7 @@ public partial class SettingsWindow : Window
     private bool _groupLoading;
     private readonly List<(string Name, CheckBox Box)> _scanBoxes = new();
     private readonly List<HotkeyField> _slotFields = new();
+    private readonly List<(ComboBox OnEnter, ComboBox OnLeave)> _slotSwitchFields = new();
     private HashSet<string> _running;
     private bool _fontsLoaded;
     private readonly System.Windows.Threading.DispatcherTimer _memTimer = new() { Interval = TimeSpan.FromSeconds(2) };   // runs only while the Performance page is showing
@@ -564,16 +567,17 @@ public partial class SettingsWindow : Window
         BuildSlotRows();
     }
 
-    /// <summary>One line per client: "Client 1" with its hotkey box. A group starts with just the first line; + adds more.</summary>
+    /// <summary>One row per numbered client, with its jump-to key and optional switching overrides.</summary>
     private void BuildSlotRows()
     {
         SlotHotkeyHost.Children.Clear();
         _slotFields.Clear();
+        _slotSwitchFields.Clear();
         var group = _shownSlotGroup;
         if (group is null) return;
 
         int highest = 0;
-        foreach (string key in group.Hotkeys.Keys)
+        foreach (string key in group.Hotkeys.Keys.Concat(group.Switching.Keys))
         {
             if (int.TryParse(key, out int n) && n > highest) highest = n;
         }
@@ -581,23 +585,48 @@ public partial class SettingsWindow : Window
 
         for (int i = 1; i <= rows; i++)
         {
-            var row = new Grid();
-            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(96) });
-            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            string slot = i.ToString();
+            group.Switching.TryGetValue(slot, out var saved);
+            var row = new Grid { Margin = new Thickness(0, 0, 0, 8) };
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            for (int col = 0; col < 3; col++)
+                row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
 
-            var label = new TextBlock
+            row.Children.Add(new TextBlock
             {
-                Text = "Client " + i,
+                Text = "Client " + slot,
                 FontWeight = FontWeights.SemiBold,
-                VerticalAlignment = VerticalAlignment.Top,
-                Margin = new Thickness(0, 8, 0, 0)
+                VerticalAlignment = VerticalAlignment.Center,
+                Margin = new Thickness(0, 14, 8, 0)
+            });
+            var field = new HotkeyField { Text = group.Hotkeys.TryGetValue(slot, out var key) ? key : "" };
+            var enter = new ComboBox
+            {
+                ItemsSource = SlotActionTexts,
+                SelectedIndex = Array.IndexOf(ActionValues, saved?.ActivateAction) + 1
             };
-            var field = new HotkeyField { Text = group.Hotkeys.TryGetValue(i.ToString(), out var key) ? key : "" };
-            Grid.SetColumn(field, 1);
-            row.Children.Add(label);
-            row.Children.Add(field);
+            var leave = new ComboBox
+            {
+                ItemsSource = SlotLeaveTexts,
+                SelectedIndex = saved?.MinimiseOnLeave switch { true => 1, false => 2, null => 0 }
+            };
+            AddSlotField("Jump-To Hotkey", field, 1);
+            AddSlotField("On switch to", enter, 2);
+            AddSlotField("On switch away", leave, 3);
             SlotHotkeyHost.Children.Add(row);
             _slotFields.Add(field);
+            _slotSwitchFields.Add((enter, leave));
+
+            void AddSlotField(string title, Control control, int column)
+            {
+                var stack = new StackPanel { Margin = new Thickness(0, 0, column < 3 ? 8 : 0, 0) };
+                var label = new TextBox { Style = (Style)FindResource("FieldLabel"), Text = title };
+                System.Windows.Automation.AutomationProperties.SetName(control, $"Client {slot}: {title}");
+                stack.Children.Add(label);
+                stack.Children.Add(control);
+                Grid.SetColumn(stack, column);
+                row.Children.Add(stack);
+            }
         }
 
         AddSlotBtn.IsEnabled = rows < MaxSlotRows;
@@ -610,9 +639,17 @@ public partial class SettingsWindow : Window
         var group = _shownSlotGroup;
         if (group is null) return;
         group.Hotkeys = new Dictionary<string, string>();
+        group.Switching = new Dictionary<string, ClientSwitchSettings>();
         for (int i = 0; i < _slotFields.Count; i++)
         {
-            if (_slotFields[i].Text.Length > 0) group.Hotkeys[(i + 1).ToString()] = _slotFields[i].Text;
+            string slot = (i + 1).ToString();
+            if (_slotFields[i].Text.Length > 0) group.Hotkeys[slot] = _slotFields[i].Text;
+            var (enter, leave) = _slotSwitchFields[i];
+            int action = enter.SelectedIndex - 1;
+            string? activate = action >= 0 && action < ActionValues.Length ? ActionValues[action] : null;
+            bool? minimise = leave.SelectedIndex switch { 1 => true, 2 => false, _ => null };
+            if (activate is not null || minimise.HasValue)
+                group.Switching[slot] = new ClientSwitchSettings { ActivateAction = activate, MinimiseOnLeave = minimise };
         }
         group.Rows = Math.Max(1, _slotFields.Count);
     }
@@ -647,6 +684,7 @@ public partial class SettingsWindow : Window
         CommitSlotGroup();
         if (group.Rows <= 1) return;
         group.Hotkeys.Remove(group.Rows.ToString());
+        group.Switching.Remove(group.Rows.ToString());
         group.Rows--;
         BuildSlotRows();
     }
@@ -2998,7 +3036,3 @@ public partial class SettingsWindow : Window
         return true;
     }
 }
-
-
-
-

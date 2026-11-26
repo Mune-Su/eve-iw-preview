@@ -238,5 +238,3 @@ public sealed class LabelWindow : Window
         _brackets.Data = geometry;
     }
 }
-
-

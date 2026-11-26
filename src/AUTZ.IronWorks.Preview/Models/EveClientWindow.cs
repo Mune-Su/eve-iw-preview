@@ -10,7 +10,3 @@ public sealed record EveClientWindow(nint Handle, string Title, string Character
     /// <summary>A client that is open but not logged in yet (its window is just titled "EVE").</summary>
     public bool IsLoginScreen => Title.Equals("EVE", StringComparison.OrdinalIgnoreCase);
 }
-
-
-
-

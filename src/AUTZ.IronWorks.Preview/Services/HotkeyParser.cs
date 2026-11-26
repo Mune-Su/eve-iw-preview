@@ -220,5 +220,3 @@ public static class HotkeyParser
         return string.Join("+", modifiers.Concat(others));
     }
 }
-
-

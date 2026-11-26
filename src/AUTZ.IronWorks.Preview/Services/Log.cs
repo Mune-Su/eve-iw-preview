@@ -468,5 +468,3 @@ internal ref struct DebugLine
 
     internal string Text => _text?.ToString() ?? "";
 }
-
-

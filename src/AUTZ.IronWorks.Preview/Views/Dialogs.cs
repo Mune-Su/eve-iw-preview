@@ -92,7 +92,3 @@ internal sealed class DialogWindow : Window
         Content = root;
     }
 }
-
-
-
-

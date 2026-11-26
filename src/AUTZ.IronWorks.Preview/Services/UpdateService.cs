@@ -377,5 +377,3 @@ internal static class UpdateService
 
     private static string Quote(string path) => path.Replace("'", "''");
 }
-
-

@@ -2,6 +2,10 @@
 
 Every version of EVE-IW-Preview, newest first. The app shows the same list under About > What's New.
 
+## v0.19.35 - Per-client switching
+- Numbered clients now have their own switch-to and switch-away settings.
+- Per-client options can inherit per-character settings.
+
 ## v0.19.34 — Credits
 - Credit added for the instant-switching code. See About.
 
@@ -498,7 +502,3 @@ Every version of EVE-IW-Preview, newest first. The app shows the same list under
 
 - AUTZ IronWorks emblem for the exe, tray and windows.
 - Drag the bottom-right corner to resize, colour pickers, and updates that never touch a running app.
-
-
-
-

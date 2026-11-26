@@ -24,5 +24,3 @@ internal static class MemoryTrim
         catch { }
     }
 }
-
-

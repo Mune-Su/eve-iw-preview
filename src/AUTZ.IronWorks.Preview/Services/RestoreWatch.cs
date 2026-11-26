@@ -122,4 +122,3 @@ internal sealed class RestoreWatch
                              (count > 0 ? $" (average answering {average:0} ms over {count})" : ""));
     }
 }
-

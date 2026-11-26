@@ -91,5 +91,3 @@ begin
   if CurUninstallStep = usPostUninstall then
     RegDeleteValue(HKCU, 'Software\Microsoft\Windows\CurrentVersion\Run', 'EVE-IronWorks-Preview');
 end;
-
-
