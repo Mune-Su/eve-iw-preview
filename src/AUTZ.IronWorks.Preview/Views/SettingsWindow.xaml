@@ -182,9 +182,6 @@
 <TextBox Style="{StaticResource FieldLabel}" Text="Resource (optional)"/><TextBox x:Name="JabberResource"/>
 <TextBox Style="{StaticResource FieldLabel}" Text="Password"/><PasswordBox x:Name="JabberPassword" Margin="0,0,0,8" Background="{StaticResource BrushInput}" Foreground="{StaticResource BrushText}" BorderBrush="{StaticResource BrushLine}" Padding="7,3"/>
 <CheckBox x:Name="JabberRemember"><TextBlock Text="Remember password"/></CheckBox>
-<TextBox Style="{StaticResource FieldLabel}" Text="Server (optional)"/><TextBox x:Name="JabberHost"/>
-<TextBox Style="{StaticResource FieldLabel}" Text="Port"/><TextBox x:Name="JabberPort" Text="5222"/>
-<TextBox Style="{StaticResource FieldLabel}" Text="Ping rooms (one full room address per line)"/><TextBox x:Name="JabberRooms" AcceptsReturn="True" Height="72" TextWrapping="Wrap"/>
 <CheckBox x:Name="JabberAuto"><TextBlock Text="Connect automatically"/></CheckBox>
 <CheckBox x:Name="JabberNotify"><TextBlock Text="Notify me about pings"/></CheckBox>
 <TextBlock x:Name="JabberStatus" Text="Disconnected" Margin="0,6,0,8"/>
@@ -216,6 +213,7 @@
         </Grid>
     </Grid>
 </Window>
+
 
 
 

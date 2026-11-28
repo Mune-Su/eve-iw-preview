@@ -199,10 +199,7 @@ public partial class SettingsWindow : Window
         JabberDomain.Text = jidParts.Length == 2 ? jidParts[1] : "";
         JabberResource.Text = jabber.Config.Resource;
         JabberRemember.IsChecked = jabber.Config.RememberPassword;
-        JabberHost.Text = jabber.Config.Server;
-        JabberPort.Text = jabber.Config.Port.ToString();
-        JabberRooms.Text = jabber.Config.Rooms;
-        JabberAuto.IsChecked = jabber.Config.AutoConnect;
+                                JabberAuto.IsChecked = jabber.Config.AutoConnect;
         JabberNotify.IsChecked = jabber.Config.Notify;
         JabberStatus.Text = jabber.Status;
         jabber.Changed += JabberChanged;
@@ -1691,12 +1688,11 @@ public partial class SettingsWindow : Window
     private void JabberChanged() => Dispatcher.BeginInvoke(new Action(() => JabberStatus.Text = JabberHub.Instance.Status));
     private void JabberSave_Click(object sender, RoutedEventArgs e)
     {
-        if (!int.TryParse(JabberPort.Text, out int port) || port < 1 || port > 65535) { Dialogs.Info(this, "Enter a valid Jabber port."); return; }
         try
         {
             JabberHub.Instance.Save(new JabberConfig { Login = JabberUsername.Text.Trim() + "@" + JabberDomain.Text.Trim(), Resource = JabberResource.Text.Trim(),
-                  RememberPassword = JabberRemember.IsChecked == true, Server = JabberHost.Text.Trim(), Port = port,
-                Rooms = JabberRooms.Text.Trim(), AutoConnect = JabberAuto.IsChecked == true, Notify = JabberNotify.IsChecked == true }, JabberPassword.Password);
+                  RememberPassword = JabberRemember.IsChecked == true,
+                AutoConnect = JabberAuto.IsChecked == true, Notify = JabberNotify.IsChecked == true }, JabberPassword.Password);
             if (JabberRemember.IsChecked == true) JabberPassword.Clear();
             JabberStatus.Text = "Saved";
         }
@@ -3091,6 +3087,7 @@ public partial class SettingsWindow : Window
         return true;
     }
 }
+
 
 
 

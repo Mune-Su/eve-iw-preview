@@ -1,5 +1,6 @@
 using System.IO;
 using System.Net.Security;
+using System.Runtime.InteropServices;
 using System.Net.Sockets;
 using System.Security.Cryptography;
 using System.Text;
@@ -14,9 +15,6 @@ internal sealed class JabberConfig
     public string Login { get; set; } = "";
     public string Resource { get; set; } = "";
     public bool RememberPassword { get; set; } = true;
-    public string Server { get; set; } = "";
-    public int Port { get; set; } = 5222;
-    public string Rooms { get; set; } = "";
     public bool AutoConnect { get; set; }
     public bool Notify { get; set; } = true;
     public string PasswordProtected { get; set; } = "";
@@ -85,6 +83,36 @@ internal sealed class JabberService : IDisposable
     }
     private void SetStatus(string value) { Status = value; Changed?.Invoke(); }
     private static string Escape(string value) => System.Security.SecurityElement.Escape(value) ?? "";
+    [DllImport("dnsapi.dll", CharSet = CharSet.Unicode, EntryPoint = "DnsQuery_W", SetLastError = true)]
+    private static extern int DnsQuery(string name, ushort type, uint options, nint extra, out nint records, nint reserved);
+    [DllImport("dnsapi.dll")] private static extern void DnsRecordListFree(nint records, int freeType);
+    [StructLayout(LayoutKind.Sequential)] private struct DnsSrvData
+    {
+        public nint Target;
+        public ushort Priority;
+        public ushort Weight;
+        public ushort Port;
+        public ushort Pad;
+    }
+    private static (string Host, int Port) DiscoverServer(string domain)
+    {
+        nint records = 0;
+        try
+        {
+            // DNS_TYPE_SRV = 33; DnsRecord layout is pointer-sized on x64.
+            if (DnsQuery("_xmpp-client._tcp." + domain, 33, 0, 0, out records, 0) == 0 && records != 0)
+            {
+                nint data = records + 32;
+                nint targetPtr = Marshal.ReadIntPtr(data);
+                int port = (ushort)Marshal.ReadInt16(data, 12);
+                string? target = Marshal.PtrToStringUni(targetPtr)?.TrimEnd('.');
+                if (!string.IsNullOrWhiteSpace(target) && port is > 0 and <= 65535) return (target, port);
+            }
+        }
+        catch { }
+        finally { if (records != 0) DnsRecordListFree(records, 1); }
+        return (domain, 5222);
+    }
     private async Task Run(CancellationToken token)
     {
         while (!token.IsCancellationRequested)
@@ -94,12 +122,12 @@ internal sealed class JabberService : IDisposable
                 string login = Config.Login.Trim();
                 string[] parts = login.Split('@', 2);
                 if (parts.Length != 2 || parts[0].Length == 0 || parts[1].Length == 0) throw new InvalidOperationException("Enter a Jabber login (name@domain).");
-                string host = string.IsNullOrWhiteSpace(Config.Server) ? parts[1] : Config.Server.Trim();
+                var (host, port) = DiscoverServer(parts[1]);
                 string password = Password();
                 if (password.Length == 0) throw new InvalidOperationException("Enter a Jabber password.");
                 SetStatus("Connecting...");
                 using var tcp = new TcpClient();
-                await tcp.ConnectAsync(host, Math.Clamp(Config.Port, 1, 65535), token);
+                await tcp.ConnectAsync(host, port, token);
                 using var raw = tcp.GetStream();
                 using var ssl = new SslStream(raw, false);
                 async Task Send(Stream stream, string xml)
@@ -119,7 +147,7 @@ internal sealed class JabberService : IDisposable
                 }
                 if (!tls) throw new InvalidOperationException("The Jabber server did not offer STARTTLS.");
                 await Send(raw, "<starttls xmlns='urn:ietf:params:xml:ns:xmpp-tls'/>");
-                while (await reader.ReadAsync()) if (reader.NodeType == XmlNodeType.Element && reader.LocalName is "proceed" or "failure") { if (reader.LocalName == "failure") throw new InvalidOperationException("STARTTLS refused."); break; }
+                while (await reader.ReadAsync()) if (reader.NodeType == XmlNodeType.Element && reader.LocalName is "proceed" or "failure") { if (reader.LocalName == "failure") throw new InvalidOperationException("Server refused STARTTLS."); break; }
                 reader.Dispose();
                 await ssl.AuthenticateAsClientAsync(new SslClientAuthenticationOptions { TargetHost = host }, token);
                 await Send(ssl, opening);
@@ -133,7 +161,14 @@ internal sealed class JabberService : IDisposable
                 }
                 if (!plain) throw new InvalidOperationException("Server does not support SASL PLAIN over TLS.");
                 await Send(ssl, "<auth xmlns='urn:ietf:params:xml:ns:xmpp-sasl' mechanism='PLAIN'>" + payload + "</auth>");
-                while (await secureReader.ReadAsync()) if (secureReader.NodeType == XmlNodeType.Element && secureReader.LocalName is "success" or "failure") { if (secureReader.LocalName == "failure") throw new InvalidOperationException("Jabber login rejected."); break; }
+                while (await secureReader.ReadAsync()) if (secureReader.NodeType == XmlNodeType.Element && secureReader.LocalName is "success" or "failure") { if (secureReader.LocalName == "failure")
+                    {
+                        string detail = await secureReader.ReadInnerXmlAsync();
+                        string reason = detail.Contains("not-authorized", StringComparison.OrdinalIgnoreCase) ? "Server refused the account credentials or authentication method" :
+                            detail.Contains("temporary-auth-failure", StringComparison.OrdinalIgnoreCase) ? "Server reported a temporary authentication failure" :
+                            "Server rejected SASL PLAIN authentication";
+                        throw new InvalidOperationException(reason + ". Pidgin may use a different SASL mechanism.");
+                    } break; }
                 // Restart stream and bind a resource.
                 secureReader.Dispose();
                 await Send(ssl, opening);
@@ -148,8 +183,6 @@ internal sealed class JabberService : IDisposable
                 }
                 if (!bound) throw new InvalidOperationException("Jabber resource binding failed.");
                 await Send(ssl, "<presence/>");
-                foreach (string room in Config.Rooms.Split(new[] { ',', ';', '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
-                    await Send(ssl, "<presence to='" + Escape(room + "/" + parts[0]) + "'><x xmlns='http://jabber.org/protocol/muc'/></presence>");
                 SetStatus("Connected");
                 while (await messages.ReadAsync())
                 {
@@ -172,4 +205,5 @@ internal sealed class JabberService : IDisposable
     }
     public void Dispose() { _stop.Cancel(); _stop.Dispose(); }
 }
+
 
