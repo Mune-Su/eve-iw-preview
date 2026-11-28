@@ -1,5 +1,8 @@
 # Changelog
 Every version of EVE-IW-Preview, newest first.
+## v0.19.50 - Expanded New Eden map
+- Universe and region navigation, stargates, search, zoom, jumps and kills.
+- Public ESI only; no character location.
 ## v0.19.49 - Map, intel and ping diagnostics
 - Public ESI region map; local chat-log intel scanner; no SSO or character location.
 - Settings sections start collapsed; Jabber diagnostics use existing logs.
