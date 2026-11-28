@@ -18,6 +18,8 @@ internal static class PopoutLayout
     private static readonly Dictionary<string,Position> Saved = Load();
     private static readonly Dictionary<string,Window> Live = new();
     private static bool _shuttingDown;
+    private static readonly HashSet<string> UserClosed = new();
+    public static void MarkUserClosed(string key) => UserClosed.Add(key);
     private static Dictionary<string,Position> Load()
     {
         try { if (File.Exists(FilePath)) return JsonSerializer.Deserialize<Dictionary<string,Position>>(File.ReadAllText(FilePath)) ?? new(); }
@@ -38,6 +40,7 @@ internal static class PopoutLayout
     public static void Track(string key, Window window)
     {
         Live[key] = window;
+        UserClosed.Remove(key);
         if (Saved.TryGetValue(key, out var saved))
         {
             if (saved.Width >= window.MinWidth && saved.Height >= window.MinHeight)
@@ -56,7 +59,8 @@ internal static class PopoutLayout
         {
             if (window.WindowState == WindowState.Minimized) return;
             var bounds = window.WindowState == WindowState.Maximized ? window.RestoreBounds : new Rect(window.Left,window.Top,window.Width,window.Height);
-            if (bounds.Width < 100 || bounds.Height < 100) return;
+            if (!window.IsLoaded || bounds.Width < 100 || bounds.Height < 100 ||
+                double.IsNaN(bounds.Left) || double.IsNaN(bounds.Top)) return;
             Saved[key] = new Position { Open = true, Left = bounds.Left, Top = bounds.Top,
                 Width = bounds.Width, Height = bounds.Height, Maximized = window.WindowState == WindowState.Maximized };
             Save();
@@ -72,7 +76,11 @@ internal static class PopoutLayout
         window.Closed += (_,_) =>
         {
             Live.Remove(key);
-            if (Saved.TryGetValue(key,out var item)) { item.Open = _shuttingDown; Save(); }
+            if (Saved.TryGetValue(key,out var item))
+            {
+                item.Open = _shuttingDown || !UserClosed.Remove(key);
+                Save();
+            }
         };
     }
     public static void Shutdown()

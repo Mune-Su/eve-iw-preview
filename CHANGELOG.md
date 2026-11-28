@@ -1,5 +1,8 @@
 # Changelog
 Every version of EVE-IW-Preview, newest first.
+## v0.19.65 - PAP capture and window restore
+- Accept Account Info from direct and forwarded Jabber messages; preserve local PAP cache.
+- Preserve popout open state across app shutdown and restore positions.
 ## v0.19.64 - Fix Account Info parser build
 - Fix CS0103 in JabberService by qualifying Match.Empty.
 ## v0.19.63 - PAPs from Account Info

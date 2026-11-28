@@ -44,8 +44,9 @@ internal sealed class JabberService : IDisposable
     private bool ReadParticipation(string body, DateTime receivedAt)
     {
         // Only account reports are authoritative; fleet broadcasts must never change PAP totals.
-        if (!body.Contains("Account Info", StringComparison.OrdinalIgnoreCase) &&
-            !body.Contains("*Participation*", StringComparison.OrdinalIgnoreCase)) return false;
+        if (!body.Contains("This Month", StringComparison.OrdinalIgnoreCase) ||
+            !body.Contains("STR", StringComparison.OrdinalIgnoreCase) ||
+            !body.Contains("PCT", StringComparison.OrdinalIgnoreCase)) return false;
         var counts = MonthPattern.Match(body);
         if (!counts.Success || !int.TryParse(counts.Groups[1].Value, out int strat) ||
             !int.TryParse(counts.Groups[2].Value, out int pct))
@@ -90,7 +91,7 @@ internal sealed class JabberService : IDisposable
         var latest = messages.Concat(cached is null ? Array.Empty<AccountInfoCache>() : new[] { cached })
             .OrderByDescending(x => x.ReceivedAt).FirstOrDefault();
         if (latest is not null) ReadParticipation(latest.Body, latest.ReceivedAt);
-        else Log.Debug("JABBER", "no account info message available locally");
+        else Log.Write("Jabber PAPs: no Account Info received or saved by IronWorks. The server archive is not available through this reader.");
         try { Changed?.Invoke(); } catch { }
     }
 

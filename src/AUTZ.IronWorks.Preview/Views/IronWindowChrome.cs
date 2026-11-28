@@ -48,7 +48,16 @@ internal static class IronWindowChrome
         Add("−",1,() => window.WindowState = WindowState.Minimized);
         var maximize = Add("□",2,() => window.WindowState = window.WindowState == WindowState.Maximized ? WindowState.Normal : WindowState.Maximized);
         if (window.ResizeMode != ResizeMode.CanResize) maximize.Visibility = Visibility.Collapsed;
-        Add("×",3,window.Close);
+        Add("×",3,() =>
+        {
+            string? key = window switch
+            {
+                PingsWindow => "Pings", JabberChatWindow => "Chat", SettingsWindow => "Settings",
+                IntelWindow => "Intel", NewEdenMapWindow => "Map", _ => null
+            };
+            if (key is not null) AUTZ.IronWorks.Preview.Services.PopoutLayout.MarkUserClosed(key);
+            window.Close();
+        });
         DockPanel.SetDock(header, Dock.Top); root.Children.Add(header);
         root.Children.Add(original); window.Content = root;
         void Update()
