@@ -11,7 +11,8 @@ internal static class Changelog
 {
     public static readonly ChangelogEntry[] Entries =  
       {
-        new("0.19.65", "PAP capture and window restore", new[] { "Read account information received via direct or forwarded Jabber messages.", "Keep popouts open across application shutdown and restore their saved geometry." }),
+        new("0.19.67", "Jabber contacts and rooms", new[] { "Contacts and Chat Rooms tabs with direct and group messaging.", "Use XmppDotNet MessageType.GroupChat and keep directorbot separate." }),
+          new("0.19.65", "PAP capture and window restore", new[] { "Read account information received via direct or forwarded Jabber messages.", "Keep popouts open across application shutdown and restore their saved geometry." }),
           new("0.19.64", "Fix Account Info parser build", new[] { "Qualify Regex Match.Empty to resolve CS0103." }),
           new("0.19.63", "PAPs from Account Info", new[] { "Read the latest locally received directorbot Account Info instead of sending a command.", "Parse monthly STR/PCT and Last strat-op, save the latest values and refresh locally." }),
           new("0.19.62", "Compact Pings header and PAP refresh", new[] { "Single Pings header and compact Participation row with refresh icon.", "Comms shown between message and Doctrine.", "Consistent Jabber Chat chrome and navigation." }),

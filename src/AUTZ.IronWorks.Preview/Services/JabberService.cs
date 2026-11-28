@@ -16,6 +16,7 @@ using AUTZ.IronWorks.Preview.Core;
 namespace AUTZ.IronWorks.Preview.Services;
 internal sealed record JabberPing(DateTime Time, string Sender, string Channel, string Body, bool Read = false);
 internal sealed record ParticipationStats(int Strat, int Pct, string LastPap);
+internal sealed record JabberContact(string Jid, string Name, bool Online);
 internal sealed record JabberChatMessage(DateTime Time, string Peer, string Body, bool Outgoing = false);
 internal sealed class JabberConfig
 {
@@ -101,6 +102,61 @@ internal sealed class JabberService : IDisposable
     private readonly object _gate = new();
     private List<JabberPing> _history = new();
     private readonly List<JabberChatMessage> _chats = new();
+    private readonly Dictionary<string,JabberContact> _contacts = new(StringComparer.OrdinalIgnoreCase);
+    private readonly HashSet<string> _rooms = new(StringComparer.OrdinalIgnoreCase);
+    private static readonly string ChatFile = Path.Combine(Folder, "chats.json");
+    private static readonly string ContactsFile = Path.Combine(Folder, "contacts.json");
+    private static readonly string RoomsFile = Path.Combine(Folder, "rooms.json");
+    public IReadOnlyList<JabberContact> Contacts { get { lock (_gate) return _contacts.Values.OrderBy(x => x.Name).ToArray(); } }
+    public IReadOnlyList<string> Rooms { get { lock (_gate) return _rooms.OrderBy(x => x).ToArray(); } }
+    private void SaveChatData()
+    {
+        try
+        {
+            Directory.CreateDirectory(Folder);
+            lock (_gate)
+            {
+                File.WriteAllText(ChatFile, JsonSerializer.Serialize(_chats));
+                File.WriteAllText(ContactsFile, JsonSerializer.Serialize(_contacts.Values.ToArray()));
+                File.WriteAllText(RoomsFile, JsonSerializer.Serialize(_rooms.ToArray()));
+            }
+        }
+        catch (Exception ex) { Log.Debug("JABBER", "chat save error=" + ex.GetType().Name); }
+    }
+    public void AddContact(string jid)
+    {
+        jid = jid.Trim(); if (!jid.Contains('@')) throw new InvalidOperationException("Enter a full Jabber address.");
+        lock (_gate) _contacts.TryAdd(jid, new JabberContact(jid, jid.Split('@')[0], false));
+        SaveChatData(); ChatChanged?.Invoke();
+    }
+    public async Task JoinRoom(string room)
+    {
+        room = room.Trim(); if (!room.Contains('@')) throw new InvalidOperationException("Enter a full room address.");
+        lock (_gate) _rooms.Add(room);
+        SaveChatData(); ChatChanged?.Invoke();
+        await JoinRoomPresence(room);
+    }
+    private async Task JoinRoomPresence(string room)
+    {
+        XmppDotNet.XmppClient? client; lock (_connectionGate) client = _client;
+        if (client is null || Status != "Connected") return;
+        string nickname = Config.Login.Split('@')[0];
+        await client.SendAsync(new XmppDotNet.Xmpp.Client.Presence { To = room + "/" + nickname });
+    }
+    public void LeaveRoom(string room)
+    {
+        lock (_gate) _rooms.Remove(room);
+        SaveChatData(); ChatChanged?.Invoke();
+    }
+    public async Task SendRoom(string room, string body)
+    {
+        if (string.IsNullOrWhiteSpace(body)) return;
+        XmppDotNet.XmppClient? client; lock (_connectionGate) client = _client;
+        if (client is null || Status != "Connected") throw new InvalidOperationException("Jabber is disconnected.");
+        await client.SendAsync(new XmppDotNet.Xmpp.Client.Message { To = room, Type = MessageType.GroupChat, Body = body });
+        lock (_gate) { _chats.Add(new JabberChatMessage(DateTime.Now, room, body, true)); TrimChats(); }
+        SaveChatData(); ChatChanged?.Invoke();
+    }
     private readonly SemaphoreSlim _sendLock = new(1, 1);
     public event Action? ChatChanged;
     public IReadOnlyList<JabberChatMessage> Chats { get { lock (_gate) return _chats.ToArray(); } }
@@ -120,7 +176,7 @@ internal sealed class JabberService : IDisposable
             Body = body
         });
         lock (_gate) { _chats.Add(new JabberChatMessage(DateTime.Now, peer, body, true)); TrimChats(); }
-        ChatChanged?.Invoke();
+        SaveChatData(); ChatChanged?.Invoke();
     }
     private void TrimChats() { if (_chats.Count > 1000) _chats.RemoveRange(0, _chats.Count - 1000); }
     public JabberConfig Config { get; private set; } = new();
@@ -130,6 +186,9 @@ internal sealed class JabberService : IDisposable
     public IReadOnlyList<JabberPing> History { get { lock (_gate) return _history.ToArray(); } }
     public JabberService()
     {
+        try { if (File.Exists(ChatFile)) _chats.AddRange(JsonSerializer.Deserialize<List<JabberChatMessage>>(File.ReadAllText(ChatFile)) ?? new()); } catch { }
+        try { if (File.Exists(ContactsFile)) foreach (var c in JsonSerializer.Deserialize<List<JabberContact>>(File.ReadAllText(ContactsFile)) ?? new()) _contacts[c.Jid] = c; } catch { }
+        try { if (File.Exists(RoomsFile)) foreach (var room in JsonSerializer.Deserialize<List<string>>(File.ReadAllText(RoomsFile)) ?? new()) _rooms.Add(room); } catch { }
         try { if (File.Exists(ConfigFile)) Config = JsonSerializer.Deserialize<JabberConfig>(File.ReadAllText(ConfigFile)) ?? new(); } catch { }
         try { if (File.Exists(HistoryFile)) _history = JsonSerializer.Deserialize<List<JabberPing>>(File.ReadAllText(HistoryFile)) ?? new(); } catch { }
         try { if (File.Exists(ParticipationFile)) Participation = JsonSerializer.Deserialize<ParticipationStats>(File.ReadAllText(ParticipationFile)); } catch { }
@@ -233,7 +292,8 @@ internal sealed class JabberService : IDisposable
                       _ = Task.Run(async () =>
                       {
                           try { await session.SendPresenceAsync(Show.Chat, "Available");
-                                Log.Debug("JABBER", "presence sent; message listener active"); }
+                                Log.Debug("JABBER", "presence sent; message listener active");
+                                foreach (var room in Rooms) { try { await JoinRoomPresence(room); } catch { } } }
                           catch (Exception ex) { Log.Debug("JABBER", "presence error=" + ex.GetType().Name); }
                       });
                   }
@@ -271,33 +331,40 @@ internal sealed class JabberService : IDisposable
           }
       }
       private void ProcessIncoming(System.Xml.Linq.XElement message)
-      {
-          string type = (string?)message.Attribute("type") ?? "normal";
-          string sender = (string?)message.Attribute("from") ?? "Unknown";
-          string peer = sender.Split('/')[0];
-          string body = message.Elements().FirstOrDefault(x => x.Name.LocalName == "body")?.Value ?? "";
-          Log.Debug("JABBER", "incoming stanza type=" + type + "; body=" + (body.Length > 0 ? "yes" : "no"));
-          if (string.IsNullOrWhiteSpace(body)) return;
-          if (peer.Split('@')[0].Equals("directorbot", StringComparison.OrdinalIgnoreCase) && ReadParticipation(body, DateTime.Now)) return;
-          bool director = peer.Split('@')[0].Equals("directorbot", StringComparison.OrdinalIgnoreCase);
-                      // Directorbot broadcasts carry a footer naming their broadcast audience/type.
-            // Never require fleet fields: GICE, Locusts and other announcements can omit them.
-            bool broadcast = director && System.Text.RegularExpressions.Regex.IsMatch(body,
-                @"(?im)\bthis\s+was\s+(?:an?\s+)?(?:[\w-]+\s+)*broadcast\s+from\b");
-            if (director && !broadcast)
-                Log.Debug("JABBER", "directorbot message without broadcast footer routed to Chat");
-if (!broadcast)
-          {
-              lock (_gate) { _chats.Add(new JabberChatMessage(DateTime.Now, peer, body)); TrimChats(); }
-              Log.Debug("JABBER", "routed to Chat");
-              try { ChatChanged?.Invoke(); } catch (Exception ex) { Log.Debug("JABBER", "chat view error=" + ex.GetType().Name); }
-              return;
-          }
-          var ping = new JabberPing(DateTime.Now, "directorbot", peer, body);
-          lock (_gate) { _history.Insert(0, ping); if (_history.Count > 500) _history.RemoveRange(500, _history.Count - 500); SaveHistory(); }
-          Log.Debug("JABBER", "routed to Pings");
-          try { Received?.Invoke(ping); } catch (Exception ex) { Log.Debug("JABBER", "ping notification error=" + ex.GetType().Name); }
-          try { Changed?.Invoke(); } catch (Exception ex) { Log.Debug("JABBER", "ping view error=" + ex.GetType().Name); }
-      }
+    {
+        string type = (string?)message.Attribute("type") ?? "normal";
+        string sender = (string?)message.Attribute("from") ?? "Unknown";
+        string peer = sender.Split('/')[0];
+        var inner = message.Descendants().FirstOrDefault(x => x.Name.LocalName == "forwarded")?
+            .Descendants().FirstOrDefault(x => x.Name.LocalName == "message");
+        if (inner is not null) { message = inner; sender = (string?)inner.Attribute("from") ?? sender; peer = sender.Split('/')[0]; }
+        string body = message.Elements().FirstOrDefault(x => x.Name.LocalName == "body")?.Value ?? "";
+        if (string.IsNullOrWhiteSpace(body)) return;
+        bool director = peer.Split('@')[0].Equals("directorbot", StringComparison.OrdinalIgnoreCase);
+        bool broadcast = director && System.Text.RegularExpressions.Regex.IsMatch(body,
+            @"(?im)\bthis\s+was\s+(?:an?\s+)?(?:[\w-]+\s+)*broadcast\s+from\b");
+        if (!director)
+        {
+            lock (_gate)
+            {
+                _chats.Add(new JabberChatMessage(DateTime.Now, peer, body)); TrimChats();
+                if (!type.Equals("groupchat", StringComparison.OrdinalIgnoreCase))
+                    _contacts.TryAdd(peer, new JabberContact(peer, peer.Split('@')[0], false));
+                else _rooms.Add(peer);
+            }
+            SaveChatData();
+            try { ChatChanged?.Invoke(); } catch { }
+        }
+        else
+        {
+            // All directorbot messages are examined independently of the normal Jabber chat list.
+            ReadParticipation(body, DateTime.Now);
+        }
+        if (!broadcast) return;
+        var ping = new JabberPing(DateTime.Now, "directorbot", peer, body);
+        lock (_gate) { _history.Insert(0, ping); if (_history.Count > 500) _history.RemoveRange(500, _history.Count - 500); SaveHistory(); }
+        try { Received?.Invoke(ping); } catch { }
+        try { Changed?.Invoke(); } catch { }
+    }
     public void Dispose() { _stop.Cancel(); _stop.Dispose(); }
 }

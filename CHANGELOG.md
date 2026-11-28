@@ -1,5 +1,8 @@
 # Changelog
 Every version of EVE-IW-Preview, newest first.
+## v0.19.67 - Jabber contacts and rooms
+- Dark Jabber contacts and rooms UI, direct/group messages and local history.
+- Correct GroupChat enum and preserve directorbot broadcast and PAP routing.
 ## v0.19.65 - PAP capture and window restore
 - Accept Account Info from direct and forwarded Jabber messages; preserve local PAP cache.
 - Preserve popout open state across app shutdown and restore positions.
