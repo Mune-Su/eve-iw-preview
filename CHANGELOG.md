@@ -1,5 +1,7 @@
 # Changelog
 Every version of EVE-IW-Preview, newest first.
+## v0.19.43 - Remove unused update fields
+- Remove obsolete _timer and _checking fields from UpdateService.
 ## v0.19.42 - Clean WPF build
 - Refresh SettingsWindow XAML and its C# code together.
 - Clean generated WPF build files before compiling in update-preview.ps1.

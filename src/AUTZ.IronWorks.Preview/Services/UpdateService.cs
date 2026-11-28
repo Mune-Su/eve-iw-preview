@@ -34,8 +34,6 @@ internal static class UpdateService
 
     public static string Folder => Path.Combine(AppInfo.DataFolder, "updates");
 
-    private static Timer? _timer;
-    private static int _checking;
 
     // ---------- start-up ----------
 
@@ -336,4 +334,5 @@ internal static class UpdateService
 
     private static string Quote(string path) => path.Replace("'", "''");
 }
+
 
