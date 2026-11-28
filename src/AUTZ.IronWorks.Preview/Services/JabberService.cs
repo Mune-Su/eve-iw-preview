@@ -1,4 +1,9 @@
 using System.IO;
+using System.Reactive.Linq;
+using XmppDotNet.Transport.Socket;
+using XmppDotNet.Extensions.Client.Presence;
+using XmppDotNet.Xmpp;
+using XmppDotNet.Xmpp.Base;
 using System.Net.Security;
 using System.Runtime.InteropServices;
 using System.Net.Sockets;
@@ -32,7 +37,6 @@ internal sealed class JabberService : IDisposable
     private List<JabberPing> _history = new();
     private readonly List<JabberChatMessage> _chats = new();
     private readonly SemaphoreSlim _sendLock = new(1, 1);
-    private Func<string, string, Task>? _sendChat;
     public event Action? ChatChanged;
     public IReadOnlyList<JabberChatMessage> Chats { get { lock (_gate) return _chats.ToArray(); } }
     public async Task SendChat(string peer, string body)
@@ -41,8 +45,15 @@ internal sealed class JabberService : IDisposable
         if (!peer.Contains('@') || peer.Any(c => char.IsWhiteSpace(c) || c == '<' || c == '>' || c == '\'' || c == '"'))
             throw new InvalidOperationException("Enter a full Jabber address (name@domain).");
         if (string.IsNullOrWhiteSpace(body)) return;
-        var send = _sendChat ?? throw new InvalidOperationException("Jabber is disconnected.");
-        await send(peer, body);
+        XmppDotNet.XmppClient? client;
+        lock (_connectionGate) client = _client;
+        if (client is null || Status != "Connected") throw new InvalidOperationException("Jabber is disconnected.");
+        await client.SendAsync(new XmppDotNet.Xmpp.Client.Message
+        {
+            To = peer,
+            Type = MessageType.Chat,
+            Body = body
+        });
         lock (_gate) { _chats.Add(new JabberChatMessage(DateTime.Now, peer, body, true)); TrimChats(); }
         ChatChanged?.Invoke();
     }
@@ -106,166 +117,106 @@ internal sealed class JabberService : IDisposable
         if (value.StartsWith("Disconnected:", StringComparison.Ordinal)) Log.Write("Jabber connection failed (see connection status).");
         Changed?.Invoke();
     }
-    private static string Escape(string value) => System.Security.SecurityElement.Escape(value) ?? "";
-    [DllImport("dnsapi.dll", CharSet = CharSet.Unicode, EntryPoint = "DnsQuery_W", SetLastError = true)]
-    private static extern int DnsQuery(string name, ushort type, uint options, nint extra, out nint records, nint reserved);
-    [DllImport("dnsapi.dll")] private static extern void DnsRecordListFree(nint records, int freeType);
-    [StructLayout(LayoutKind.Sequential)] private struct DnsSrvData
-    {
-        public nint Target;
-        public ushort Priority;
-        public ushort Weight;
-        public ushort Port;
-        public ushort Pad;
-    }
-    private static (string Host, int Port) DiscoverServer(string domain)
-    {
-        nint records = 0;
-        try
-        {
-            // DNS_TYPE_SRV = 33; DnsRecord layout is pointer-sized on x64.
-            if (DnsQuery("_xmpp-client._tcp." + domain, 33, 0, 0, out records, 0) == 0 && records != 0)
-            {
-                nint data = records + 32;
-                nint targetPtr = Marshal.ReadIntPtr(data);
-                int port = (ushort)Marshal.ReadInt16(data, 12);
-                string? target = Marshal.PtrToStringUni(targetPtr)?.TrimEnd('.');
-                if (!string.IsNullOrWhiteSpace(target) && port is > 0 and <= 65535) return (target, port);
-            }
-        }
-        catch { }
-        finally { if (records != 0) DnsRecordListFree(records, 1); }
-        return (domain, 5222);
-    }
-    private async Task Run(CancellationToken token)
-    {
-        while (!token.IsCancellationRequested)
-        {
-            try
-            {
-                string login = Config.Login.Trim();
-                string[] parts = login.Split('@', 2);
-                if (parts.Length != 2 || parts[0].Length == 0 || parts[1].Length == 0) throw new InvalidOperationException("Enter a Jabber login (name@domain).");
-                var (host, port) = DiscoverServer(parts[1]);
-                string password = Password();
-                if (password.Length == 0) throw new InvalidOperationException("Enter a Jabber password.");
-                SetStatus("Connecting...");
-                // The alliance documents the domain and an explicit fallback host.
-                // Only retry the fallback for transport failures, never for rejected credentials.
-                TcpClient tcp = new();
-                try
-                {
-                    try { await tcp.ConnectAsync(host, port, token); }
-                    catch (SocketException) when (parts[1].Equals("goonfleet.com", StringComparison.OrdinalIgnoreCase)
-                                                  && !host.Equals("jabber-server.goonfleet.com", StringComparison.OrdinalIgnoreCase))
-                    {
-                        tcp.Dispose();
-                        tcp = new TcpClient();
-                        host = "jabber-server.goonfleet.com";
-                        port = 5222;
-                        await tcp.ConnectAsync(host, port, token);
-                    }
-                    using var raw = tcp.GetStream();
-                using var ssl = new SslStream(raw, false);
-                async Task Send(Stream stream, string xml)
-                {
-                    byte[] bytes = Encoding.UTF8.GetBytes(xml);
-                    await stream.WriteAsync(bytes, token);
-                    await stream.FlushAsync(token);
-                }
-                string opening = "<stream:stream to='" + Escape(parts[1]) + "' xmlns='jabber:client' xmlns:stream='http://etherx.jabber.org/streams' version='1.0'>";
-                await Send(raw, opening);
-                // Read until STARTTLS is advertised; no authentication is sent over plaintext.
-                var reader = XmlReader.Create(raw, new XmlReaderSettings { Async = true, ConformanceLevel = ConformanceLevel.Fragment, IgnoreWhitespace = true, CloseInput = false });
-                bool tls = false;
-                while (await reader.ReadAsync())
-                {
-                    if (reader.NodeType == XmlNodeType.Element && reader.LocalName == "starttls") { tls = true; break; }
-                }
-                if (!tls) throw new InvalidOperationException("The Jabber server did not offer STARTTLS.");
-                await Send(raw, "<starttls xmlns='urn:ietf:params:xml:ns:xmpp-tls'/>");
-                while (await reader.ReadAsync()) if (reader.NodeType == XmlNodeType.Element && reader.LocalName is "proceed" or "failure") { if (reader.LocalName == "failure") throw new InvalidOperationException("Server refused STARTTLS."); break; }
-                reader.Dispose();
-                await ssl.AuthenticateAsClientAsync(new SslClientAuthenticationOptions { TargetHost = host }, token);
-                await Send(ssl, opening);
-                // SASL PLAIN is permitted only inside verified TLS.
-                string payload = Convert.ToBase64String(Encoding.UTF8.GetBytes("\0" + parts[0] + "\0" + password));
-                using var secureReader = XmlReader.Create(ssl, new XmlReaderSettings { Async = true, ConformanceLevel = ConformanceLevel.Fragment, IgnoreWhitespace = true, CloseInput = false });
-                bool plain = false;
-                while (await secureReader.ReadAsync())
-                {
-                    if (secureReader.NodeType == XmlNodeType.Element && secureReader.LocalName == "mechanism" && await secureReader.ReadElementContentAsStringAsync() == "PLAIN") { plain = true; break; }
-                }
-                if (!plain) throw new InvalidOperationException("Server requires an unsupported authentication method.");
-                await Send(ssl, "<auth xmlns='urn:ietf:params:xml:ns:xmpp-sasl' mechanism='PLAIN'>" + payload + "</auth>");
-                while (await secureReader.ReadAsync()) if (secureReader.NodeType == XmlNodeType.Element && secureReader.LocalName is "success" or "failure") { if (secureReader.LocalName == "failure")
-                    {
-                        string detail = await secureReader.ReadInnerXmlAsync();
-                        string reason = detail.Contains("not-authorized", StringComparison.OrdinalIgnoreCase) ? "Server refused the account credentials or authentication method" :
-                            detail.Contains("temporary-auth-failure", StringComparison.OrdinalIgnoreCase) ? "Server reported a temporary authentication failure" :
-                            "Server rejected SASL PLAIN authentication";
-                        throw new InvalidOperationException(reason + ".");
-                    } break; }
-                // Restart stream and bind a resource.
-                secureReader.Dispose();
-                await Send(ssl, opening);
-                using var messages = XmlReader.Create(ssl, new XmlReaderSettings { Async = true, ConformanceLevel = ConformanceLevel.Fragment, IgnoreWhitespace = true, CloseInput = false });
-                while (await messages.ReadAsync()) if (messages.NodeType == XmlNodeType.Element && messages.LocalName == "features") break;
-                await Send(ssl, "<iq type='set' id='bind1'><bind xmlns='urn:ietf:params:xml:ns:xmpp-bind'><resource>" + Escape(string.IsNullOrWhiteSpace(Config.Resource) ? "EVE-IW-Preview" : Config.Resource) + "</resource></bind></iq>");
-                bool bound = false;
-                while (await messages.ReadAsync()) if (messages.NodeType == XmlNodeType.Element && messages.LocalName == "iq" && messages.GetAttribute("id") == "bind1")
-                {
-                    bound = messages.GetAttribute("type") == "result";
-                    break;
-                }
-                if (!bound) throw new InvalidOperationException("Jabber resource binding failed.");
-                await Send(ssl, "<presence/>");
-                _sendChat = async (peer, body) =>
-                {
-                    await _sendLock.WaitAsync(token);
-                    try { await Send(ssl, "<message to='" + Escape(peer) + "' type='chat'><body>" + Escape(body) + "</body></message>"); }
-                    finally { _sendLock.Release(); }
-                };
-                SetStatus("Connected");
-                Log.Debug("JABBER", "resource bound, presence sent; receive loop started");
-                Log.Debug("JABBER", "direct-message listener active");
-                while (!token.IsCancellationRequested && await messages.ReadAsync())
-                {
-                    if (messages.NodeType != XmlNodeType.Element || messages.LocalName != "message") continue;
-                    Log.Debug("JABBER", "incoming message stanza type=" + (messages.GetAttribute("type") ?? "normal"));
-                    var element = await XNode.ReadFromAsync(messages, token) as XElement;
-                    string body = element?.Elements().FirstOrDefault(e => e.Name.LocalName == "body")?.Value ?? "";
-                    if (string.IsNullOrWhiteSpace(body)) { Log.Debug("JABBER", "message ignored: no body"); continue; }
-                    string sender = element?.Attribute("from")?.Value ?? "Unknown";
-                    string peer = sender.Split('/')[0];
-                    // Groupchat stanzas and direct replies belong in Chat. Broadcasts use the existing ping store.
-                    string kind = element?.Attribute("type")?.Value ?? "normal";
-                    bool broadcast = peer.Split('@')[0].Equals("directorbot", StringComparison.OrdinalIgnoreCase)
-                        && (body.Contains("formup", StringComparison.OrdinalIgnoreCase)
-                            || body.Contains("fleet ping", StringComparison.OrdinalIgnoreCase)
-                            || body.Contains("broadcast", StringComparison.OrdinalIgnoreCase));
-                    if (!broadcast)
-                    {
-                        lock (_gate) { _chats.Add(new JabberChatMessage(DateTime.Now, peer, body)); TrimChats(); }
-                        Log.Debug("JABBER", "chat received; type=" + kind);
-                        try { ChatChanged?.Invoke(); } catch (Exception ex) { Log.Debug("JABBER", "chat display failed: " + ex.GetType().Name); }
-                        continue;
-                    }
-                    var ping = new JabberPing(DateTime.Now, sender.Split('/').Last(), peer, body);
-                    lock (_gate) { _history.Insert(0, ping); if (_history.Count > 500) _history.RemoveRange(500, _history.Count - 500); SaveHistory(); }
-                    Log.Debug("JABBER", "message saved; notification subscribers=" + (Received?.GetInvocationList().Length ?? 0));
-                    try { Received?.Invoke(ping); } catch (Exception ex) { Log.Debug("JABBER", "notification subscriber error: " + ex.GetType().Name); }
-                    try { Changed?.Invoke(); } catch (Exception ex) { Log.Debug("JABBER", "viewer refresh error: " + ex.GetType().Name); }
-                }
-                }
-                finally { _sendChat = null; tcp.Dispose(); }
-            }
-            catch (OperationCanceledException) { break; }
-            catch (Exception ex) { Log.Debug("JABBER", "receive/connection exception: " + ex.GetType().Name); SetStatus("Disconnected: " + ex.Message); }
-            if (!Config.AutoConnect) break;
-            try { await Task.Delay(10000, token); } catch (OperationCanceledException) { break; }
-        }
-        if (token.IsCancellationRequested) SetStatus("Disconnected");
-    }
+      // XmppDotNet owns the XML stream, TLS, SASL, resource binding and reconnection.
+      // Never replace XmlReader instances on the live XMPP socket.
+      private XmppDotNet.XmppClient? _client;
+      private readonly object _connectionGate = new();
+      private async Task Run(CancellationToken token)
+      {
+          XmppDotNet.XmppClient? client = null;
+          IDisposable? messageSubscription = null;
+          IDisposable? stateSubscription = null;
+          try
+          {
+              string login = Config.Login.Trim();
+              if (login.Split('@').Length != 2) throw new InvalidOperationException("Enter a Jabber login (name@domain).");
+              string password = Password();
+              if (password.Length == 0) throw new InvalidOperationException("Enter a Jabber password.");
+              SetStatus("Connecting...");
+              client = new XmppDotNet.XmppClient(conf =>
+              {
+                  conf.UseSocketTransport();
+                  conf.AutoReconnect = true;
+              })
+              {
+                  Jid = login,
+                  Password = password,
+                  Resource = string.IsNullOrWhiteSpace(Config.Resource) ? null : Config.Resource,
+                  Tls = true
+              };
+              var session = client;
+              lock (_connectionGate) _client = session;
+              stateSubscription = session.StateChanged.Subscribe(state =>
+              {
+                  string name = state.ToString();
+                  Log.Debug("JABBER", "session=" + name);
+                  if (name.Equals("Binded", StringComparison.OrdinalIgnoreCase))
+                  {
+                      SetStatus("Connected");
+                      _ = Task.Run(async () =>
+                      {
+                          try { await session.SendPresenceAsync(Show.Chat, "Available");
+                                Log.Debug("JABBER", "presence sent; message listener active"); }
+                          catch (Exception ex) { Log.Debug("JABBER", "presence error=" + ex.GetType().Name); }
+                      });
+                  }
+                  else if (name.Contains("Disconnect", StringComparison.OrdinalIgnoreCase)) SetStatus("Disconnected");
+              });
+              // Subscribe before ConnectAsync. All message types arrive here, including normal and headline.
+              messageSubscription = session.XmppXElementReceived
+                  .Where(element => element is Message)
+                  .Subscribe(element =>
+                  {
+                      try { ProcessIncoming(System.Xml.Linq.XElement.Parse(element.ToString())); }
+                      catch (Exception ex) { Log.Debug("JABBER", "message processing error=" + ex.GetType().Name); }
+                  });
+              Log.Debug("JABBER", "message handler registered before connect");
+              await session.ConnectAsync();
+              // Keep the service alive while the library manages the connection and reconnects.
+              await Task.Delay(Timeout.Infinite, token);
+          }
+          catch (OperationCanceledException) when (token.IsCancellationRequested) { }
+          catch (Exception ex)
+          {
+              Log.Debug("JABBER", "connection error=" + ex.GetType().Name);
+              SetStatus("Disconnected: " + ex.Message);
+          }
+          finally
+          {
+              messageSubscription?.Dispose();
+              stateSubscription?.Dispose();
+              lock (_connectionGate) { if (ReferenceEquals(_client, client)) _client = null; }
+              if (client is not null)
+              {
+                  try { await client.DisconnectAsync(); } catch { }
+              }
+              if (token.IsCancellationRequested) SetStatus("Disconnected");
+          }
+      }
+      private void ProcessIncoming(System.Xml.Linq.XElement message)
+      {
+          string type = (string?)message.Attribute("type") ?? "normal";
+          string sender = (string?)message.Attribute("from") ?? "Unknown";
+          string peer = sender.Split('/')[0];
+          string body = message.Elements().FirstOrDefault(x => x.Name.LocalName == "body")?.Value ?? "";
+          Log.Debug("JABBER", "incoming stanza type=" + type + "; body=" + (body.Length > 0 ? "yes" : "no"));
+          if (string.IsNullOrWhiteSpace(body)) return;
+          bool director = peer.Split('@')[0].Equals("directorbot", StringComparison.OrdinalIgnoreCase);
+          // Directorbot broadcasts are marked by the source announcement text, not guessed from generic words.
+          bool broadcast = director && (body.Contains("This was a coord broadcast", StringComparison.OrdinalIgnoreCase)
+              || body.Contains("FC Name:", StringComparison.OrdinalIgnoreCase) && body.Contains("Formup Location:", StringComparison.OrdinalIgnoreCase));
+          if (!broadcast)
+          {
+              lock (_gate) { _chats.Add(new JabberChatMessage(DateTime.Now, peer, body)); TrimChats(); }
+              Log.Debug("JABBER", "routed to Chat");
+              try { ChatChanged?.Invoke(); } catch (Exception ex) { Log.Debug("JABBER", "chat view error=" + ex.GetType().Name); }
+              return;
+          }
+          var ping = new JabberPing(DateTime.Now, "directorbot", peer, body);
+          lock (_gate) { _history.Insert(0, ping); if (_history.Count > 500) _history.RemoveRange(500, _history.Count - 500); SaveHistory(); }
+          Log.Debug("JABBER", "routed to Pings");
+          try { Received?.Invoke(ping); } catch (Exception ex) { Log.Debug("JABBER", "ping notification error=" + ex.GetType().Name); }
+          try { Changed?.Invoke(); } catch (Exception ex) { Log.Debug("JABBER", "ping view error=" + ex.GetType().Name); }
+      }
     public void Dispose() { _stop.Cancel(); _stop.Dispose(); }
 }

@@ -1,5 +1,12 @@
 # Changelog
 Every version of EVE-IW-Preview, newest first.
+## v0.19.55 - Correct Jabber send API
+- Use SendAsync with an XMPP chat message and remove unused field.
+## v0.19.54 - Complete XmppDotNet dependencies
+- Add the required socket transport and extensions packages.
+## v0.19.53 - Jabber receiver and update check
+- Replace manual XMPP stream parsing with XmppDotNet 3.3.0.
+- Check for Updates button always enabled under About; display release notes before installing.
 ## v0.19.52 - Jabber Chat and Pings
 - Jabber settings with separate Chat and Pings popouts.
 - Direct chat sending and receiving over the existing connection.

@@ -8,7 +8,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <AssemblyName>EVE-IW-Preview</AssemblyName>
     <RootNamespace>AUTZ.IronWorks.Preview</RootNamespace>
-    <Version>0.19.52</Version>
+    <Version>0.19.55</Version>
     <Product>EVE-IronWorks-Preview</Product>
     <Company>AUTZ IronWorks</Company>
     <Authors>AUTZ IronWorks</Authors>
@@ -21,6 +21,11 @@
     <ConcurrentGarbageCollection>false</ConcurrentGarbageCollection>
     <TieredPGO>false</TieredPGO>
   </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="XmppDotNet" Version="3.3.0" />
+    <PackageReference Include="XmppDotNet.Transport.Socket" Version="3.3.0" />
+    <PackageReference Include="XmppDotNet.Extensions" Version="3.3.0" />
+  </ItemGroup>
 
 
   <!-- The AUTZ IronWorks emblem (lava icon): used for the exe/tray icon and shown inside the app windows. -->

@@ -11,7 +11,10 @@ internal static class Changelog
 {
     public static readonly ChangelogEntry[] Entries =  
       {
-        new("0.19.52", "Jabber Chat and Pings", new[] { "Jabber settings and separate Chat and Pings popouts.", "Send direct messages using the existing connection." }),
+        new("0.19.55", "Correct Jabber send API", new[] { "Use the documented XmppDotNet SendAsync message API and remove the unused send delegate." }),
+          new("0.19.54", "Complete XmppDotNet dependencies", new[] { "Include socket transport and extension packages required by the Jabber client." }),
+          new("0.19.53", "Jabber receiver and update check", new[] { "Use XmppDotNet for incoming Jabber messages and reconnects.", "Always available Check for Updates button under About." }),
+          new("0.19.52", "Jabber Chat and Pings", new[] { "Jabber settings and separate Chat and Pings popouts.", "Send direct messages using the existing connection." }),
           new("0.19.51", "Intel channels and Jabber diagnostics", new[] { "Manually saved intel channels and duplicate-line filtering.", "Direct-message reception and notification diagnostics use existing logs." }),
           new("0.19.50", "Expanded New Eden map", new[] { "Universe region navigation, system stargates, search, zoom and activity overlays.", "No character tracking or SSO required." }),
           new("0.19.49", "Map, intel and ping diagnostics", new[] { "Public ESI region map and local chat-log intel viewer.", "All settings sections start collapsed; Jabber traces use existing Diagnostics logs." }),

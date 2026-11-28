@@ -204,7 +204,7 @@ public partial class SettingsWindow : Window
         JabberStatus.Text = jabber.Status;
         jabber.Changed += JabberChanged;
         SelectPage(0);
-        Loaded += async (_, _) => await RefreshUpdateButtonAsync();
+        
     }
 
     private void UpdateComponentToggleButtons()
@@ -1733,28 +1733,23 @@ public partial class SettingsWindow : Window
     }
 
     private System.Windows.Controls.Button UpdateButton => NewControl("UpdateNowBtn") as System.Windows.Controls.Button ?? throw new InvalidOperationException("Update button missing");
-    private async Task RefreshUpdateButtonAsync()
-    {
-        UpdateButton.IsEnabled = false;
-        UpdateButton.ToolTip = "Checking for updates";
-        var status = await UpdateService.CheckLatestAsync();
-        if (!IsLoaded) return;
-        UpdateButton.IsEnabled = status.Available;
-        UpdateButton.ToolTip = status.Error ? "Unable to check for updates" :
-            status.Available ? "Download and install v" + status.Version : "You're running the latest version";
-    }
-    private async void UpdateNow_Click(object sender, RoutedEventArgs e)
-    {
-        UpdateButton.IsEnabled = false;
+      private async void UpdateNow_Click(object sender, RoutedEventArgs e)
+      {
+          var button = UpdateButton;
+          button.IsEnabled = false;
+          button.Content = "Checking...";
           try
           {
-              var result = await UpdateService.InstallOnDemandAsync();
-              if (result.Started) { System.Windows.Application.Current.Shutdown(); return; }
-              Dialogs.Info(this, result.Message);
+              var status = await UpdateService.CheckLatestAsync();
+              if (status.Error) { Dialogs.Info(this, "Unable to check for updates."); return; }
+              if (!status.Available) { Dialogs.Info(this, "You're running the latest version."); return; }
+              var notes = new ChangelogWindow(AppInfo.Version) { Owner = this, Topmost = false };
+              notes.ShowUpdate(status.Version, status.Notes);
+              notes.Show();
           }
-          catch (Exception ex) { Dialogs.Info(this, "Update failed: " + ex.Message); }
-          finally { await RefreshUpdateButtonAsync(); }
-    }
+          catch (Exception ex) { Log.Debug("UPDATE", "check failed: " + ex.GetType().Name); Dialogs.Info(this, "Unable to check for updates."); }
+          finally { button.Content = "Check for Updates"; button.IsEnabled = true; }
+      }
     private void Discord_Click(object sender, RoutedEventArgs e) => OpenPath(this, AppInfo.Discord);
 
     private void WebsiteButton_Click(object sender, RoutedEventArgs e) => OpenPath(this, AppInfo.Website);
