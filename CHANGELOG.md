@@ -1,5 +1,10 @@
 # Changelog
 Every version of EVE-IW-Preview, newest first.
+## v0.19.64 - Fix Account Info parser build
+- Fix CS0103 in JabberService by qualifying Match.Empty.
+## v0.19.63 - PAPs from Account Info
+- Read the latest received directorbot Account Info; no outgoing refresh command.
+- Extract This Month STR/PCT and Last strat-op date, persist locally.
 ## v0.19.62 - Compact Pings header and PAP refresh
 - Remove duplicate Pings heading, add small PAP refresh icon.
 - Display Comms before Doctrine and apply compact Jabber Chat header.

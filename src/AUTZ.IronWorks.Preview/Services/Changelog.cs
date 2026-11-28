@@ -11,7 +11,9 @@ internal static class Changelog
 {
     public static readonly ChangelogEntry[] Entries =  
       {
-        new("0.19.62", "Compact Pings header and PAP refresh", new[] { "Single Pings header and compact Participation row with refresh icon.", "Comms shown between message and Doctrine.", "Consistent Jabber Chat chrome and navigation." }),
+        new("0.19.64", "Fix Account Info parser build", new[] { "Qualify Regex Match.Empty to resolve CS0103." }),
+          new("0.19.63", "PAPs from Account Info", new[] { "Read the latest locally received directorbot Account Info instead of sending a command.", "Parse monthly STR/PCT and Last strat-op, save the latest values and refresh locally." }),
+          new("0.19.62", "Compact Pings header and PAP refresh", new[] { "Single Pings header and compact Participation row with refresh icon.", "Comms shown between message and Doctrine.", "Consistent Jabber Chat chrome and navigation." }),
           new("0.19.61", "Restore Participation model", new[] { "Add missing Participation property and parse monthly STRAT/PCT reports.", "Persist last valid participation figures and preserve chronological ping feed." }),
           new("0.19.60", "Chronological ping feed", new[] { "Oldest pings first and newest at bottom.", "Auto-scroll for new pings when already at bottom, preserving position while reading history." }),
           new("0.19.59", "Participation and compact Pings fixes", new[] { "STRAT, PCT and LAST PAP from the latest directorbot Participation report.", "Restore Announcement from labels and compact Pings chrome.", "Simplify About and remove the duplicate Intel navigation heading." }),

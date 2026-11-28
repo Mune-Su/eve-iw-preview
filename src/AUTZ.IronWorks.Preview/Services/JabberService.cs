@@ -33,20 +33,65 @@ internal sealed class JabberService : IDisposable
     private static readonly string HistoryFile = Path.Combine(Folder, "history.json");
     private static readonly string ParticipationFile = Path.Combine(Folder, "participation.json");
     public ParticipationStats? Participation { get; private set; }
-    private static readonly System.Text.RegularExpressions.Regex MonthPattern = new(@"(?im)^\s*(?:->\s*)?This Month:\s*(\d+)\s+STR\s*\+\s*(\d+)\s+PCT\s*$");
-    private static readonly System.Text.RegularExpressions.Regex LastPattern = new(@"(?im)^\s*(?:->\s*)?Last strat[- ]pap:\s*(.+?)\s*$");
-    private bool ReadParticipation(string body)
+    private static readonly System.Text.RegularExpressions.Regex MonthPattern = new(
+        @"(?im)^\s*(?:->\s*)?This\s+Month\s*:\s*(\d+)\s*STR\s*\+\s*(\d+)\s*PCT\s*$");
+    private static readonly System.Text.RegularExpressions.Regex LastPattern = new(
+        @"(?im)^\s*(?:->\s*)?Last\s+strat[- ](?:op|pap)\s*:\s*(.+?)\s*$");
+    private static readonly System.Text.RegularExpressions.Regex DatePattern = new(
+        @"(?i)\b(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)[a-z]*\s+\d{1,2}\b");
+    private DateTime _participationAt = DateTime.MinValue;
+    private string? _latestAccountInfo;
+    private bool ReadParticipation(string body, DateTime receivedAt)
     {
+        // Only account reports are authoritative; fleet broadcasts must never change PAP totals.
+        if (!body.Contains("Account Info", StringComparison.OrdinalIgnoreCase) &&
+            !body.Contains("*Participation*", StringComparison.OrdinalIgnoreCase)) return false;
         var counts = MonthPattern.Match(body);
-        if (!counts.Success || !int.TryParse(counts.Groups[1].Value, out int strat) || !int.TryParse(counts.Groups[2].Value, out int pct)) return false;
+        if (!counts.Success || !int.TryParse(counts.Groups[1].Value, out int strat) ||
+            !int.TryParse(counts.Groups[2].Value, out int pct))
+        {
+            Log.Debug("JABBER", "account info found but monthly participation format not recognised");
+            return false;
+        }
+        if (receivedAt < _participationAt) return true;
         var last = LastPattern.Match(body);
-        string lastText = last.Success ? last.Groups[1].Value.Trim() : "--";
+        var date = last.Success ? DatePattern.Match(last.Groups[1].Value) : System.Text.RegularExpressions.Match.Empty;
+        string lastText = date.Success ? date.Value : "--";
         Participation = new ParticipationStats(strat, pct, lastText);
-        try { Directory.CreateDirectory(Folder); File.WriteAllText(ParticipationFile, JsonSerializer.Serialize(Participation)); }
+        _participationAt = receivedAt;
+        _latestAccountInfo = body;
+        try
+        {
+            Directory.CreateDirectory(Folder);
+            File.WriteAllText(ParticipationFile, JsonSerializer.Serialize(Participation));
+            File.WriteAllText(Path.Combine(Folder, "latest-account-info.json"),
+                JsonSerializer.Serialize(new AccountInfoCache(receivedAt, body)));
+        }
         catch (Exception ex) { Log.Debug("JABBER", "participation save failed: " + ex.GetType().Name); }
-        Log.Debug("JABBER", "participation report updated");
+        Log.Debug("JABBER", "participation report updated from received account info");
         try { Changed?.Invoke(); } catch { }
         return true;
+    }
+    private sealed record AccountInfoCache(DateTime ReceivedAt, string Body);
+    public void RefreshParticipation()
+    {
+        // Refresh only locally available account information. Never send a directorbot command.
+        AccountInfoCache? cached = null;
+        try
+        {
+            string path = Path.Combine(Folder, "latest-account-info.json");
+            if (File.Exists(path)) cached = JsonSerializer.Deserialize<AccountInfoCache>(File.ReadAllText(path));
+        }
+        catch { }
+        var messages = Chats.Where(x => !x.Outgoing &&
+            x.Peer.Split('@')[0].Equals("directorbot", StringComparison.OrdinalIgnoreCase) &&
+            x.Body.Contains("Participation", StringComparison.OrdinalIgnoreCase))
+            .Select(x => new AccountInfoCache(x.Time, x.Body));
+        var latest = messages.Concat(cached is null ? Array.Empty<AccountInfoCache>() : new[] { cached })
+            .OrderByDescending(x => x.ReceivedAt).FirstOrDefault();
+        if (latest is not null) ReadParticipation(latest.Body, latest.ReceivedAt);
+        else Log.Debug("JABBER", "no account info message available locally");
+        try { Changed?.Invoke(); } catch { }
     }
 
     private CancellationTokenSource _stop = new();
@@ -58,13 +103,6 @@ internal sealed class JabberService : IDisposable
     private readonly SemaphoreSlim _sendLock = new(1, 1);
     public event Action? ChatChanged;
     public IReadOnlyList<JabberChatMessage> Chats { get { lock (_gate) return _chats.ToArray(); } }
-    public async Task RequestParticipation()
-    {
-        string domain = Config.Login.Split('@').LastOrDefault() ?? "";
-        if (string.IsNullOrWhiteSpace(domain)) throw new InvalidOperationException("Configure Jabber first.");
-        // Request an updated directorbot participation report through the existing XMPP connection.
-        await SendChat("directorbot@" + domain, "pap");
-    }
     public async Task SendChat(string peer, string body)
     {
         peer = peer.Trim();
@@ -94,6 +132,17 @@ internal sealed class JabberService : IDisposable
         try { if (File.Exists(ConfigFile)) Config = JsonSerializer.Deserialize<JabberConfig>(File.ReadAllText(ConfigFile)) ?? new(); } catch { }
         try { if (File.Exists(HistoryFile)) _history = JsonSerializer.Deserialize<List<JabberPing>>(File.ReadAllText(HistoryFile)) ?? new(); } catch { }
         try { if (File.Exists(ParticipationFile)) Participation = JsonSerializer.Deserialize<ParticipationStats>(File.ReadAllText(ParticipationFile)); } catch { }
+        try
+        {
+            string path = Path.Combine(Folder, "latest-account-info.json");
+            if (File.Exists(path))
+            {
+                var saved = JsonSerializer.Deserialize<AccountInfoCache>(File.ReadAllText(path));
+                if (saved is not null) ReadParticipation(saved.Body, saved.ReceivedAt);
+            }
+        }
+        catch { }
+
         if (Config.AutoConnect) Connect();
     }
     public void Save(JabberConfig config, string? password)
@@ -228,7 +277,7 @@ internal sealed class JabberService : IDisposable
           string body = message.Elements().FirstOrDefault(x => x.Name.LocalName == "body")?.Value ?? "";
           Log.Debug("JABBER", "incoming stanza type=" + type + "; body=" + (body.Length > 0 ? "yes" : "no"));
           if (string.IsNullOrWhiteSpace(body)) return;
-          if (peer.Split('@')[0].Equals("directorbot", StringComparison.OrdinalIgnoreCase) && ReadParticipation(body)) return;
+          if (peer.Split('@')[0].Equals("directorbot", StringComparison.OrdinalIgnoreCase) && ReadParticipation(body, DateTime.Now)) return;
           bool director = peer.Split('@')[0].Equals("directorbot", StringComparison.OrdinalIgnoreCase);
                       // Directorbot broadcasts carry a footer naming their broadcast audience/type.
             // Never require fleet fields: GICE, Locusts and other announcements can omit them.

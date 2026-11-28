@@ -44,12 +44,10 @@ internal sealed class PingsWindow : Window
         var papRow = new DockPanel { Margin = new Thickness(0,0,0,5) };
         var refresh = new Button { Content = "↻", Width = 25, Height = 24, FontSize = 16,
             Padding = new Thickness(0), ToolTip = "Refresh PAPs", HorizontalAlignment = HorizontalAlignment.Right };
-        refresh.Click += async (_,_) =>
+        refresh.Click += (_,_) =>
         {
-            refresh.IsEnabled = false;
-            try { await _service.RequestParticipation(); }
-            catch (Exception ex) { refresh.ToolTip = "Refresh failed: " + ex.Message; }
-            finally { refresh.IsEnabled = true; }
+            _service.RefreshParticipation();
+            refresh.ToolTip = _service.Participation is null ? "No Account Info received yet" : "Latest saved Account Info";
         };
         DockPanel.SetDock(refresh, Dock.Right); papRow.Children.Add(refresh);
         papRow.Children.Add(participation);
