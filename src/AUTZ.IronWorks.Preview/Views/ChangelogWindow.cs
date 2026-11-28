@@ -18,7 +18,7 @@ public sealed class ChangelogWindow : Window
     private readonly Button _updateButton = new() { Content = "Update Now", MinWidth = 100, Margin = new Thickness(0, 0, 8, 0), Visibility = Visibility.Collapsed };
     public void ShowUpdate(string version, string notes)
     {
-        _releaseNotes.Text = "Update v" + version + " available\n" + (string.IsNullOrWhiteSpace(notes) ? "Release notes unavailable." : notes);
+        _releaseNotes.Text = "Update Available";
         _updatePanel.Visibility = Visibility.Visible;
         _updateButton.Visibility = Visibility.Visible;
     }
@@ -165,5 +165,6 @@ public sealed class ChangelogWindow : Window
         Content = grid;
     }
 }
+
 
 

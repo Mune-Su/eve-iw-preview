@@ -34,6 +34,7 @@ internal sealed class UpdateWindow : Window
     private double _target;                    // what the download has reached, 0 to 1
     private double _shown;                     // what the lava shows now: it eases toward the target
     private bool _allowClose;
+      private readonly Button _continue = new() { Content = "Continue", Visibility = Visibility.Collapsed, Margin = new Thickness(22, 0, 22, 14), HorizontalAlignment = HorizontalAlignment.Right };
     private bool _rendering;
 
     public UpdateWindow(string version)
@@ -67,6 +68,9 @@ internal sealed class UpdateWindow : Window
         _status.Foreground = (Brush)FindResource("BrushMuted");
         _status.Text = "Downloading... 0%";
         root.Children.Add(_status);
+          _continue.Style = (Style)FindResource("PrimaryButton");
+          _continue.Click += (_, _) => Finish();
+          root.Children.Add(_continue);
 
         Content = new Border
         {
@@ -230,4 +234,13 @@ internal sealed class UpdateWindow : Window
         _allowClose = true;
         Close();
     }
+      public void ReadyToContinue()
+      {
+          _target = _shown = 1;
+          Place();
+          _status.Text = "Download verified. Continue to install.";
+          _continue.Visibility = Visibility.Visible;
+          _allowClose = true;
+      }
 }
+

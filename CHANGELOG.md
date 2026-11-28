@@ -1,5 +1,8 @@
 # Changelog
 Every version of EVE-IW-Preview, newest first.
+## v0.19.45 - Jabber pings and update workflow
+- Jabber XMPP connection, local ping history and viewer under Pings.
+- Update Available label and no repeated changelog after update.
 ## v0.19.44 - Manual updates only
 - No automatic startup download or install.
 - Update Now only appears for a newer release and reports errors.
@@ -532,6 +535,7 @@ Every version of EVE-IW-Preview, newest first. The app shows the same list under
 
 - AUTZ IronWorks emblem for the exe, tray and windows.
 - Drag the bottom-right corner to resize, colour pickers, and updates that never touch a running app.
+
 
 
 

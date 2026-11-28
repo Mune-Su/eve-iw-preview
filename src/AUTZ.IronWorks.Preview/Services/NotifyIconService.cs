@@ -133,6 +133,13 @@ public sealed class NotifyIconService : IDisposable
         // alerts and confirmations appear as Windows notifications from the tray icon
         manager.Toast += (title, text) => _icon.ShowBalloonTip(4000, title, text, Forms.ToolTipIcon.Info);
 
+        JabberHub.Instance.Received += ping =>
+        {
+            if (!JabberHub.Instance.Config.Notify) return;
+            Application.Current.Dispatcher.BeginInvoke(new Action(() =>
+                _icon.ShowBalloonTip(6000, "Jabber Ping", ping.Body.Length > 160 ? ping.Body[..160] : ping.Body, Forms.ToolTipIcon.Info)));
+        };
+        _icon.BalloonTipClicked += (_, _) => JabberHub.OpenWindow();
         // Windows only lists the icon (so it can be pinned to the taskbar) a moment after it first appears: keep trying for a few seconds
         if (manager.State.PinTrayIcon)
         {
@@ -229,4 +236,5 @@ public sealed class NotifyIconService : IDisposable
         _icon.Dispose();
     }
 }
+
 

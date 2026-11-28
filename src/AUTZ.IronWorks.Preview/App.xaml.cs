@@ -94,7 +94,7 @@ public partial class App : System.Windows.Application
         _manager.Start();
         _ = ShowAvailableUpdateAsync();
 
-        ShowWhatsNew(state);
+        if (!UpdateService.ConsumeUpdatedLaunch()) ShowWhatsNew(state);
     }
 
     private static bool HasArg(string[] args, string name) =>
@@ -170,5 +170,6 @@ public partial class App : System.Windows.Application
         base.OnExit(e);
     }
 }
+
 
 

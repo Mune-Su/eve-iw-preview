@@ -33,6 +33,18 @@ internal static class UpdateService
     private sealed record Release(Version Version, string SetupUrl, string Sha256);
 
     public static string Folder => Path.Combine(AppInfo.DataFolder, "updates");
+      private static string SkipChangelogMarker => Path.Combine(Folder, "skip-changelog-once");
+      public static bool ConsumeUpdatedLaunch()
+      {
+          try
+          {
+              if (!File.Exists(SkipChangelogMarker)) return false;
+              File.Delete(SkipChangelogMarker);
+              return true;
+          }
+          catch { return false; }
+      }
+
 
 
     // ---------- start-up ----------
@@ -86,6 +98,7 @@ internal static class UpdateService
                 return false;
             }
             File.WriteAllText(marker, DateTime.Now.ToString("s"));
+              File.WriteAllText(SkipChangelogMarker, newest.Version.ToString());
 
             string script =
                 $"Wait-Process -Id {Environment.ProcessId} -Timeout 30 -ErrorAction SilentlyContinue; " +
@@ -347,6 +360,7 @@ internal static class UpdateService
 
     private static string Quote(string path) => path.Replace("'", "''");
 }
+
 
 
 

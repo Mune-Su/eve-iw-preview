@@ -192,6 +192,15 @@ public partial class SettingsWindow : Window
         LoadFrom();
         CaptureBaseline(_shownProfile);
         _stateBaseline = StateSnapshot();
+        var jabber = JabberHub.Instance;
+        JabberLogin.Text = jabber.Config.Login;
+        JabberHost.Text = jabber.Config.Server;
+        JabberPort.Text = jabber.Config.Port.ToString();
+        JabberRooms.Text = jabber.Config.Rooms;
+        JabberAuto.IsChecked = jabber.Config.AutoConnect;
+        JabberNotify.IsChecked = jabber.Config.Notify;
+        JabberStatus.Text = jabber.Status;
+        jabber.Changed += JabberChanged;
         SelectPage(0);
         Loaded += async (_, _) => await RefreshUpdateButtonAsync();
     }
@@ -1674,6 +1683,22 @@ public partial class SettingsWindow : Window
         if (folder is not null) ChatFolderBox.Text = folder;
     }
 
+    private void JabberChanged() => Dispatcher.BeginInvoke(new Action(() => JabberStatus.Text = JabberHub.Instance.Status));
+    private void JabberSave_Click(object sender, RoutedEventArgs e)
+    {
+        if (!int.TryParse(JabberPort.Text, out int port) || port < 1 || port > 65535) { Dialogs.Info(this, "Enter a valid Jabber port."); return; }
+        try
+        {
+            JabberHub.Instance.Save(new JabberConfig { Login = JabberLogin.Text.Trim(), Server = JabberHost.Text.Trim(), Port = port,
+                Rooms = JabberRooms.Text.Trim(), AutoConnect = JabberAuto.IsChecked == true, Notify = JabberNotify.IsChecked == true }, JabberPassword.Password);
+            JabberPassword.Clear();
+            JabberStatus.Text = "Saved";
+        }
+        catch (Exception ex) { Dialogs.Info(this, "Jabber settings could not be saved: " + ex.Message); }
+    }
+    private void JabberConnect_Click(object sender, RoutedEventArgs e) { JabberSave_Click(sender, e); JabberHub.Instance.Connect(); }
+    private void JabberDisconnect_Click(object sender, RoutedEventArgs e) => JabberHub.Instance.Disconnect();
+    private void JabberOpen_Click(object sender, RoutedEventArgs e) => JabberHub.OpenWindow();
     // ---------- about ----------
 
     private void ViewChangelog_Click(object sender, RoutedEventArgs e) =>
@@ -2412,6 +2437,7 @@ public partial class SettingsWindow : Window
 
     protected override void OnClosed(EventArgs e)
     {
+        JabberHub.Instance.Changed -= JabberChanged;
         HotkeyField.RecordingChanged -= OnHotkeyRecording;
         _memTimer.Stop();
         _progTimer.Stop();
@@ -3055,6 +3081,7 @@ public partial class SettingsWindow : Window
         return true;
     }
 }
+
 
 
 
