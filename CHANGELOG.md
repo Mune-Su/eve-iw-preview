@@ -1,5 +1,8 @@
 # Changelog
 Every version of EVE-IW-Preview, newest first.
+## v0.19.56 - Ping cards
+- Single scrolling feed with fleet title, FC, formup, doctrine, PAP, time and clickable links.
+- No expanding cards or details panel. Preserve unread tracking and history.
 ## v0.19.55 - Correct Jabber send API
 - Use SendAsync with an XMPP chat message and remove unused field.
 ## v0.19.54 - Complete XmppDotNet dependencies

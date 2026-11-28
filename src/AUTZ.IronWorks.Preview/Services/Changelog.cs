@@ -11,7 +11,8 @@ internal static class Changelog
 {
     public static readonly ChangelogEntry[] Entries =  
       {
-        new("0.19.55", "Correct Jabber send API", new[] { "Use the documented XmppDotNet SendAsync message API and remove the unused send delegate." }),
+        new("0.19.56", "Ping cards", new[] { "Single scrolling feed of complete fleet cards with FC, formup, doctrine, PAP and links.", "Keep unread status, copying and ping history without expandable panels." }),
+          new("0.19.55", "Correct Jabber send API", new[] { "Use the documented XmppDotNet SendAsync message API and remove the unused send delegate." }),
           new("0.19.54", "Complete XmppDotNet dependencies", new[] { "Include socket transport and extension packages required by the Jabber client." }),
           new("0.19.53", "Jabber receiver and update check", new[] { "Use XmppDotNet for incoming Jabber messages and reconnects.", "Always available Check for Updates button under About." }),
           new("0.19.52", "Jabber Chat and Pings", new[] { "Jabber settings and separate Chat and Pings popouts.", "Send direct messages using the existing connection." }),
