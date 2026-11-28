@@ -81,7 +81,13 @@ internal sealed class JabberService : IDisposable
     {
         try { Directory.CreateDirectory(Folder); File.WriteAllText(HistoryFile, JsonSerializer.Serialize(_history)); } catch { }
     }
-    private void SetStatus(string value) { Status = value; Changed?.Invoke(); }
+    private void SetStatus(string value)
+    {
+        Status = value;
+        Log.Debug("JABBER", "state=" + (value.StartsWith("Disconnected:") ? "connection failed" : value));
+        if (value.StartsWith("Disconnected:", StringComparison.Ordinal)) Log.Write("Jabber connection failed (see connection status).");
+        Changed?.Invoke();
+    }
     private static string Escape(string value) => System.Security.SecurityElement.Escape(value) ?? "";
     [DllImport("dnsapi.dll", CharSet = CharSet.Unicode, EntryPoint = "DnsQuery_W", SetLastError = true)]
     private static extern int DnsQuery(string name, ushort type, uint options, nint extra, out nint records, nint reserved);
@@ -197,22 +203,25 @@ internal sealed class JabberService : IDisposable
                 if (!bound) throw new InvalidOperationException("Jabber resource binding failed.");
                 await Send(ssl, "<presence/>");
                 SetStatus("Connected");
+                Log.Debug("JABBER", "resource bound, presence sent; receive loop started");
                 while (await messages.ReadAsync())
                 {
                     if (messages.NodeType != XmlNodeType.Element || messages.LocalName != "message") continue;
+                    Log.Debug("JABBER", "incoming message stanza type=" + (messages.GetAttribute("type") ?? "normal"));
                     var element = await XNode.ReadFromAsync(messages, token) as XElement;
                     string body = element?.Elements().FirstOrDefault(e => e.Name.LocalName == "body")?.Value ?? "";
-                    if (string.IsNullOrWhiteSpace(body)) continue;
+                    if (string.IsNullOrWhiteSpace(body)) { Log.Debug("JABBER", "message ignored: no body"); continue; }
                     string sender = element?.Attribute("from")?.Value ?? "Unknown";
                     var ping = new JabberPing(DateTime.Now, sender.Split('/').Last(), sender.Split('/')[0], body);
                     lock (_gate) { _history.Insert(0, ping); if (_history.Count > 500) _history.RemoveRange(500, _history.Count - 500); SaveHistory(); }
+                    Log.Debug("JABBER", "message saved; notification subscribers=" + (Received?.GetInvocationList().Length ?? 0));
                     Received?.Invoke(ping); Changed?.Invoke();
                 }
                 }
                 finally { tcp.Dispose(); }
             }
             catch (OperationCanceledException) { break; }
-            catch (Exception ex) { SetStatus("Disconnected: " + ex.Message); }
+            catch (Exception ex) { Log.Debug("JABBER", "receive/connection exception: " + ex.GetType().Name); SetStatus("Disconnected: " + ex.Message); }
             if (!Config.AutoConnect) break;
             try { await Task.Delay(10000, token); } catch (OperationCanceledException) { break; }
         }
@@ -220,6 +229,7 @@ internal sealed class JabberService : IDisposable
     }
     public void Dispose() { _stop.Cancel(); _stop.Dispose(); }
 }
+
 
 
 

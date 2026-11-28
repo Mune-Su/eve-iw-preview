@@ -135,7 +135,8 @@ public sealed class NotifyIconService : IDisposable
 
         JabberHub.Instance.Received += ping =>
         {
-            if (!JabberHub.Instance.Config.Notify) return;
+            if (!JabberHub.Instance.Config.Notify) { Log.Debug("JABBER", "notification skipped: disabled"); return; }
+            Log.Debug("JABBER", "notification queued");
             Application.Current.Dispatcher.BeginInvoke(new Action(() =>
                 _icon.ShowBalloonTip(6000, "Jabber Ping", ping.Body.Length > 160 ? ping.Body[..160] : ping.Body, Forms.ToolTipIcon.Info)));
         };
@@ -236,5 +237,6 @@ public sealed class NotifyIconService : IDisposable
         _icon.Dispose();
     }
 }
+
 
 

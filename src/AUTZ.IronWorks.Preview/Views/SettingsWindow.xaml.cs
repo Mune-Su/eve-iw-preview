@@ -271,11 +271,11 @@ public partial class SettingsWindow : Window
         head.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         var label = new TextBlock { Text = title, FontSize = 13.5, FontWeight = FontWeights.Bold,
             Foreground = Theme.Text, Margin = new Thickness(12, 9, 0, 9) };
-        var arrow = new TextBlock { Text = "▾", Foreground = Theme.Accent, Margin = new Thickness(0, 9, 10, 9) };
+        var arrow = new TextBlock { Text = "▸", Foreground = Theme.Accent, Margin = new Thickness(0, 9, 10, 9) };
         Grid.SetColumn(arrow, 1);
         head.Children.Add(label);
         head.Children.Add(arrow);
-        var children = new StackPanel { Visibility = Visibility.Visible };
+        var children = new StackPanel { Visibility = Visibility.Collapsed };
         head.MouseLeftButtonUp += (_, _) =>
         {
             bool open = children.Visibility != Visibility.Visible;
@@ -1685,6 +1685,8 @@ public partial class SettingsWindow : Window
         if (folder is not null) ChatFolderBox.Text = folder;
     }
 
+    private void OpenMap_Click(object sender, RoutedEventArgs e) => new NewEdenMapWindow { Owner = this }.Show();
+    private void OpenIntel_Click(object sender, RoutedEventArgs e) => new IntelWindow { Owner = this }.Show();
     private void JabberChanged() => Dispatcher.BeginInvoke(new Action(() => JabberStatus.Text = JabberHub.Instance.Status));
     private void JabberSave_Click(object sender, RoutedEventArgs e)
     {
@@ -3087,6 +3089,7 @@ public partial class SettingsWindow : Window
         return true;
     }
 }
+
 
 
 

@@ -1,5 +1,8 @@
 # Changelog
 Every version of EVE-IW-Preview, newest first.
+## v0.19.49 - Map, intel and ping diagnostics
+- Public ESI region map; local chat-log intel scanner; no SSO or character location.
+- Settings sections start collapsed; Jabber diagnostics use existing logs.
 ## v0.19.48 - Jabber connection fallback
 - Try the documented fallback host after a transport failure.
 - Keep TLS required and remove unrelated application references from errors.
@@ -544,6 +547,7 @@ Every version of EVE-IW-Preview, newest first. The app shows the same list under
 
 - AUTZ IronWorks emblem for the exe, tray and windows.
 - Drag the bottom-right corner to resize, colour pickers, and updates that never touch a running app.
+
 
 
 
