@@ -1,5 +1,8 @@
 # Changelog
 Every version of EVE-IW-Preview, newest first.
+## v0.19.52 - Jabber Chat and Pings
+- Jabber settings with separate Chat and Pings popouts.
+- Direct chat sending and receiving over the existing connection.
 ## v0.19.51 - Intel channels and Jabber diagnostics
 - Manual intel channels, saved across restarts; prevent duplicate log entries.
 - Direct-message diagnostics and isolated notification errors.

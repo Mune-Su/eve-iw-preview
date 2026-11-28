@@ -6,6 +6,20 @@ internal static class JabberHub
     private static readonly Lazy<JabberService> Service = new(() => new JabberService());
     public static JabberService Instance => Service.Value;
     private static PingsWindow? _window;
+    private static JabberChatWindow? _chat;
+    public static void OpenChat()
+    {
+        Application.Current.Dispatcher.Invoke(() =>
+        {
+            if (_chat is null || !_chat.IsLoaded)
+            {
+                _chat = new JabberChatWindow(Instance);
+                _chat.Show();
+            }
+            if (_chat.WindowState == WindowState.Minimized) _chat.WindowState = WindowState.Normal;
+            _chat.Activate();
+        });
+    }
     public static void OpenWindow()
     {
         Application.Current.Dispatcher.Invoke(() =>
@@ -19,4 +33,3 @@ internal static class JabberHub
         });
     }
 }
-

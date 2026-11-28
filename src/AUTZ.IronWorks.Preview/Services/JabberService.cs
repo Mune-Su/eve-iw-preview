@@ -10,6 +10,7 @@ using System.Xml.Linq;
 using AUTZ.IronWorks.Preview.Core;
 namespace AUTZ.IronWorks.Preview.Services;
 internal sealed record JabberPing(DateTime Time, string Sender, string Channel, string Body, bool Read = false);
+internal sealed record JabberChatMessage(DateTime Time, string Peer, string Body, bool Outgoing = false);
 internal sealed class JabberConfig
 {
     public string Login { get; set; } = "";
@@ -29,6 +30,23 @@ internal sealed class JabberService : IDisposable
     private string _sessionPassword = "";
     private readonly object _gate = new();
     private List<JabberPing> _history = new();
+    private readonly List<JabberChatMessage> _chats = new();
+    private readonly SemaphoreSlim _sendLock = new(1, 1);
+    private Func<string, string, Task>? _sendChat;
+    public event Action? ChatChanged;
+    public IReadOnlyList<JabberChatMessage> Chats { get { lock (_gate) return _chats.ToArray(); } }
+    public async Task SendChat(string peer, string body)
+    {
+        peer = peer.Trim();
+        if (!peer.Contains('@') || peer.Any(c => char.IsWhiteSpace(c) || c == '<' || c == '>' || c == '\'' || c == '"'))
+            throw new InvalidOperationException("Enter a full Jabber address (name@domain).");
+        if (string.IsNullOrWhiteSpace(body)) return;
+        var send = _sendChat ?? throw new InvalidOperationException("Jabber is disconnected.");
+        await send(peer, body);
+        lock (_gate) { _chats.Add(new JabberChatMessage(DateTime.Now, peer, body, true)); TrimChats(); }
+        ChatChanged?.Invoke();
+    }
+    private void TrimChats() { if (_chats.Count > 1000) _chats.RemoveRange(0, _chats.Count - 1000); }
     public JabberConfig Config { get; private set; } = new();
     public string Status { get; private set; } = "Disconnected";
     public event Action? Changed;
@@ -202,6 +220,12 @@ internal sealed class JabberService : IDisposable
                 }
                 if (!bound) throw new InvalidOperationException("Jabber resource binding failed.");
                 await Send(ssl, "<presence/>");
+                _sendChat = async (peer, body) =>
+                {
+                    await _sendLock.WaitAsync(token);
+                    try { await Send(ssl, "<message to='" + Escape(peer) + "' type='chat'><body>" + Escape(body) + "</body></message>"); }
+                    finally { _sendLock.Release(); }
+                };
                 SetStatus("Connected");
                 Log.Debug("JABBER", "resource bound, presence sent; receive loop started");
                 Log.Debug("JABBER", "direct-message listener active");
@@ -213,14 +237,28 @@ internal sealed class JabberService : IDisposable
                     string body = element?.Elements().FirstOrDefault(e => e.Name.LocalName == "body")?.Value ?? "";
                     if (string.IsNullOrWhiteSpace(body)) { Log.Debug("JABBER", "message ignored: no body"); continue; }
                     string sender = element?.Attribute("from")?.Value ?? "Unknown";
-                    var ping = new JabberPing(DateTime.Now, sender.Split('/').Last(), sender.Split('/')[0], body);
+                    string peer = sender.Split('/')[0];
+                    // Groupchat stanzas and direct replies belong in Chat. Broadcasts use the existing ping store.
+                    string kind = element?.Attribute("type")?.Value ?? "normal";
+                    bool broadcast = peer.Split('@')[0].Equals("directorbot", StringComparison.OrdinalIgnoreCase)
+                        && (body.Contains("formup", StringComparison.OrdinalIgnoreCase)
+                            || body.Contains("fleet ping", StringComparison.OrdinalIgnoreCase)
+                            || body.Contains("broadcast", StringComparison.OrdinalIgnoreCase));
+                    if (!broadcast)
+                    {
+                        lock (_gate) { _chats.Add(new JabberChatMessage(DateTime.Now, peer, body)); TrimChats(); }
+                        Log.Debug("JABBER", "chat received; type=" + kind);
+                        try { ChatChanged?.Invoke(); } catch (Exception ex) { Log.Debug("JABBER", "chat display failed: " + ex.GetType().Name); }
+                        continue;
+                    }
+                    var ping = new JabberPing(DateTime.Now, sender.Split('/').Last(), peer, body);
                     lock (_gate) { _history.Insert(0, ping); if (_history.Count > 500) _history.RemoveRange(500, _history.Count - 500); SaveHistory(); }
                     Log.Debug("JABBER", "message saved; notification subscribers=" + (Received?.GetInvocationList().Length ?? 0));
                     try { Received?.Invoke(ping); } catch (Exception ex) { Log.Debug("JABBER", "notification subscriber error: " + ex.GetType().Name); }
                     try { Changed?.Invoke(); } catch (Exception ex) { Log.Debug("JABBER", "viewer refresh error: " + ex.GetType().Name); }
                 }
                 }
-                finally { tcp.Dispose(); }
+                finally { _sendChat = null; tcp.Dispose(); }
             }
             catch (OperationCanceledException) { break; }
             catch (Exception ex) { Log.Debug("JABBER", "receive/connection exception: " + ex.GetType().Name); SetStatus("Disconnected: " + ex.Message); }

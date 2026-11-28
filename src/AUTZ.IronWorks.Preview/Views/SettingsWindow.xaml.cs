@@ -252,7 +252,7 @@ public partial class SettingsWindow : Window
         _pages.Add(new PageDef("Alerts", PageAlerts, new Control[] { CardNotifyMain, CardLogEvents, CardLogMain }));
         _pages.Add(new PageDef("Map", NewPage("PageMap"), new Control[] { NewControl("CardMapSetup") }));
         _pages.Add(new PageDef("Intel", NewPage("PageIntel"), new Control[] { NewControl("CardIntelSetup") }));
-        _pages.Add(new PageDef("Pings", NewPage("PagePings"), new Control[] { NewControl("CardPingsSetup") }));
+        _pages.Add(new PageDef("Jabber", NewPage("PagePings"), new Control[] { NewControl("CardPingsSetup") }));
         _pages.Add(new PageDef("Performance", PageMemory, new Control[] { CardMemoryNow, CardPerformance, CardMemoryTop, CardMemoryKeep }));
         _pages.Add(new PageDef("Diagnostics", PageDiagnostics, new Control[] { CardFiles, CardDiagnostics }));
         if (AdminAccess.IsOwner) _pages.Add(new PageDef("Admin", PageAdmin, new Control[] { NewControl("CardOwnerTrace") }));
@@ -1706,6 +1706,7 @@ public partial class SettingsWindow : Window
           JabberHub.Instance.Connect();
       }
     private void JabberDisconnect_Click(object sender, RoutedEventArgs e) => JabberHub.Instance.Disconnect();
+    private void JabberChat_Click(object sender, RoutedEventArgs e) => JabberHub.OpenChat();
     private void JabberOpen_Click(object sender, RoutedEventArgs e) => JabberHub.OpenWindow();
     // ---------- about ----------
 
@@ -3089,11 +3090,3 @@ public partial class SettingsWindow : Window
         return true;
     }
 }
-
-
-
-
-
-
-
-

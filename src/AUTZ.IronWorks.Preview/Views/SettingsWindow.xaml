@@ -176,7 +176,7 @@
 <ScrollViewer x:Name="PageAdmin" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Visibility="Collapsed"><StackPanel Margin="16,12,16,4" MaxWidth="1000" HorizontalAlignment="Stretch"><Expander x:Name="CardOwnerTrace" Header="WINDOWS MEMORY TRACE" Style="{StaticResource Card}" IsExpanded="False"><StackPanel><TextBox Style="{StaticResource Desc}" Text="Private 60-second Windows ETW capture. May include system paths. Requires administrator rights."/><WrapPanel><Button x:Name="OwnerTraceStartBtn" Content="Start 60-second trace" Margin="0,0,6,6" Click="OwnerTraceStart_Click"/><Button x:Name="OwnerTraceStopBtn" Content="Stop trace" Margin="0,0,6,6" Click="OwnerTraceStop_Click"/><Button Content="Open trace folder" Margin="0,0,6,6" Click="OwnerTraceFolder_Click"/></WrapPanel><TextBox x:Name="OwnerTraceStatus" Style="{StaticResource Desc}" Text="Tracing is off."/></StackPanel></Expander></StackPanel></ScrollViewer>
 <ScrollViewer x:Name="PageMap" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Visibility="Collapsed"><StackPanel Margin="16,12,16,4" MaxWidth="1000" HorizontalAlignment="Stretch"><Expander x:Name="CardMapSetup" Header="MAP" Style="{StaticResource Card}" IsExpanded="False"><StackPanel><TextBox Style="{StaticResource Desc}" Text="Full New Eden map and regional zoom are planned. No map service is running."/><Button Content="Open New Eden Map" Click="OpenMap_Click" Margin="0,8,0,0" HorizontalAlignment="Left"/></StackPanel></Expander></StackPanel></ScrollViewer>
 <ScrollViewer x:Name="PageIntel" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Visibility="Collapsed"><StackPanel Margin="16,12,16,4" MaxWidth="1000" HorizontalAlignment="Stretch"><Expander x:Name="CardIntelSetup" Header="INTEL" Style="{StaticResource Card}" IsExpanded="False"><StackPanel><TextBox Style="{StaticResource Desc}" Text="Intel from selected EVE chat logs is planned. No intel scanner is running."/><Button Content="Open Intel Scanner" Click="OpenIntel_Click" Margin="0,8,0,0" HorizontalAlignment="Left"/></StackPanel></Expander></StackPanel></ScrollViewer>
-<ScrollViewer x:Name="PagePings" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Visibility="Collapsed"><StackPanel Margin="16,12,16,4" MaxWidth="1000" HorizontalAlignment="Stretch"><Expander x:Name="CardPingsSetup" Header="PINGS" Style="{StaticResource Card}" IsExpanded="False"><StackPanel><TextBox Style="{StaticResource FieldLabel}" Text="Protocol"/><ComboBox x:Name="JabberProtocol"><ComboBoxItem Content="XMPP"/></ComboBox>
+<ScrollViewer x:Name="PagePings" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Visibility="Collapsed"><StackPanel Margin="16,12,16,4" MaxWidth="1000" HorizontalAlignment="Stretch"><Expander x:Name="CardPingsSetup" Header="JABBER" Style="{StaticResource Card}" IsExpanded="False"><StackPanel><TextBox Style="{StaticResource FieldLabel}" Text="Protocol"/><ComboBox x:Name="JabberProtocol"><ComboBoxItem Content="XMPP"/></ComboBox>
 <TextBox Style="{StaticResource FieldLabel}" Text="Username"/><TextBox x:Name="JabberUsername"/>
 <TextBox Style="{StaticResource FieldLabel}" Text="Domain"/><TextBox x:Name="JabberDomain"/>
 <TextBox Style="{StaticResource FieldLabel}" Text="Resource (optional)"/><TextBox x:Name="JabberResource"/>
@@ -185,7 +185,7 @@
 <CheckBox x:Name="JabberAuto"><TextBlock Text="Connect automatically"/></CheckBox>
 <CheckBox x:Name="JabberNotify"><TextBlock Text="Notify me about pings"/></CheckBox>
 <TextBlock x:Name="JabberStatus" Text="Disconnected" Margin="0,6,0,8"/>
-<WrapPanel><Button Content="Save Jabber" Click="JabberSave_Click" Margin="0,0,8,0"/><Button Content="Connect" Click="JabberConnect_Click" Margin="0,0,8,0"/><Button Content="Disconnect" Click="JabberDisconnect_Click" Margin="0,0,8,0"/><Button Content="Open Pings" Click="JabberOpen_Click"/></WrapPanel></StackPanel></Expander></StackPanel></ScrollViewer>
+<WrapPanel><Button Content="Save Jabber" Click="JabberSave_Click" Margin="0,0,8,0"/><Button Content="Connect" Click="JabberConnect_Click" Margin="0,0,8,0"/><Button Content="Disconnect" Click="JabberDisconnect_Click" Margin="0,0,8,0"/><Button Content="Open Chat" Click="JabberChat_Click" Margin="0,0,8,0"/><Button Content="Open Pings" Click="JabberOpen_Click"/></WrapPanel></StackPanel></Expander></StackPanel></ScrollViewer>
             </Grid>
 
             <!-- footer: search, status, buttons -->
@@ -213,10 +213,3 @@
         </Grid>
     </Grid>
 </Window>
-
-
-
-
-
-
-
