@@ -15,6 +15,7 @@ using System.Xml.Linq;
 using AUTZ.IronWorks.Preview.Core;
 namespace AUTZ.IronWorks.Preview.Services;
 internal sealed record JabberPing(DateTime Time, string Sender, string Channel, string Body, bool Read = false);
+internal sealed record ParticipationStats(int Strat, int Pct, string LastPap);
 internal sealed record JabberChatMessage(DateTime Time, string Peer, string Body, bool Outgoing = false);
 internal sealed class JabberConfig
 {
@@ -30,6 +31,24 @@ internal sealed class JabberService : IDisposable
     private static readonly string Folder = Path.Combine(AppInfo.DataFolder, "jabber");
     private static readonly string ConfigFile = Path.Combine(Folder, "config.json");
     private static readonly string HistoryFile = Path.Combine(Folder, "history.json");
+    private static readonly string ParticipationFile = Path.Combine(Folder, "participation.json");
+    public ParticipationStats? Participation { get; private set; }
+    private static readonly System.Text.RegularExpressions.Regex MonthPattern = new(@"(?im)^\s*(?:->\s*)?This Month:\s*(\d+)\s+STR\s*\+\s*(\d+)\s+PCT\s*$");
+    private static readonly System.Text.RegularExpressions.Regex LastPattern = new(@"(?im)^\s*(?:->\s*)?Last strat[- ]pap:\s*(.+?)\s*$");
+    private bool ReadParticipation(string body)
+    {
+        var counts = MonthPattern.Match(body);
+        if (!counts.Success || !int.TryParse(counts.Groups[1].Value, out int strat) || !int.TryParse(counts.Groups[2].Value, out int pct)) return false;
+        var last = LastPattern.Match(body);
+        string lastText = last.Success ? last.Groups[1].Value.Trim() : "--";
+        Participation = new ParticipationStats(strat, pct, lastText);
+        try { Directory.CreateDirectory(Folder); File.WriteAllText(ParticipationFile, JsonSerializer.Serialize(Participation)); }
+        catch (Exception ex) { Log.Debug("JABBER", "participation save failed: " + ex.GetType().Name); }
+        Log.Debug("JABBER", "participation report updated");
+        try { Changed?.Invoke(); } catch { }
+        return true;
+    }
+
     private CancellationTokenSource _stop = new();
     private Task? _runner;
     private string _sessionPassword = "";
@@ -67,6 +86,7 @@ internal sealed class JabberService : IDisposable
     {
         try { if (File.Exists(ConfigFile)) Config = JsonSerializer.Deserialize<JabberConfig>(File.ReadAllText(ConfigFile)) ?? new(); } catch { }
         try { if (File.Exists(HistoryFile)) _history = JsonSerializer.Deserialize<List<JabberPing>>(File.ReadAllText(HistoryFile)) ?? new(); } catch { }
+        try { if (File.Exists(ParticipationFile)) Participation = JsonSerializer.Deserialize<ParticipationStats>(File.ReadAllText(ParticipationFile)); } catch { }
         if (Config.AutoConnect) Connect();
     }
     public void Save(JabberConfig config, string? password)
@@ -201,6 +221,7 @@ internal sealed class JabberService : IDisposable
           string body = message.Elements().FirstOrDefault(x => x.Name.LocalName == "body")?.Value ?? "";
           Log.Debug("JABBER", "incoming stanza type=" + type + "; body=" + (body.Length > 0 ? "yes" : "no"));
           if (string.IsNullOrWhiteSpace(body)) return;
+          if (peer.Split('@')[0].Equals("directorbot", StringComparison.OrdinalIgnoreCase) && ReadParticipation(body)) return;
           bool director = peer.Split('@')[0].Equals("directorbot", StringComparison.OrdinalIgnoreCase);
                       // Directorbot broadcasts carry a footer naming their broadcast audience/type.
             // Never require fleet fields: GICE, Locusts and other announcements can omit them.

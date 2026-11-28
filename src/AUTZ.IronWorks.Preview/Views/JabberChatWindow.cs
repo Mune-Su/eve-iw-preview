@@ -20,10 +20,8 @@ internal sealed class JabberChatWindow : Window
         var bottom = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0,8,0,0) };
         bottom.Children.Add(_to); bottom.Children.Add(_message);
         var send = new Button { Content = "Send" };
-        send.Click += async (_,_) => { try { await _service.SendChat(_to.Text, _message.Text); _message.Clear();           Loaded += (_,_) => { if (Tag as string == "iron-chrome") return; Tag = "iron-chrome"; IronWindowChrome.Attach(this, "Jabber Chat"); };
-          PopoutLayout.Track("Chat", this);
-Refresh(); } catch (Exception ex) { _status.Text = ex.Message; } };
-        bottom.Children.Add(send); DockPanel.SetDock(bottom, Dock.Bottom); root.Children.Add(bottom);
+                  send.Click += async (_,_) => { try { await _service.SendChat(_to.Text, _message.Text); _message.Clear(); Refresh(); } catch (Exception ex) { _status.Text = ex.Message; } };
+bottom.Children.Add(send); DockPanel.SetDock(bottom, Dock.Bottom); root.Children.Add(bottom);
         var grid = new Grid(); grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(200) });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         _peers.SelectionChanged += (_,_) => { if (_peers.SelectedItem is string peer) { _to.Text = peer; ShowPeer(peer); } };

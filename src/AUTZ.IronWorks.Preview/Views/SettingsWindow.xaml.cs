@@ -320,7 +320,7 @@ public partial class SettingsWindow : Window
         if (index < 0 || index >= _pages.Count) return;
         bool leavingThumbs = _pageIndex == PageGroups_ && index != PageGroups_;     // the character list is on this page
         _pageIndex = index;
-        string? group = index >= 1 && index <= 5 ? "Switcher" : index >= 6 && index <= 8 ? "Intel" : null;
+        string? group = index >= 1 && index <= 5 ? "Switcher" : null;
         if (group is not null && _navGroups.TryGetValue(group, out var children))
         {
             children.Visibility = Visibility.Visible;

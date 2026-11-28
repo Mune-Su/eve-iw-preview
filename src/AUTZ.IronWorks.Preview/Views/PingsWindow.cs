@@ -12,7 +12,13 @@ internal sealed class PingsWindow : Window
 {
     private readonly JabberService _service;
     private readonly StackPanel _feed = new();
+    private readonly ScrollViewer _scroll = new() { VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+        HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled };
+    private int _lastPingCount = -1;
+    private DateTime _lastNewestPing = DateTime.MinValue;
+    private bool _firstDisplay = true;
     private readonly TextBlock _status = new();
+    private readonly TextBlock[] _papValues = new TextBlock[3];
     private readonly DispatcherTimer _clock = new() { Interval = TimeSpan.FromMinutes(1) };
     private static readonly Regex Urls = new(@"https?://[^\s<>]+", RegexOptions.IgnoreCase | RegexOptions.Compiled);
     private static readonly Regex Field = new(@"^\s*(?<name>FC Name|Formup Location|Current System|Doctrine|PAP Type|PAP|Comms)\s*:\s*(?<value>.*)$", RegexOptions.IgnoreCase | RegexOptions.Compiled);
@@ -28,29 +34,60 @@ internal sealed class PingsWindow : Window
             Foreground = (Brush)FindResource("BrushAccent"), Margin = new Thickness(0,0,12,0) });
         _status.VerticalAlignment = VerticalAlignment.Center; _status.FontSize = 11;
         top.Children.Add(_status); DockPanel.SetDock(top, Dock.Top); root.Children.Add(top);
-        root.Children.Add(new ScrollViewer { Content = _feed, VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
-            HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled });
+        var participation = new Grid { Margin = new Thickness(0,0,0,8) };
+        for (int i = 0; i < 3; i++) participation.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        for (int i = 0; i < 3; i++)
+        {
+            string label = i == 0 ? "STRAT" : i == 1 ? "PCT" : "LAST PAP";
+            var cell = new StackPanel { Margin = new Thickness(8,3,5,3) };
+            var value = new TextBlock { Text = "--", FontSize = 19, FontWeight = FontWeights.SemiBold, Foreground = Brushes.White };
+            _papValues[i] = value;
+            cell.Children.Add(value);
+            cell.Children.Add(new TextBlock { Text = label, FontSize = 10, Foreground = (Brush)FindResource("BrushMuted") });
+            var border = new Border { BorderBrush = (Brush)FindResource("BrushAccentLine"), BorderThickness = new Thickness(2,0,0,0), Child = cell };
+            Grid.SetColumn(border, i); participation.Children.Add(border);
+        }
+        DockPanel.SetDock(participation, Dock.Top); root.Children.Add(participation);
+        _scroll.Content = _feed;
+        root.Children.Add(_scroll);
         Content = root;
         _service.Changed += RefreshSafe;
-        _clock.Tick += (_,_) =>           Loaded += (_,_) => { if (Tag as string == "iron-chrome") return; Tag = "iron-chrome"; IronWindowChrome.Attach(this, "Pings"); };
+                  _clock.Tick += (_,_) => Refresh();
+          IronWindowChrome.Attach(this, "Pings");
           PopoutLayout.Track("Pings", this);
-Refresh();
-        Loaded += (_,_) => _clock.Start();
+Loaded += (_,_) => _clock.Start();
         Closed += (_,_) => { _clock.Stop(); _service.Changed -= RefreshSafe; };
         Refresh();
     }
     private void RefreshSafe() => Dispatcher.BeginInvoke(new Action(Refresh));
     private void Refresh()
     {
+        var pap = _service.Participation;
+        _papValues[0].Text = pap?.Strat.ToString() ?? "--";
+        _papValues[1].Text = pap?.Pct.ToString() ?? "--";
+        _papValues[2].Text = pap?.LastPap ?? "--";
         var history = _service.History;
         _status.Text = _service.Status + "  |  Unread: " + history.Count(x => !x.Read);
+        double oldOffset = _scroll.VerticalOffset;
+        bool nearBottom = _scroll.ScrollableHeight - oldOffset <= 36;
+        var newest = history.Count == 0 ? DateTime.MinValue : history.Max(x => x.Time);
+        bool newPing = history.Count > _lastPingCount && newest > _lastNewestPing;
+        _lastPingCount = history.Count;
+        _lastNewestPing = newest;
         _feed.Children.Clear();
         if (history.Count == 0)
         {
             _feed.Children.Add(new TextBlock { Text = "No pings received yet.", Foreground = (Brush)FindResource("BrushMuted") });
             return;
         }
-        foreach (var ping in history) _feed.Children.Add(Card(ping));
+        foreach (var ping in history.OrderBy(x => x.Time)) _feed.Children.Add(Card(ping));
+        bool scrollToNewest = _firstDisplay || (newPing && nearBottom);
+        _firstDisplay = false;
+        Dispatcher.BeginInvoke(new Action(() =>
+        {
+            if (scrollToNewest) _scroll.ScrollToEnd();
+            else _scroll.ScrollToVerticalOffset(oldOffset);
+        }), System.Windows.Threading.DispatcherPriority.Loaded);
     }
     private static string Kind(string body, Dictionary<string,string> fields)
     {
@@ -105,6 +142,17 @@ Refresh();
         }
         catch { }
         var content = new StackPanel { Margin = new Thickness(10,7,10,7) };
+        if (!fields.ContainsKey("FC Name"))
+        {
+            var announcement = Regex.Match(ping.Body, @"(?im)^\s*this was an?\s+.+?broadcast from\s+(?<sender>[^\r\n]+)");
+            if (announcement.Success)
+            {
+                var row = new TextBlock { FontSize = 12, TextWrapping = TextWrapping.Wrap };
+                row.Inlines.Add(new Run("Announcement from: ") { Foreground = (Brush)FindResource("BrushMuted") });
+                row.Inlines.Add(new Run(announcement.Groups["sender"].Value.Trim().TrimEnd('.', '~')) { Foreground = Brushes.White, FontWeight = FontWeights.SemiBold });
+                content.Children.Add(row);
+            }
+        }
         if (fields.TryGetValue("FC Name", out var fc) && fc.Length > 0)
             {
             var row = new TextBlock { FontSize = 12.5, TextWrapping = TextWrapping.Wrap };

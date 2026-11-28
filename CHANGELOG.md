@@ -1,5 +1,15 @@
 # Changelog
 Every version of EVE-IW-Preview, newest first.
+## v0.19.61 - Restore Participation model
+- Fix missing JabberService.Participation compilation error.
+- Save and load monthly STRAT/PCT and last PAP from directorbot reports.
+## v0.19.60 - Chronological ping feed
+- Oldest pings at top, newest at bottom. Auto-scroll on new pings only when at bottom.
+- Preserve scroll position while reviewing earlier pings.
+## v0.19.59 - Participation and Pings fixes
+- Compact STRAT, PCT, LAST PAP header from directorbot Participation reports; save latest valid report.
+- Restore announcement sender and correct Pings title chrome and Jabber Chat initialization.
+- Remove duplicate Intel group and About card wrapper.
 ## v0.19.58 - Compact windows and saved layout
 - Seamless compact headers and active orange top line.
 - Save open popouts and their positions across restarts.
