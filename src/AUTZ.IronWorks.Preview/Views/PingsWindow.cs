@@ -3,6 +3,8 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Documents;
 using System.Windows.Media;
+using System.Windows.Media.Imaging;
+using System.Windows.Threading;
 using AUTZ.IronWorks.Preview.Core;
 using AUTZ.IronWorks.Preview.Services;
 namespace AUTZ.IronWorks.Preview.Views;
@@ -11,109 +13,125 @@ internal sealed class PingsWindow : Window
     private readonly JabberService _service;
     private readonly StackPanel _feed = new();
     private readonly TextBlock _status = new();
-    private readonly Brush _accent;
-    private readonly Brush _muted;
+    private readonly DispatcherTimer _clock = new() { Interval = TimeSpan.FromMinutes(1) };
     private static readonly Regex Urls = new(@"https?://[^\s<>]+", RegexOptions.IgnoreCase | RegexOptions.Compiled);
-    private static readonly Regex Field = new(@"^\s*(?:[-*>]\s*)?(?<name>FC Name|Formup Location|Current System|Doctrine|PAP Type|PAP|Comms)\s*:\s*(?<value>.*)$", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+    private static readonly Regex Field = new(@"^\s*(?<name>FC Name|Formup Location|Current System|Doctrine|PAP Type|PAP|Comms)\s*:\s*(?<value>.*)$", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+    private static readonly Regex Footer = new(@"(?i)^\s*[~=-]*\s*this was an? .*broadcast from\b", RegexOptions.Compiled);
     public PingsWindow(JabberService service)
     {
-        _service = service;
-        _accent = (Brush)FindResource("BrushAccent");
-        _muted = (Brush)FindResource("BrushMuted");
-        Title = "Pings - " + AppInfo.Name;
-        Width = 650; Height = 720; MinWidth = 420; MinHeight = 350;
+        _service = service; Title = "Pings - " + AppInfo.Name;
+        Width = 520; Height = 650; MinWidth = 370; MinHeight = 300;
         Background = (Brush)FindResource("BrushBg"); Foreground = (Brush)FindResource("BrushText");
-        var root = new DockPanel { Margin = new Thickness(14) };
-        var top = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0,0,0,12) };
-        top.Children.Add(new TextBlock { Text = "PINGS", FontSize = 18, FontWeight = FontWeights.Bold,
-            Foreground = _accent, Margin = new Thickness(0,0,16,0) });
-        _status.VerticalAlignment = VerticalAlignment.Center;
-        top.Children.Add(_status);
-        DockPanel.SetDock(top, Dock.Top); root.Children.Add(top);
-        var bottom = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right,
-            Margin = new Thickness(0,10,0,0) };
-        AddButton(bottom, "Mark All Read", () => _service.MarkRead(true));
-        AddButton(bottom, "Clear History", () =>
-        {
-            if (Dialogs.Ask(this, "Clear Pings", "Delete saved ping history?", "Clear", "Cancel") == 0) _service.Clear();
-        });
-        AddButton(bottom, "Close", Close);
-        DockPanel.SetDock(bottom, Dock.Bottom); root.Children.Add(bottom);
-        var scroll = new ScrollViewer { Content = _feed, VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
-            HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled };
-        root.Children.Add(scroll); Content = root;
+        var root = new DockPanel { Margin = new Thickness(8) };
+        var top = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(2,2,0,8) };
+        top.Children.Add(new TextBlock { Text = "PINGS", FontSize = 15, FontWeight = FontWeights.Bold,
+            Foreground = (Brush)FindResource("BrushAccent"), Margin = new Thickness(0,0,12,0) });
+        _status.VerticalAlignment = VerticalAlignment.Center; _status.FontSize = 11;
+        top.Children.Add(_status); DockPanel.SetDock(top, Dock.Top); root.Children.Add(top);
+        root.Children.Add(new ScrollViewer { Content = _feed, VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+            HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled });
+        Content = root;
         _service.Changed += RefreshSafe;
-        Closed += (_, _) => _service.Changed -= RefreshSafe;
+        _clock.Tick += (_,_) => Refresh();
+        Loaded += (_,_) => _clock.Start();
+        Closed += (_,_) => { _clock.Stop(); _service.Changed -= RefreshSafe; };
         Refresh();
-    }
-    private static void AddButton(Panel panel, string label, Action action)
-    {
-        var button = new Button { Content = label, Margin = new Thickness(6,0,0,0) };
-        button.Click += (_, _) => action(); panel.Children.Add(button);
     }
     private void RefreshSafe() => Dispatcher.BeginInvoke(new Action(Refresh));
     private void Refresh()
     {
         var history = _service.History;
-        _status.Text = _service.Status + "  |  Unread: " + history.Count(p => !p.Read);
+        _status.Text = _service.Status + "  |  Unread: " + history.Count(x => !x.Read);
         _feed.Children.Clear();
         if (history.Count == 0)
         {
-            _feed.Children.Add(new TextBlock { Text = "No pings received yet.", Foreground = _muted,
-                Margin = new Thickness(6,12,0,0) });
+            _feed.Children.Add(new TextBlock { Text = "No pings received yet.", Foreground = (Brush)FindResource("BrushMuted") });
             return;
         }
-        for (int i = 0; i < history.Count; i++) _feed.Children.Add(Card(history[i], i));
+        foreach (var ping in history) _feed.Children.Add(Card(ping));
     }
-    private UIElement Card(JabberPing ping, int index)
+    private static string Kind(string body, Dictionary<string,string> fields)
     {
-        var lines = ping.Body.Replace("\r", "").Split('\n');
+        if (Regex.IsMatch(body, @"(?i)\b(strategic|strat)\b") ||
+            fields.TryGetValue("PAP Type", out var pap) && pap.Contains("Strategic", StringComparison.OrdinalIgnoreCase)) return "STRAT";
+        if (Regex.IsMatch(body, @"(?i)\b(peacetime|pct)\b")) return "PCT";
+        var match = Regex.Match(body, @"(?i)\bthis was an?\s+([\w-]+)\s+broadcast from\b");
+        if (match.Success) return match.Groups[1].Value.ToUpperInvariant();
+        return "BROADCAST";
+    }
+    private static string When(DateTime time)
+    {
+        var age = DateTime.Now - time;
+        if (age >= TimeSpan.Zero && age < TimeSpan.FromMinutes(30))
+        {
+            int mins = Math.Max(1, (int)age.TotalMinutes);
+            return mins + (mins == 1 ? " min ago" : " mins ago");
+        }
+        return time.Date == DateTime.Today ? time.ToString("HH:mm") : time.ToString("dd MMM, HH:mm");
+    }
+    private UIElement Card(JabberPing ping)
+    {
         var fields = new Dictionary<string,string>(StringComparer.OrdinalIgnoreCase);
         var prose = new List<string>();
-        foreach (string raw in lines)
+        foreach (string raw in ping.Body.Replace("\r", "").Split('\n'))
         {
-            string line = raw.Trim(); if (line.Length == 0) continue;
+            string line = raw.Trim();
+            if (line.Length == 0 || Footer.IsMatch(line) || line.StartsWith("~~~")) continue;
             var match = Field.Match(line);
             if (match.Success) fields[match.Groups["name"].Value] = match.Groups["value"].Value;
-            else if (!line.StartsWith("~~~") && !line.StartsWith("====")) prose.Add(line);
+            else prose.Add(line);
         }
-        string headline = prose.FirstOrDefault() ?? "Fleet broadcast";
-        // The title and fields are all visible. There is no collapsed or expanded state.
-        var card = new Border
+        string kind = Kind(ping.Body, fields);
+        Color accent = kind switch
         {
-            Background = new SolidColorBrush(Color.FromRgb(18,27,36)),
-            BorderBrush = ping.Read ? new SolidColorBrush(Color.FromRgb(42,62,77)) : _accent,
-            BorderThickness = new Thickness(3,0,0,0),
-            CornerRadius = new CornerRadius(3), Margin = new Thickness(0,0,0,9), Padding = new Thickness(12)
+            "STRAT" => Color.FromRgb(249,115,22), "PCT" => Color.FromRgb(184,113,65),
+            "GICE" => Color.FromRgb(80,161,173), "BROADCAST" => Color.FromRgb(106,121,137),
+            _ => Color.FromRgb(183,129,78)
         };
-        var content = new StackPanel();
-        var heading = new TextBlock { Text = headline, FontSize = 15, FontWeight = FontWeights.SemiBold,
-            TextWrapping = TextWrapping.Wrap, Foreground = (Brush)FindResource("BrushText") };
-        content.Children.Add(heading);
-        foreach (string key in new[] { "FC Name", "Formup Location", "Current System", "Doctrine", "PAP Type", "PAP", "Comms" })
+        var frame = new Border { Margin = new Thickness(0,0,0,6), BorderThickness = new Thickness(ping.Read ? 2 : 3,0,0,0),
+            BorderBrush = new SolidColorBrush(accent), Background = new SolidColorBrush(Color.FromRgb(17,23,29)) };
+        var backdrop = new Grid();
+        // Existing AUTZ lava-furnace emblem, deliberately faint; variations follow broadcast category.
+        try
         {
-            if (!fields.TryGetValue(key, out var value)) continue;
-            var row = new TextBlock { TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0,5,0,0) };
-            row.Inlines.Add(new Run(key + ": ") { Foreground = _muted });
-            AddLinkedText(row, value);
-            content.Children.Add(row);
+            var logo = new Image { Source = new BitmapImage(new Uri("pack://application:,,,/Assets/logo.png")),
+                Width = 155, Height = 155, Stretch = Stretch.Uniform, Opacity = kind switch
+                { "STRAT" => .085, "PCT" => .065, "GICE" => .075, _ => .055 },
+                HorizontalAlignment = kind == "PCT" ? HorizontalAlignment.Left : HorizontalAlignment.Right,
+                VerticalAlignment = VerticalAlignment.Center, IsHitTestVisible = false };
+            backdrop.Children.Add(logo);
         }
-        // Include other useful broadcast text without duplicating parsed fields.
-        foreach (string line in prose.Skip(1).Where(x => !Field.IsMatch(x)).Take(5))
+        catch { }
+        var content = new StackPanel { Margin = new Thickness(10,7,10,7) };
+        if (fields.TryGetValue("FC Name", out var fc) && fc.Length > 0)
+            content.Children.Add(Line("Fleet under " + fc, 11, new SolidColorBrush(Color.FromRgb(175,190,198))));
+        if (fields.TryGetValue("Formup Location", out var system) || fields.TryGetValue("Current System", out system))
+            content.Children.Add(Line(system, 11, new SolidColorBrush(Color.FromRgb(250,183,137))));
+        if (prose.Count > 0)
         {
-            var row = new TextBlock { TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0,5,0,0) };
-            AddLinkedText(row, line); content.Children.Add(row);
+            var title = new TextBlock { Text = prose[0], FontSize = 13, FontWeight = FontWeights.SemiBold,
+                Foreground = Brushes.White, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0,5,0,2) };
+            content.Children.Add(title);
+            foreach (string line in prose.Skip(1).Take(8))
+            {
+                var row = new TextBlock { FontSize = 11.5, TextWrapping = TextWrapping.Wrap };
+                AddLinkedText(row, line); content.Children.Add(row);
+            }
         }
-        var footer = new DockPanel { Margin = new Thickness(0,10,0,0) };
-        var buttons = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right };
-        AddButton(buttons, "Copy", () => Clipboard.SetText(ping.Body));
-        if (!ping.Read) AddButton(buttons, "Mark Read", () => _service.MarkRead(false, index));
-        DockPanel.SetDock(buttons, Dock.Right); footer.Children.Add(buttons);
-        footer.Children.Add(new TextBlock { Text = ping.Time.ToString("dd MMM yyyy  HH:mm") + "  •  " + ping.Sender,
-            Foreground = _muted, VerticalAlignment = VerticalAlignment.Center, TextWrapping = TextWrapping.Wrap });
-        content.Children.Add(footer); card.Child = content;
-        return card;
+        if (fields.TryGetValue("Doctrine", out var doctrine) && doctrine.Length > 0)
+        {
+            content.Children.Add(Line("Doctrine", 10, (Brush)FindResource("BrushMuted")));
+            content.Children.Add(Line(doctrine, 11, Brushes.White));
+        }
+        var footer = new Border { Margin = new Thickness(-10,6,-10,-7), Padding = new Thickness(10,5,10,5),
+            Background = new SolidColorBrush(Color.FromArgb(145,31,37,43)) };
+        footer.Child = Line(kind + "  ·  " + When(ping.Time), 10.5, (Brush)FindResource("BrushMuted"));
+        content.Children.Add(footer);
+        backdrop.Children.Add(content); frame.Child = backdrop;
+        return frame;
     }
+    private static TextBlock Line(string text, double size, Brush color) => new()
+    { Text = text, FontSize = size, Foreground = color, TextWrapping = TextWrapping.Wrap };
     private static void AddLinkedText(TextBlock target, string text)
     {
         int cursor = 0;

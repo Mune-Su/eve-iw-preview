@@ -202,10 +202,13 @@ internal sealed class JabberService : IDisposable
           Log.Debug("JABBER", "incoming stanza type=" + type + "; body=" + (body.Length > 0 ? "yes" : "no"));
           if (string.IsNullOrWhiteSpace(body)) return;
           bool director = peer.Split('@')[0].Equals("directorbot", StringComparison.OrdinalIgnoreCase);
-          // Directorbot broadcasts are marked by the source announcement text, not guessed from generic words.
-          bool broadcast = director && (body.Contains("This was a coord broadcast", StringComparison.OrdinalIgnoreCase)
-              || body.Contains("FC Name:", StringComparison.OrdinalIgnoreCase) && body.Contains("Formup Location:", StringComparison.OrdinalIgnoreCase));
-          if (!broadcast)
+                      // Directorbot broadcasts carry a footer naming their broadcast audience/type.
+            // Never require fleet fields: GICE, Locusts and other announcements can omit them.
+            bool broadcast = director && System.Text.RegularExpressions.Regex.IsMatch(body,
+                @"(?im)\bthis\s+was\s+(?:an?\s+)?(?:[\w-]+\s+)*broadcast\s+from\b");
+            if (director && !broadcast)
+                Log.Debug("JABBER", "directorbot message without broadcast footer routed to Chat");
+if (!broadcast)
           {
               lock (_gate) { _chats.Add(new JabberChatMessage(DateTime.Now, peer, body)); TrimChats(); }
               Log.Debug("JABBER", "routed to Chat");

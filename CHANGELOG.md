@@ -1,5 +1,8 @@
 # Changelog
 Every version of EVE-IW-Preview, newest first.
+## v0.19.57 - Compact broadcasts
+- Recognise directorbot broadcasts by footer, including GICE and unknown types.
+- Compact read-only furnace cards, STRAT/PCT labels and relative or short-form times.
 ## v0.19.56 - Ping cards
 - Single scrolling feed with fleet title, FC, formup, doctrine, PAP, time and clickable links.
 - No expanding cards or details panel. Preserve unread tracking and history.
