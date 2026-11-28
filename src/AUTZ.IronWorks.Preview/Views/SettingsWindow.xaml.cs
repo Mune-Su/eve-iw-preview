@@ -2848,49 +2848,6 @@ public partial class SettingsWindow : Window
 
     // ---------- admin (only on the owner's PC) ----------
 
-    private const string ReleasesApi = "https://api.github.com/repos/Mune-Su/eve-iw-preview/releases?per_page=100";
-    private const string ReleasesPage = "https://github.com/Mune-Su/eve-iw-preview/releases";
-
-    private async void AdminDownloads_Click(object sender, RoutedEventArgs e)
-    {
-        AdminDownloadsBtn.IsEnabled = false;
-        AdminDownloadsText.Text = "Checking...";
-        try
-        {
-            using var http = new System.Net.Http.HttpClient { Timeout = TimeSpan.FromSeconds(15) };
-            http.DefaultRequestHeaders.UserAgent.ParseAdd("EVE-IW-Preview");
-            string json = await http.GetStringAsync(ReleasesApi);
-            using var doc = JsonDocument.Parse(json);
-            var text = new StringBuilder();
-            long setups = 0;
-            foreach (var release in doc.RootElement.EnumerateArray())
-            {
-                string tag = release.TryGetProperty("tag_name", out var t) ? t.GetString() ?? "" : "";
-                if (!release.TryGetProperty("assets", out var assets)) continue;
-                foreach (var asset in assets.EnumerateArray())
-                {
-                    string name = asset.TryGetProperty("name", out var n) ? n.GetString() ?? "" : "";
-                    long count = asset.TryGetProperty("download_count", out var c) && c.TryGetInt64(out long v) ? v : 0;
-                    if (name.EndsWith(".exe", StringComparison.OrdinalIgnoreCase)) setups += count;
-                    text.AppendLine($"{tag,-16}{name,-32}{count,8:N0}");
-                }
-            }
-            AdminDownloadsText.Text = text.Length == 0
-                ? "No release files yet."
-                : text + Environment.NewLine + $"Setup downloads, all releases: {setups:N0}";
-        }
-        catch (Exception ex)
-        {
-            AdminDownloadsText.Text = "Couldn't check: " + ex.Message;
-        }
-        finally
-        {
-            AdminDownloadsBtn.IsEnabled = true;
-        }
-    }
-
-    private void AdminReleases_Click(object sender, RoutedEventArgs e) => OpenPath(this, ReleasesPage);
-
     private async void OwnerTraceStart_Click(object sender, RoutedEventArgs e)
     {
         if (!AdminAccess.IsOwner) return;
@@ -2912,12 +2869,6 @@ public partial class SettingsWindow : Window
         Directory.CreateDirectory(folder);
         OpenPath(this, folder);
     }
-    private void AdminSounds_Click(object sender, RoutedEventArgs e)
-    {
-        try { Directory.CreateDirectory(SoundLibrary.Folder); } catch { }
-        OpenPath(this, SoundLibrary.Folder);
-    }
-
     // ---------- validation ----------
 
     private bool Fail(int page, string message)
@@ -3099,5 +3050,6 @@ public partial class SettingsWindow : Window
         return true;
     }
 }
+
 
 

@@ -11,7 +11,9 @@ internal static class Changelog
 {
     public static readonly ChangelogEntry[] Entries =  
       {
-        new("0.19.40", "Fix update button build", new[] { "Resolve the Update button at runtime to avoid missing generated XAML field." }),
+        new("0.19.42", "Clean WPF build", new[] { "Refresh Settings XAML and clean generated WPF files before compilation." }),
+          new("0.19.41", "Complete Settings cleanup", new[] { "Removed obsolete Admin download handlers that broke GitHub validation.", "Removed unused automatic-update fields." }),
+          new("0.19.40", "Fix update button build", new[] { "Resolve the Update button at runtime to avoid missing generated XAML field." }),
           new("0.19.39", "Manual updates and settings cleanup", new[] { "Updates require a click and show release notes.", "About, General and Admin menus simplified.", "Disable Switcher submenu stays open for multiple selections." }),
           new("0.19.38", "Owner-only Windows memory tracing", new[] { "Admin-only 60-second ETW capture with Windows Performance Recorder.", "Local EVE memory samples and ETL for Windows Performance Analyzer." }),
           new("0.19.37", "Settings build fix", new[] { "Fixed missing settings control references." }),
@@ -531,5 +533,6 @@ internal static class Changelog
         })
     };
 }
+
 
 

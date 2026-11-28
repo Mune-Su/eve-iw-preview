@@ -1,5 +1,12 @@
 # Changelog
 Every version of EVE-IW-Preview, newest first.
+## v0.19.42 - Clean WPF build
+- Refresh SettingsWindow XAML and its C# code together.
+- Clean generated WPF build files before compiling in update-preview.ps1.
+## v0.19.41 - Complete Settings cleanup
+- Remove obsolete Admin Release Downloads code and its missing XAML references.
+- Remove unused automatic-update fields.
+- Keep the manual-update and settings changes from v0.19.39 and v0.19.40.
 ## v0.19.40 - Update button build fix
 - Fix CS0103 for UpdateNowBtn in SettingsWindow.xaml.cs.
 ## v0.19.39 - Manual updates and settings cleanup
@@ -520,5 +527,6 @@ Every version of EVE-IW-Preview, newest first. The app shows the same list under
 
 - AUTZ IronWorks emblem for the exe, tray and windows.
 - Drag the bottom-right corner to resize, colour pickers, and updates that never touch a running app.
+
 
 

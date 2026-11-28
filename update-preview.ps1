@@ -85,6 +85,8 @@ try {
 
     # compile check only. Your own PC updates from the GitHub Latest release, like everyone else's.
     Write-Host 'Checking the code builds...' -ForegroundColor Cyan
+    dotnet clean '.\AUTZ.IronWorks.Preview.sln' --configuration Release --nologo -v q
+    if ($LASTEXITCODE -ne 0) { Stop-Update 'Clean failed. Build stopped.' }
     dotnet build '.\AUTZ.IronWorks.Preview.sln' --configuration Release --nologo -v q
     if ($LASTEXITCODE -ne 0) { Stop-Update 'Build failed. Copy the first error above and send it to me.' }
     $Built = $true
@@ -103,3 +105,4 @@ if ($Built) {
     Write-Host ''; Write-Host "If anything in src/ shows as D (deleted) that you didn't expect, stop and check. Otherwise:" -ForegroundColor Cyan
     Write-Host '  git add --all'; Write-Host "  git commit -m `"v$Version`""; Write-Host '  ppush'
 }
+
