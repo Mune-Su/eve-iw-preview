@@ -13,6 +13,14 @@ namespace AUTZ.IronWorks.Preview.Views;
 /// <summary>The what's-new pop-up: the newest version up top, then every earlier version underneath.</summary>
 public sealed class ChangelogWindow : Window
 {
+    private readonly StackPanel _updatePanel = new();
+    private readonly TextBlock _releaseNotes = new() { TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 8, 0, 0) };
+    private readonly Button _updateButton = new() { Content = "Update Now", MinWidth = 100, Margin = new Thickness(0, 0, 8, 0) };
+    public void ShowUpdate(string version, string notes)
+    {
+        _releaseNotes.Text = "Update v" + version + " available\n" + (string.IsNullOrWhiteSpace(notes) ? "Release notes unavailable." : notes);
+        _updatePanel.Visibility = Visibility.Visible;
+    }
     public ChangelogWindow(string version)
     {
         Title = "What's new - " + AppInfo.Name;
@@ -128,10 +136,26 @@ public sealed class ChangelogWindow : Window
         };
         var close = new Button { Content = "Close", MinWidth = 100, HorizontalAlignment = HorizontalAlignment.Right, IsDefault = true, IsCancel = true, Style = (Style)FindResource("PrimaryButton") };
         close.Click += (_, _) => Close();
-        footer.Child = close;
+        _updatePanel.Visibility = Visibility.Collapsed;
+        _updatePanel.Children.Add(_releaseNotes);
+        var actions = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right };
+        _updateButton.Style = (Style)FindResource("PrimaryButton");
+        _updateButton.Click += async (_, _) =>
+        {
+            _updateButton.IsEnabled = false;
+            if (await UpdateService.InstallOnDemandAsync()) { System.Windows.Application.Current.Shutdown(); return; }
+            _updateButton.IsEnabled = true;
+        };
+        actions.Children.Add(_updateButton);
+        actions.Children.Add(close);
+        var footStack = new StackPanel();
+        footStack.Children.Add(_updatePanel);
+        footStack.Children.Add(actions);
+        footer.Child = footStack;
         Grid.SetRow(footer, 2);
         grid.Children.Add(footer);
 
         Content = grid;
     }
 }
+

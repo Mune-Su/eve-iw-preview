@@ -17,7 +17,7 @@ It only shows pictures of your clients and brings windows to the front. It never
 
 - Installs for your Windows account only. No admin rights needed.
 - Shows in Programs and Features, with an uninstaller.
-- **Updates itself:** the app checks for a newer version each time it starts, and installs it straight away with no prompts. Turn it off under About > Update automatically.
+- Checks for updates at startup and shows release notes. Install only using Update or Update Now.
 - Your settings and profiles are kept on every update.
 - Needs the .NET 8 Desktop Runtime. Setup tells you if it's missing.
 
@@ -116,7 +116,7 @@ dotnet build -c Release
 
 - Every push to `release` runs **Validate**: restore, build, and build the installer.
 - Pushing a `vX.Y.Z` tag runs **Release**: builds the installer and publishes `EVE-IW-Preview-Setup.exe` and `SHA256SUMS.txt` as the GitHub release.
-- Installed copies pick up the new **Latest** release the next time they start.
+- Installed copies offer the latest release for manual installation.
 
 ## Suggestions and bug reports
 - [Join the Discord](https://discord.com/invite/TseFqVu6GF) for suggestions, bug reports and help.
@@ -134,3 +134,4 @@ Free software under the [GNU GPL v3](LICENSE). It comes with no warranty.
 ## Credits
 
 The instant-switching code (the focus grant, the hook thread and the key-release handling) is adapted from [EVE-Maj Preview](https://github.com/mrmjstc/eve-maj-preview) by mrmjstc, which is also licensed under the GPL v3. Thank you. See [NOTICE](NOTICE).
+

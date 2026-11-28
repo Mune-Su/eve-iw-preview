@@ -38,20 +38,7 @@ public partial class App : System.Windows.Application
 
         WaitForPreviousInstance(e.Args);               // "Restart as administrator": let the old copy finish closing first
 
-        // updates: a Setup that is already downloaded installs now. Otherwise GitHub is checked (a few seconds at most) and a newer
-        // version is downloaded with the crucible window, installed silently, and opened. Nothing shows when there is no update.
-        bool autoUpdate = ProfileStore.LoadState().AutoUpdate;
-        if (UpdateService.InstallPendingUpdate(autoUpdate))
-        {
-            Shutdown();
-            return;
-        }
-        // a copy the admin task or "Restart as administrator" started has just been through this: it doesn't check again
-        if (!HasArg(e.Args, AdminTaskService.TaskArgument) && !HasArg(e.Args, "--after-pid") && UpdateService.UpdateAtStartup(autoUpdate))
-        {
-            Shutdown();
-            return;
-        }
+        // Updates are checked in the background; installation always needs a click.
         // "Always start as administrator": a normal start hands over to the scheduled task (no Windows prompt) and closes itself.
         // A copy the task started, or one that was just restarted as administrator, never hands over again.
         // The task is only used when it starts this exe: a task left pointing at an old copy (for example the portable exe that was
@@ -105,7 +92,8 @@ public partial class App : System.Windows.Application
         // No main window and no taskbar button: the app lives in the system tray (right-click the icon).
         _tray = new NotifyIconService(_manager);
         _manager.Start();
-        UpdateService.StartChecks(() => _manager?.State.AutoUpdate == true);
+        UpdateService.StartChecks(() => true);
+        _ = ShowAvailableUpdateAsync();
 
         ShowWhatsNew(state);
     }
@@ -155,6 +143,20 @@ public partial class App : System.Windows.Application
         }), DispatcherPriority.ApplicationIdle);
     }
 
+    private async Task ShowAvailableUpdateAsync()
+    {
+        var latest = await UpdateService.CheckLatestAsync();
+        if (!latest.Available) return;
+        await Dispatcher.InvokeAsync(() =>
+        {
+            // Only one update popup. Existing version changelog may already be showing.
+            var existing = Windows.OfType<ChangelogWindow>().FirstOrDefault();
+            if (existing is not null) { existing.ShowUpdate(latest.Version, latest.Notes); return; }
+            var popup = new ChangelogWindow(AppInfo.Version);
+            popup.ShowUpdate(latest.Version, latest.Notes);
+            popup.Show();
+        });
+    }
     protected override void OnExit(ExitEventArgs e)
     {
         Log.Trace("APP", $"shutdown: exitCode={e.ApplicationExitCode}");
@@ -169,3 +171,4 @@ public partial class App : System.Windows.Application
         base.OnExit(e);
     }
 }
+

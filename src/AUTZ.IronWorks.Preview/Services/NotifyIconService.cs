@@ -119,6 +119,8 @@ public sealed class NotifyIconService : IDisposable
             FillProfiles(profilesItem, manager);
         };
 
+          menu.Closed += (_, _) => toggleItem.DropDown.Close();
+          toggleItem.DropDown.KeyDown += (_, e) => { if (e.KeyCode == System.Windows.Forms.Keys.Escape) menu.Close(); };
         _icon = new Forms.NotifyIcon
         {
             Text = AppInfo.ShortName,          // the tray tooltip uses the short name
@@ -147,6 +149,7 @@ public sealed class NotifyIconService : IDisposable
     private static void FillSwitcher(Forms.ToolStripMenuItem parent, PreviewManager manager)
     {
         parent.DropDownItems.Clear();
+        parent.DropDown.AutoClose = false;
         var all = new Forms.ToolStripMenuItem(manager.SwitcherEnabled ? "Disable All" : "Enable All");
         all.Click += (_, _) => { Log.Debug("TRAY", "clicked Disable / Enable All (switcher)"); manager.ToggleSwitcher(); };
         parent.DropDownItems.Add(all);
@@ -171,7 +174,10 @@ public sealed class NotifyIconService : IDisposable
             item.Click += (_, _) =>
             {
                 Log.Debug("TRAY", "clicked a client under Disable Switcher");
-                manager.SetClientDisabled(key, !disabled);
+                bool nowDisabled = !item.Checked;
+                manager.SetClientDisabled(key, nowDisabled);
+                item.Checked = nowDisabled;
+                item.ToolTipText = nowDisabled ? "Off for this client. Click to turn it back on." : "Click to turn the switcher off for this client.";
             };
             parent.DropDownItems.Add(item);
         }
@@ -223,3 +229,4 @@ public sealed class NotifyIconService : IDisposable
         _icon.Dispose();
     }
 }
+

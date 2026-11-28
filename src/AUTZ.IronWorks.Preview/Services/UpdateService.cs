@@ -43,64 +43,6 @@ internal static class UpdateService
     /// Called at every start, before anything shows. Checks GitHub; if a newer version is there it downloads it (with the
     /// progress window), installs it silently and reopens the app. True = close now. False = carry on starting.
     /// </summary>
-    public static bool UpdateAtStartup(bool enabled)
-    {
-        try
-        {
-            if (!enabled) return false;
-            var current = Parse(AppInfo.Version);
-            string? exe = Environment.ProcessPath;
-            if (current is null || string.IsNullOrEmpty(exe) || !IsInstalledCopy(exe)) return false;
-            if (OtherCopyRunning()) return false;
-
-            // the quick check. Any problem (no internet, GitHub slow) just means the app opens as normal.
-            using var cts = new CancellationTokenSource(StartupWait);
-            var look = Task.Run(() => FindNewerAsync(current, cts.Token));
-            if (!look.Wait(StartupWait + TimeSpan.FromSeconds(1))) { Log.Write("Update check: GitHub didn't answer in time."); return false; }
-            var release = look.Result;
-            if (release is null) return false;
-
-            // one try per version: if the last try left the old version running, don't loop
-            if (File.Exists(Path.Combine(Folder, "tried-" + release.Version)))
-            {
-                Log.Write($"Update to v{release.Version} didn't work last time, so it isn't tried again.");
-                return false;
-            }
-
-            // already downloaded by the background check: install it now
-            if (PendingSetups().Any(p => p.Version >= release.Version)) return InstallPendingUpdate(true);
-
-            bool downloaded = false;
-            var window = new UpdateWindow(release.Version.ToString());
-            window.Loaded += async (_, _) =>
-            {
-                try
-                {
-                    using var downloadCts = new CancellationTokenSource(TimeSpan.FromMinutes(2));
-                    downloaded = await DownloadAsync(release, new Progress<double>(window.SetProgress), downloadCts.Token);
-                    if (downloaded)
-                    {
-                        window.SetInstalling();
-                        await Task.Delay(900);
-                    }
-                }
-                catch (Exception ex)
-                {
-                    Log.Write("Update download failed: " + ex.Message);
-                }
-                window.Finish();
-            };
-            window.ShowDialog();
-
-            return downloaded && InstallPendingUpdate(true);
-        }
-        catch (Exception ex)
-        {
-            Log.Write("Update at start-up failed: " + ex.Message);
-            return false;
-        }
-    }
-
     // ---------- install a Setup that is waiting ----------
 
     /// <summary>
@@ -172,44 +114,61 @@ internal static class UpdateService
     // ---------- while the app runs ----------
 
     /// <summary>Checks again while the app stays open: after 10 minutes, then every 6 hours. A newer Setup is downloaded for the next start.</summary>
-    public static void StartChecks(Func<bool> enabled)
+    public sealed record UpdateStatus(bool Available, bool Error, string Version, string Notes);
+    private static Release? _latest;
+    public static void StartChecks(Func<bool> enabled) { }
+    public static void Stop() { }
+    public static async Task<UpdateStatus> CheckLatestAsync()
     {
-        _timer?.Dispose();
-        _timer = new Timer(_ => _ = CheckAsync(enabled), null, TimeSpan.FromMinutes(10), TimeSpan.FromHours(6));
-    }
-
-    public static void Stop()
-    {
-        _timer?.Dispose();
-        _timer = null;
-    }
-
-    private static async Task CheckAsync(Func<bool> enabled)
-    {
-        if (!enabled() || Interlocked.Exchange(ref _checking, 1) == 1) return;
+        var current = Parse(AppInfo.Version);
+        if (current is null) return new(false, true, "", "");
         try
         {
-            var current = Parse(AppInfo.Version);
-            if (current is null) return;
-
-            using var cts = new CancellationTokenSource(TimeSpan.FromMinutes(3));
-            var release = await FindNewerAsync(current, cts.Token);
-            if (release is null) { Log.Debug("UPDATE", $"up to date (v{current})"); return; }
-            if (PendingSetups().Any(p => p.Version >= release.Version)) { Log.Debug("UPDATE", $"v{release.Version} already downloaded"); return; }
-
-            if (await DownloadAsync(release, null, cts.Token))
-                Log.Write($"Update v{release.Version} downloaded. It installs the next time the app starts.");
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(12));
+            using var http = NewClient(TimeSpan.FromSeconds(12));
+            using var doc = JsonDocument.Parse(await http.GetStringAsync(LatestApi, cts.Token));
+            var root = doc.RootElement;
+            var remote = Parse((root.GetProperty("tag_name").GetString() ?? "").TrimStart('v','V'));
+            if (remote is null) return new(false, true, "", "");
+            if (remote <= current) { _latest = null; return new(false, false, remote.ToString(), ""); }
+            string notes = root.TryGetProperty("body", out var body) ? body.GetString() ?? "" : "";
+            _latest = await FindNewerAsync(current, cts.Token);
+            return _latest is null ? new(false, true, "", "") : new(true, false, remote.ToString(), notes);
         }
         catch (Exception ex)
         {
             Log.Debug("UPDATE", "check failed: " + ex.Message);
-        }
-        finally
-        {
-            Interlocked.Exchange(ref _checking, 0);
+            return new(false, true, "", "");
         }
     }
-
+    public static async Task<bool> InstallOnDemandAsync()
+    {
+        var status = await CheckLatestAsync();
+        if (!status.Available || _latest is null) return false;
+        string? exe = Environment.ProcessPath;
+        if (string.IsNullOrWhiteSpace(exe) || !IsInstalledCopy(exe) || OtherCopyRunning()) return false;
+        var release = _latest;
+        var pending = PendingSetups().FirstOrDefault(p => p.Version == release.Version);
+        bool downloaded = false;
+        var window = new UpdateWindow(release.Version.ToString());
+        window.Loaded += async (_, _) =>
+        {
+            try
+            {
+                if (pending.Path is not null && File.Exists(pending.Path)) downloaded = true;
+                else
+                {
+                    using var cts = new CancellationTokenSource(TimeSpan.FromMinutes(3));
+                    downloaded = await DownloadAsync(release, new Progress<double>(window.SetProgress), cts.Token);
+                }
+                if (downloaded) { window.SetInstalling(); await Task.Delay(500); }
+            }
+            catch (Exception ex) { Log.Write("Update download failed: " + ex.Message); }
+            window.Finish();
+        };
+        window.ShowDialog();
+        return downloaded && InstallPendingUpdate(true);
+    }
     // ---------- GitHub ----------
 
     /// <summary>The Latest release if it is newer than this version and has a Setup with a checksum. Null otherwise (never throws).</summary>
@@ -377,3 +336,4 @@ internal static class UpdateService
 
     private static string Quote(string path) => path.Replace("'", "''");
 }
+

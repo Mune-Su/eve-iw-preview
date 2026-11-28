@@ -178,7 +178,6 @@ public partial class SettingsWindow : Window
         DebugLogBox.IsChecked = _state.DebugLogging;
         (_state.DebugLogMode == "PerSession" ? DebugSessionRadio : DebugContinuousRadio).IsChecked = true;
         PinTrayBox.IsChecked = _state.PinTrayIcon;
-        AutoUpdateBox.IsChecked = _state.AutoUpdate;
         AlwaysAdminBox.IsChecked = _state.AlwaysAdmin;
         UpdateAlwaysAdminControls();
         UpdateComponentToggleButtons();
@@ -194,6 +193,7 @@ public partial class SettingsWindow : Window
         CaptureBaseline(_shownProfile);
         _stateBaseline = StateSnapshot();
         SelectPage(0);
+        Loaded += async (_, _) => await RefreshUpdateButtonAsync();
     }
 
     private void UpdateComponentToggleButtons()
@@ -233,7 +233,7 @@ public partial class SettingsWindow : Window
 
     private void BuildNav()
     {
-        _pages.Add(new PageDef("General", PageGeneral, new Control[] { CardStartup }));
+        _pages.Add(new PageDef("General", PageGeneral, new Control[] { CardStartup, CardComponents, CardWhatsNew }));
         _pages.Add(new PageDef("Clients", NewPage("PageClients"), new Control[] { NewControl("CardClients") }));
         _pages.Add(new PageDef("Thumbnails", PageThumbs, new Control[] { CardSize, CardLabel, CardActiveBorder, CardCharacter, CardInteraction }));
         _pages.Add(new PageDef("Grouping", PageGroups, new Control[] { CardRoster, CardScan, CardClientOrder }));
@@ -242,10 +242,10 @@ public partial class SettingsWindow : Window
         _pages.Add(new PageDef("Map", NewPage("PageMap"), new Control[] { NewControl("CardMapSetup") }));
         _pages.Add(new PageDef("Intel", NewPage("PageIntel"), new Control[] { NewControl("CardIntelSetup") }));
         _pages.Add(new PageDef("Pings", NewPage("PagePings"), new Control[] { NewControl("CardPingsSetup") }));
-        _pages.Add(new PageDef("Performance", PageMemory, new Control[] { CardComponents, CardMemoryNow, CardPerformance, CardMemoryTop, CardMemoryKeep }));
+        _pages.Add(new PageDef("Performance", PageMemory, new Control[] { CardMemoryNow, CardPerformance, CardMemoryTop, CardMemoryKeep }));
         _pages.Add(new PageDef("Diagnostics", PageDiagnostics, new Control[] { CardFiles, CardDiagnostics }));
-        if (AdminAccess.IsOwner) _pages.Add(new PageDef("Admin", PageAdmin, new Control[] { CardAdmin, NewControl("CardOwnerTrace"), CardAdminTools }));
-        _pages.Add(new PageDef("About", PageAbout, new Control[] { CardAbout, CardCommunity, CardWhatsNew }));
+        if (AdminAccess.IsOwner) _pages.Add(new PageDef("Admin", PageAdmin, new Control[] { NewControl("CardOwnerTrace") }));
+        _pages.Add(new PageDef("About", PageAbout, new Control[] { CardAbout }));
         AddNavPage(0, NavPanel, false);
         AddNavGroup("Switcher", 1, 5);
         AddNavGroup("Intel", 6, 8);
@@ -1698,6 +1698,24 @@ public partial class SettingsWindow : Window
         e.Handled = true;
     }
 
+    private System.Windows.Controls.Button UpdateButton => NewControl("UpdateNowBtn") as System.Windows.Controls.Button ?? throw new InvalidOperationException("Update button missing");
+    private async Task RefreshUpdateButtonAsync()
+    {
+        UpdateButton.IsEnabled = false;
+        UpdateButton.ToolTip = "Checking for updates";
+        var status = await UpdateService.CheckLatestAsync();
+        if (!IsLoaded) return;
+        UpdateButton.IsEnabled = status.Available;
+        UpdateButton.ToolTip = status.Error ? "Unable to check for updates" :
+            status.Available ? "Download and install v" + status.Version : "You're running the latest version";
+    }
+    private async void UpdateNow_Click(object sender, RoutedEventArgs e)
+    {
+        UpdateButton.IsEnabled = false;
+        bool installing = await UpdateService.InstallOnDemandAsync();
+        if (installing) { System.Windows.Application.Current.Shutdown(); return; }
+        await RefreshUpdateButtonAsync();
+    }
     private void Discord_Click(object sender, RoutedEventArgs e) => OpenPath(this, AppInfo.Discord);
 
     private void WebsiteButton_Click(object sender, RoutedEventArgs e) => OpenPath(this, AppInfo.Website);
@@ -1873,7 +1891,6 @@ public partial class SettingsWindow : Window
         _state.DebugLogging = DebugLogBox.IsChecked == true;
         _state.DebugLogMode = DebugSessionRadio.IsChecked == true ? "PerSession" : "Continuous";
         _state.PinTrayIcon = PinTrayBox.IsChecked == true;
-        _state.AutoUpdate = AutoUpdateBox.IsChecked == true;
         _state.AlwaysAdmin = AlwaysAdminBox.IsChecked == true;
         _state.Memory = ReadMemorySettings();
         _state.WhatsNewMode = WhatsNewCombo.SelectedIndex switch { 1 => "Always", 2 => "Never", _ => "Update" };
@@ -3082,4 +3099,5 @@ public partial class SettingsWindow : Window
         return true;
     }
 }
+
 
