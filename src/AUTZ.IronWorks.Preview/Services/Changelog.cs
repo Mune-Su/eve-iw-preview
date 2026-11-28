@@ -11,7 +11,8 @@ internal static class Changelog
 {
     public static readonly ChangelogEntry[] Entries =  
       {
-        new("0.19.43", "Remove unused update fields", new[] { "Remove two obsolete automatic-update fields and their compiler warnings." }),
+        new("0.19.44", "Manual updates only", new[] { "No automatic startup download or install.", "Update Now appears only for a newer release and reports errors." }),
+          new("0.19.43", "Remove unused update fields", new[] { "Remove two obsolete automatic-update fields and their compiler warnings." }),
           new("0.19.42", "Clean WPF build", new[] { "Refresh Settings XAML and clean generated WPF files before compilation." }),
           new("0.19.41", "Complete Settings cleanup", new[] { "Removed obsolete Admin download handlers that broke GitHub validation.", "Removed unused automatic-update fields." }),
           new("0.19.40", "Fix update button build", new[] { "Resolve the Update button at runtime to avoid missing generated XAML field." }),
@@ -534,6 +535,7 @@ internal static class Changelog
         })
     };
 }
+
 
 
 

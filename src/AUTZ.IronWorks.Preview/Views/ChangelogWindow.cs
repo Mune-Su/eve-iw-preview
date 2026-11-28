@@ -15,11 +15,12 @@ public sealed class ChangelogWindow : Window
 {
     private readonly StackPanel _updatePanel = new();
     private readonly TextBlock _releaseNotes = new() { TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 8, 0, 0) };
-    private readonly Button _updateButton = new() { Content = "Update Now", MinWidth = 100, Margin = new Thickness(0, 0, 8, 0) };
+    private readonly Button _updateButton = new() { Content = "Update Now", MinWidth = 100, Margin = new Thickness(0, 0, 8, 0), Visibility = Visibility.Collapsed };
     public void ShowUpdate(string version, string notes)
     {
         _releaseNotes.Text = "Update v" + version + " available\n" + (string.IsNullOrWhiteSpace(notes) ? "Release notes unavailable." : notes);
         _updatePanel.Visibility = Visibility.Visible;
+        _updateButton.Visibility = Visibility.Visible;
     }
     public ChangelogWindow(string version)
     {
@@ -143,8 +144,14 @@ public sealed class ChangelogWindow : Window
         _updateButton.Click += async (_, _) =>
         {
             _updateButton.IsEnabled = false;
-            if (await UpdateService.InstallOnDemandAsync()) { System.Windows.Application.Current.Shutdown(); return; }
-            _updateButton.IsEnabled = true;
+              try
+              {
+                  var result = await UpdateService.InstallOnDemandAsync();
+                  if (result.Started) { System.Windows.Application.Current.Shutdown(); return; }
+                  Dialogs.Info(this, result.Message);
+              }
+              catch (Exception ex) { Dialogs.Info(this, "Update failed: " + ex.Message); }
+              finally { _updateButton.IsEnabled = true; }
         };
         actions.Children.Add(_updateButton);
         actions.Children.Add(close);
@@ -158,4 +165,5 @@ public sealed class ChangelogWindow : Window
         Content = grid;
     }
 }
+
 

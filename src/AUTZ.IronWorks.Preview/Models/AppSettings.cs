@@ -452,8 +452,8 @@ public sealed class AppState
     public string DebugLogMode { get; set; } = "Continuous";
     /// <summary>Keep the tray icon on the main tray instead of the hidden-icons overflow (Windows 11).</summary>
     public bool PinTrayIcon { get; set; } = true;
-    /// <summary>Download new versions in the background and install them when the app next starts.</summary>
-    public bool AutoUpdate { get; set; } = true;
+      /// <summary>Legacy saved setting. Automatic installation is permanently disabled.</summary>
+    public bool AutoUpdate { get; set; } = false;
     /// <summary>True = the app always starts as administrator (through a scheduled task, so Windows doesn't ask each time). Set up once with "Restart as administrator".</summary>
     public bool AlwaysAdmin { get; set; } = false;
     /// <summary>A random value mixed into the codes that replace names in the logs (so the codes can't be matched against a list of names).</summary>
@@ -482,3 +482,4 @@ public sealed class AppState
     public AppState Clone() =>
         JsonSerializer.Deserialize<AppState>(JsonSerializer.Serialize(this)) ?? new AppState();
 }
+

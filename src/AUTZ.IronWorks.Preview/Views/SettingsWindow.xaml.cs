@@ -1712,9 +1712,14 @@ public partial class SettingsWindow : Window
     private async void UpdateNow_Click(object sender, RoutedEventArgs e)
     {
         UpdateButton.IsEnabled = false;
-        bool installing = await UpdateService.InstallOnDemandAsync();
-        if (installing) { System.Windows.Application.Current.Shutdown(); return; }
-        await RefreshUpdateButtonAsync();
+          try
+          {
+              var result = await UpdateService.InstallOnDemandAsync();
+              if (result.Started) { System.Windows.Application.Current.Shutdown(); return; }
+              Dialogs.Info(this, result.Message);
+          }
+          catch (Exception ex) { Dialogs.Info(this, "Update failed: " + ex.Message); }
+          finally { await RefreshUpdateButtonAsync(); }
     }
     private void Discord_Click(object sender, RoutedEventArgs e) => OpenPath(this, AppInfo.Discord);
 
@@ -3050,6 +3055,7 @@ public partial class SettingsWindow : Window
         return true;
     }
 }
+
 
 
 

@@ -92,7 +92,6 @@ public partial class App : System.Windows.Application
         // No main window and no taskbar button: the app lives in the system tray (right-click the icon).
         _tray = new NotifyIconService(_manager);
         _manager.Start();
-        UpdateService.StartChecks(() => true);
         _ = ShowAvailableUpdateAsync();
 
         ShowWhatsNew(state);
@@ -171,4 +170,5 @@ public partial class App : System.Windows.Application
         base.OnExit(e);
     }
 }
+
 

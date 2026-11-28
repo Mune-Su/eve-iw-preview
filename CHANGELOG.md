@@ -1,5 +1,8 @@
 # Changelog
 Every version of EVE-IW-Preview, newest first.
+## v0.19.44 - Manual updates only
+- No automatic startup download or install.
+- Update Now only appears for a newer release and reports errors.
 ## v0.19.43 - Remove unused update fields
 - Remove obsolete _timer and _checking fields from UpdateService.
 ## v0.19.42 - Clean WPF build
@@ -529,6 +532,7 @@ Every version of EVE-IW-Preview, newest first. The app shows the same list under
 
 - AUTZ IronWorks emblem for the exe, tray and windows.
 - Drag the bottom-right corner to resize, colour pickers, and updates that never touch a running app.
+
 
 
 
