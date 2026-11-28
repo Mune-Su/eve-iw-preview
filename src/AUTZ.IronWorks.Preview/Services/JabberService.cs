@@ -58,6 +58,13 @@ internal sealed class JabberService : IDisposable
     private readonly SemaphoreSlim _sendLock = new(1, 1);
     public event Action? ChatChanged;
     public IReadOnlyList<JabberChatMessage> Chats { get { lock (_gate) return _chats.ToArray(); } }
+    public async Task RequestParticipation()
+    {
+        string domain = Config.Login.Split('@').LastOrDefault() ?? "";
+        if (string.IsNullOrWhiteSpace(domain)) throw new InvalidOperationException("Configure Jabber first.");
+        // Request an updated directorbot participation report through the existing XMPP connection.
+        await SendChat("directorbot@" + domain, "pap");
+    }
     public async Task SendChat(string peer, string body)
     {
         peer = peer.Trim();

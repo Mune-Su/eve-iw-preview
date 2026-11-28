@@ -17,7 +17,6 @@ internal sealed class PingsWindow : Window
     private int _lastPingCount = -1;
     private DateTime _lastNewestPing = DateTime.MinValue;
     private bool _firstDisplay = true;
-    private readonly TextBlock _status = new();
     private readonly TextBlock[] _papValues = new TextBlock[3];
     private readonly DispatcherTimer _clock = new() { Interval = TimeSpan.FromMinutes(1) };
     private static readonly Regex Urls = new(@"https?://[^\s<>]+", RegexOptions.IgnoreCase | RegexOptions.Compiled);
@@ -28,12 +27,7 @@ internal sealed class PingsWindow : Window
         _service = service; Title = "Pings - " + AppInfo.Name;
         Width = 520; Height = 650; MinWidth = 370; MinHeight = 300;
         Background = (Brush)FindResource("BrushBg"); Foreground = (Brush)FindResource("BrushText");
-        var root = new DockPanel { Margin = new Thickness(8) };
-        var top = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(2,2,0,8) };
-        top.Children.Add(new TextBlock { Text = "PINGS", FontSize = 15, FontWeight = FontWeights.Bold,
-            Foreground = (Brush)FindResource("BrushAccent"), Margin = new Thickness(0,0,12,0) });
-        _status.VerticalAlignment = VerticalAlignment.Center; _status.FontSize = 11;
-        top.Children.Add(_status); DockPanel.SetDock(top, Dock.Top); root.Children.Add(top);
+        var root = new DockPanel { Margin = new Thickness(8,3,8,8) };
         var participation = new Grid { Margin = new Thickness(0,0,0,8) };
         for (int i = 0; i < 3; i++) participation.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         for (int i = 0; i < 3; i++)
@@ -47,7 +41,19 @@ internal sealed class PingsWindow : Window
             var border = new Border { BorderBrush = (Brush)FindResource("BrushAccentLine"), BorderThickness = new Thickness(2,0,0,0), Child = cell };
             Grid.SetColumn(border, i); participation.Children.Add(border);
         }
-        DockPanel.SetDock(participation, Dock.Top); root.Children.Add(participation);
+        var papRow = new DockPanel { Margin = new Thickness(0,0,0,5) };
+        var refresh = new Button { Content = "↻", Width = 25, Height = 24, FontSize = 16,
+            Padding = new Thickness(0), ToolTip = "Refresh PAPs", HorizontalAlignment = HorizontalAlignment.Right };
+        refresh.Click += async (_,_) =>
+        {
+            refresh.IsEnabled = false;
+            try { await _service.RequestParticipation(); }
+            catch (Exception ex) { refresh.ToolTip = "Refresh failed: " + ex.Message; }
+            finally { refresh.IsEnabled = true; }
+        };
+        DockPanel.SetDock(refresh, Dock.Right); papRow.Children.Add(refresh);
+        papRow.Children.Add(participation);
+        DockPanel.SetDock(papRow, Dock.Top); root.Children.Add(papRow);
         _scroll.Content = _feed;
         root.Children.Add(_scroll);
         Content = root;
@@ -67,7 +73,6 @@ Loaded += (_,_) => _clock.Start();
         _papValues[1].Text = pap?.Pct.ToString() ?? "--";
         _papValues[2].Text = pap?.LastPap ?? "--";
         var history = _service.History;
-        _status.Text = _service.Status + "  |  Unread: " + history.Count(x => !x.Read);
         double oldOffset = _scroll.VerticalOffset;
         bool nearBottom = _scroll.ScrollableHeight - oldOffset <= 36;
         var newest = history.Count == 0 ? DateTime.MinValue : history.Max(x => x.Time);
@@ -177,6 +182,13 @@ Loaded += (_,_) => _clock.Start();
                 var row = new TextBlock { FontSize = 11.5, TextWrapping = TextWrapping.Wrap };
                 AddLinkedText(row, line); content.Children.Add(row);
             }
+        }
+        if (fields.TryGetValue("Comms", out var comms) && comms.Length > 0)
+        {
+            var row = new TextBlock { FontSize = 11.5, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0,3,0,0) };
+            row.Inlines.Add(new Run("Comms: ") { Foreground = (Brush)FindResource("BrushMuted") });
+            AddLinkedText(row, comms);
+            content.Children.Add(row);
         }
         if (fields.TryGetValue("Doctrine", out var doctrine) && doctrine.Length > 0)
         {

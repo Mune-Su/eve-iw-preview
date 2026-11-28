@@ -11,7 +11,8 @@ internal static class Changelog
 {
     public static readonly ChangelogEntry[] Entries =  
       {
-        new("0.19.61", "Restore Participation model", new[] { "Add missing Participation property and parse monthly STRAT/PCT reports.", "Persist last valid participation figures and preserve chronological ping feed." }),
+        new("0.19.62", "Compact Pings header and PAP refresh", new[] { "Single Pings header and compact Participation row with refresh icon.", "Comms shown between message and Doctrine.", "Consistent Jabber Chat chrome and navigation." }),
+          new("0.19.61", "Restore Participation model", new[] { "Add missing Participation property and parse monthly STRAT/PCT reports.", "Persist last valid participation figures and preserve chronological ping feed." }),
           new("0.19.60", "Chronological ping feed", new[] { "Oldest pings first and newest at bottom.", "Auto-scroll for new pings when already at bottom, preserving position while reading history." }),
           new("0.19.59", "Participation and compact Pings fixes", new[] { "STRAT, PCT and LAST PAP from the latest directorbot Participation report.", "Restore Announcement from labels and compact Pings chrome.", "Simplify About and remove the duplicate Intel navigation heading." }),
           new("0.19.58", "Compact windows and saved layout", new[] { "Compact seamless title bars with orange active indicator.", "Remember open popouts and their positions across restarts.", "Clear Fleet Under, System and Doctrine labels on ping cards." }),

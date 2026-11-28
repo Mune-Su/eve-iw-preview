@@ -27,6 +27,8 @@ bottom.Children.Add(send); DockPanel.SetDock(bottom, Dock.Bottom); root.Children
         _peers.SelectionChanged += (_,_) => { if (_peers.SelectedItem is string peer) { _to.Text = peer; ShowPeer(peer); } };
         grid.Children.Add(_peers); Grid.SetColumn(_body,1); _body.Margin = new Thickness(8,0,0,0); grid.Children.Add(_body);
         root.Children.Add(grid); Content = root;
+        IronWindowChrome.Attach(this, "Jabber Chat");
+        PopoutLayout.Track("Chat", this);
         _service.ChatChanged += RefreshSafe; Closed += (_,_) => _service.ChatChanged -= RefreshSafe;
         Refresh();
     }

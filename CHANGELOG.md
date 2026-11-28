@@ -1,5 +1,9 @@
 # Changelog
 Every version of EVE-IW-Preview, newest first.
+## v0.19.62 - Compact Pings header and PAP refresh
+- Remove duplicate Pings heading, add small PAP refresh icon.
+- Display Comms before Doctrine and apply compact Jabber Chat header.
+- Show Map, Intel and Jabber as separate navigation entries.
 ## v0.19.61 - Restore Participation model
 - Fix missing JabberService.Participation compilation error.
 - Save and load monthly STRAT/PCT and last PAP from directorbot reports.
