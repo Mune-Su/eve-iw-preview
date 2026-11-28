@@ -39,8 +39,10 @@ internal static class UpdateService
           try
           {
               if (!File.Exists(SkipChangelogMarker)) return false;
-              File.Delete(SkipChangelogMarker);
-              return true;
+                string target = File.ReadAllText(SkipChangelogMarker).Trim();
+                if (!target.Equals(AppInfo.Version, StringComparison.OrdinalIgnoreCase)) return false;
+                File.Delete(SkipChangelogMarker);
+                return true;
           }
           catch { return false; }
       }
@@ -360,6 +362,7 @@ internal static class UpdateService
 
     private static string Quote(string path) => path.Replace("'", "''");
 }
+
 
 
 

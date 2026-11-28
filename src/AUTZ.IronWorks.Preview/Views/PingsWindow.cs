@@ -50,5 +50,7 @@ internal sealed class PingsWindow : Window
             _list.Items.Add(p);
         _list.DisplayMemberPath = "Body";
         if (selected >= 0 && selected < _list.Items.Count) _list.SelectedIndex = selected;
+        else if (_list.Items.Count == 0) _body.Text = "No pings received yet.";
     }
 }
+

@@ -92,9 +92,17 @@ public partial class App : System.Windows.Application
         // No main window and no taskbar button: the app lives in the system tray (right-click the icon).
         _tray = new NotifyIconService(_manager);
         _manager.Start();
-        _ = ShowAvailableUpdateAsync();
-
-        if (!UpdateService.ConsumeUpdatedLaunch()) ShowWhatsNew(state);
+        bool updated = UpdateService.ConsumeUpdatedLaunch();
+        if (updated)
+        {
+            state.LastSeenVersion = AppInfo.Version;
+            ProfileStore.SaveState(state);
+        }
+        else
+        {
+            _ = ShowAvailableUpdateAsync();
+            ShowWhatsNew(state);
+        }
     }
 
     private static bool HasArg(string[] args, string name) =>
@@ -170,6 +178,7 @@ public partial class App : System.Windows.Application
         base.OnExit(e);
     }
 }
+
 
 
 

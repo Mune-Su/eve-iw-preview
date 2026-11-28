@@ -12,6 +12,8 @@ internal sealed record JabberPing(DateTime Time, string Sender, string Channel, 
 internal sealed class JabberConfig
 {
     public string Login { get; set; } = "";
+    public string Resource { get; set; } = "";
+    public bool RememberPassword { get; set; } = true;
     public string Server { get; set; } = "";
     public int Port { get; set; } = 5222;
     public string Rooms { get; set; } = "";
@@ -26,6 +28,7 @@ internal sealed class JabberService : IDisposable
     private static readonly string HistoryFile = Path.Combine(Folder, "history.json");
     private CancellationTokenSource _stop = new();
     private Task? _runner;
+    private string _sessionPassword = "";
     private readonly object _gate = new();
     private List<JabberPing> _history = new();
     public JabberConfig Config { get; private set; } = new();
@@ -41,9 +44,12 @@ internal sealed class JabberService : IDisposable
     }
     public void Save(JabberConfig config, string? password)
     {
-        if (password is not null && password.Length > 0)
-            config.PasswordProtected = Convert.ToBase64String(ProtectedData.Protect(Encoding.UTF8.GetBytes(password), null, DataProtectionScope.CurrentUser));
-        else config.PasswordProtected = Config.PasswordProtected;
+        if (password is { Length: > 0 }) _sessionPassword = password;
+        config.PasswordProtected = config.RememberPassword
+            ? (password is { Length: > 0 }
+                ? Convert.ToBase64String(ProtectedData.Protect(Encoding.UTF8.GetBytes(password), null, DataProtectionScope.CurrentUser))
+                : Config.PasswordProtected)
+            : "";
         Directory.CreateDirectory(Folder);
         File.WriteAllText(ConfigFile, JsonSerializer.Serialize(config));
         Config = config;
@@ -51,12 +57,13 @@ internal sealed class JabberService : IDisposable
     }
     private string Password()
     {
+        if (_sessionPassword.Length > 0) return _sessionPassword;
         if (Config.PasswordProtected.Length == 0) return "";
         return Encoding.UTF8.GetString(ProtectedData.Unprotect(Convert.FromBase64String(Config.PasswordProtected), null, DataProtectionScope.CurrentUser));
     }
     public void Connect()
     {
-        if (_runner is { IsCompleted: false }) return;
+        if (_runner is { IsCompleted: false }) { SetStatus("Already connecting or connected"); return; }
         if (_stop.IsCancellationRequested) { _stop.Dispose(); _stop = new CancellationTokenSource(); }
         _runner = Task.Run(() => Run(_stop.Token));
     }
@@ -113,6 +120,7 @@ internal sealed class JabberService : IDisposable
                 if (!tls) throw new InvalidOperationException("The Jabber server did not offer STARTTLS.");
                 await Send(raw, "<starttls xmlns='urn:ietf:params:xml:ns:xmpp-tls'/>");
                 while (await reader.ReadAsync()) if (reader.NodeType == XmlNodeType.Element && reader.LocalName is "proceed" or "failure") { if (reader.LocalName == "failure") throw new InvalidOperationException("STARTTLS refused."); break; }
+                reader.Dispose();
                 await ssl.AuthenticateAsClientAsync(new SslClientAuthenticationOptions { TargetHost = host }, token);
                 await Send(ssl, opening);
                 // SASL PLAIN is permitted only inside verified TLS.
@@ -127,11 +135,18 @@ internal sealed class JabberService : IDisposable
                 await Send(ssl, "<auth xmlns='urn:ietf:params:xml:ns:xmpp-sasl' mechanism='PLAIN'>" + payload + "</auth>");
                 while (await secureReader.ReadAsync()) if (secureReader.NodeType == XmlNodeType.Element && secureReader.LocalName is "success" or "failure") { if (secureReader.LocalName == "failure") throw new InvalidOperationException("Jabber login rejected."); break; }
                 // Restart stream and bind a resource.
+                secureReader.Dispose();
                 await Send(ssl, opening);
                 using var messages = XmlReader.Create(ssl, new XmlReaderSettings { Async = true, ConformanceLevel = ConformanceLevel.Fragment, IgnoreWhitespace = true, CloseInput = false });
                 while (await messages.ReadAsync()) if (messages.NodeType == XmlNodeType.Element && messages.LocalName == "features") break;
-                await Send(ssl, "<iq type='set' id='bind1'><bind xmlns='urn:ietf:params:xml:ns:xmpp-bind'><resource>EVE-IW-Preview</resource></bind></iq>");
-                while (await messages.ReadAsync()) if (messages.NodeType == XmlNodeType.Element && messages.LocalName == "iq" && messages.GetAttribute("id") == "bind1") { await messages.SkipAsync(); break; }
+                await Send(ssl, "<iq type='set' id='bind1'><bind xmlns='urn:ietf:params:xml:ns:xmpp-bind'><resource>" + Escape(string.IsNullOrWhiteSpace(Config.Resource) ? "EVE-IW-Preview" : Config.Resource) + "</resource></bind></iq>");
+                bool bound = false;
+                while (await messages.ReadAsync()) if (messages.NodeType == XmlNodeType.Element && messages.LocalName == "iq" && messages.GetAttribute("id") == "bind1")
+                {
+                    bound = messages.GetAttribute("type") == "result";
+                    break;
+                }
+                if (!bound) throw new InvalidOperationException("Jabber resource binding failed.");
                 await Send(ssl, "<presence/>");
                 foreach (string room in Config.Rooms.Split(new[] { ',', ';', '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
                     await Send(ssl, "<presence to='" + Escape(room + "/" + parts[0]) + "'><x xmlns='http://jabber.org/protocol/muc'/></presence>");
@@ -153,7 +168,8 @@ internal sealed class JabberService : IDisposable
             if (!Config.AutoConnect) break;
             try { await Task.Delay(10000, token); } catch (OperationCanceledException) { break; }
         }
-        SetStatus("Disconnected");
+        if (token.IsCancellationRequested) SetStatus("Disconnected");
     }
     public void Dispose() { _stop.Cancel(); _stop.Dispose(); }
 }
+

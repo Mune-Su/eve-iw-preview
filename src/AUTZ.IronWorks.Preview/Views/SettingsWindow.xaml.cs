@@ -193,7 +193,12 @@ public partial class SettingsWindow : Window
         CaptureBaseline(_shownProfile);
         _stateBaseline = StateSnapshot();
         var jabber = JabberHub.Instance;
-        JabberLogin.Text = jabber.Config.Login;
+        JabberProtocol.SelectedIndex = 0;
+        var jidParts = jabber.Config.Login.Split('@', 2);
+        JabberUsername.Text = jidParts[0];
+        JabberDomain.Text = jidParts.Length == 2 ? jidParts[1] : "";
+        JabberResource.Text = jabber.Config.Resource;
+        JabberRemember.IsChecked = jabber.Config.RememberPassword;
         JabberHost.Text = jabber.Config.Server;
         JabberPort.Text = jabber.Config.Port.ToString();
         JabberRooms.Text = jabber.Config.Rooms;
@@ -1689,14 +1694,19 @@ public partial class SettingsWindow : Window
         if (!int.TryParse(JabberPort.Text, out int port) || port < 1 || port > 65535) { Dialogs.Info(this, "Enter a valid Jabber port."); return; }
         try
         {
-            JabberHub.Instance.Save(new JabberConfig { Login = JabberLogin.Text.Trim(), Server = JabberHost.Text.Trim(), Port = port,
+            JabberHub.Instance.Save(new JabberConfig { Login = JabberUsername.Text.Trim() + "@" + JabberDomain.Text.Trim(), Resource = JabberResource.Text.Trim(),
+                  RememberPassword = JabberRemember.IsChecked == true, Server = JabberHost.Text.Trim(), Port = port,
                 Rooms = JabberRooms.Text.Trim(), AutoConnect = JabberAuto.IsChecked == true, Notify = JabberNotify.IsChecked == true }, JabberPassword.Password);
-            JabberPassword.Clear();
+            if (JabberRemember.IsChecked == true) JabberPassword.Clear();
             JabberStatus.Text = "Saved";
         }
         catch (Exception ex) { Dialogs.Info(this, "Jabber settings could not be saved: " + ex.Message); }
     }
-    private void JabberConnect_Click(object sender, RoutedEventArgs e) { JabberSave_Click(sender, e); JabberHub.Instance.Connect(); }
+    private void JabberConnect_Click(object sender, RoutedEventArgs e)
+      {
+          JabberSave_Click(sender, e);
+          JabberHub.Instance.Connect();
+      }
     private void JabberDisconnect_Click(object sender, RoutedEventArgs e) => JabberHub.Instance.Disconnect();
     private void JabberOpen_Click(object sender, RoutedEventArgs e) => JabberHub.OpenWindow();
     // ---------- about ----------
@@ -3081,6 +3091,7 @@ public partial class SettingsWindow : Window
         return true;
     }
 }
+
 
 
 
