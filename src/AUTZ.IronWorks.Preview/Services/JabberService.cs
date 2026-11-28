@@ -126,9 +126,22 @@ internal sealed class JabberService : IDisposable
                 string password = Password();
                 if (password.Length == 0) throw new InvalidOperationException("Enter a Jabber password.");
                 SetStatus("Connecting...");
-                using var tcp = new TcpClient();
-                await tcp.ConnectAsync(host, port, token);
-                using var raw = tcp.GetStream();
+                // The alliance documents the domain and an explicit fallback host.
+                // Only retry the fallback for transport failures, never for rejected credentials.
+                TcpClient tcp = new();
+                try
+                {
+                    try { await tcp.ConnectAsync(host, port, token); }
+                    catch (SocketException) when (parts[1].Equals("goonfleet.com", StringComparison.OrdinalIgnoreCase)
+                                                  && !host.Equals("jabber-server.goonfleet.com", StringComparison.OrdinalIgnoreCase))
+                    {
+                        tcp.Dispose();
+                        tcp = new TcpClient();
+                        host = "jabber-server.goonfleet.com";
+                        port = 5222;
+                        await tcp.ConnectAsync(host, port, token);
+                    }
+                    using var raw = tcp.GetStream();
                 using var ssl = new SslStream(raw, false);
                 async Task Send(Stream stream, string xml)
                 {
@@ -159,7 +172,7 @@ internal sealed class JabberService : IDisposable
                 {
                     if (secureReader.NodeType == XmlNodeType.Element && secureReader.LocalName == "mechanism" && await secureReader.ReadElementContentAsStringAsync() == "PLAIN") { plain = true; break; }
                 }
-                if (!plain) throw new InvalidOperationException("Server does not support SASL PLAIN over TLS.");
+                if (!plain) throw new InvalidOperationException("Server requires an unsupported authentication method.");
                 await Send(ssl, "<auth xmlns='urn:ietf:params:xml:ns:xmpp-sasl' mechanism='PLAIN'>" + payload + "</auth>");
                 while (await secureReader.ReadAsync()) if (secureReader.NodeType == XmlNodeType.Element && secureReader.LocalName is "success" or "failure") { if (secureReader.LocalName == "failure")
                     {
@@ -167,7 +180,7 @@ internal sealed class JabberService : IDisposable
                         string reason = detail.Contains("not-authorized", StringComparison.OrdinalIgnoreCase) ? "Server refused the account credentials or authentication method" :
                             detail.Contains("temporary-auth-failure", StringComparison.OrdinalIgnoreCase) ? "Server reported a temporary authentication failure" :
                             "Server rejected SASL PLAIN authentication";
-                        throw new InvalidOperationException(reason + ". Pidgin may use a different SASL mechanism.");
+                        throw new InvalidOperationException(reason + ".");
                     } break; }
                 // Restart stream and bind a resource.
                 secureReader.Dispose();
@@ -195,6 +208,8 @@ internal sealed class JabberService : IDisposable
                     lock (_gate) { _history.Insert(0, ping); if (_history.Count > 500) _history.RemoveRange(500, _history.Count - 500); SaveHistory(); }
                     Received?.Invoke(ping); Changed?.Invoke();
                 }
+                }
+                finally { tcp.Dispose(); }
             }
             catch (OperationCanceledException) { break; }
             catch (Exception ex) { SetStatus("Disconnected: " + ex.Message); }
@@ -205,5 +220,6 @@ internal sealed class JabberService : IDisposable
     }
     public void Dispose() { _stop.Cancel(); _stop.Dispose(); }
 }
+
 
 

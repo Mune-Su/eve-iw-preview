@@ -1,5 +1,8 @@
 # Changelog
 Every version of EVE-IW-Preview, newest first.
+## v0.19.48 - Jabber connection fallback
+- Try the documented fallback host after a transport failure.
+- Keep TLS required and remove unrelated application references from errors.
 ## v0.19.47 - Jabber connection diagnostics
 - Remove Server, Port and Ping Rooms from Pings.
 - Discover the XMPP endpoint through DNS SRV and report server authentication failures.
@@ -541,6 +544,7 @@ Every version of EVE-IW-Preview, newest first. The app shows the same list under
 
 - AUTZ IronWorks emblem for the exe, tray and windows.
 - Drag the bottom-right corner to resize, colour pickers, and updates that never touch a running app.
+
 
 
 
