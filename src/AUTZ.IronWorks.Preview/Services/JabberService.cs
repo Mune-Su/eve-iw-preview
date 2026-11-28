@@ -16,7 +16,7 @@ using AUTZ.IronWorks.Preview.Core;
 namespace AUTZ.IronWorks.Preview.Services;
 internal sealed record JabberPing(DateTime Time, string Sender, string Channel, string Body, bool Read = false);
 internal sealed record ParticipationStats(int Strat, int Pct, string LastPap);
-internal sealed record JabberContact(string Jid, string Name, bool Online);
+internal sealed record JabberContact(string Jid, string Name, bool Online, string Group = "Contacts");
 internal sealed record JabberChatMessage(DateTime Time, string Peer, string Body, bool Outgoing = false);
 internal sealed class JabberConfig
 {
@@ -108,6 +108,48 @@ internal sealed class JabberService : IDisposable
     private static readonly string ContactsFile = Path.Combine(Folder, "contacts.json");
     private static readonly string RoomsFile = Path.Combine(Folder, "rooms.json");
     public IReadOnlyList<JabberContact> Contacts { get { lock (_gate) return _contacts.Values.OrderBy(x => x.Name).ToArray(); } }
+    private void ReadRoster(string xml)
+    {
+        try
+        {
+            var document = System.Xml.Linq.XElement.Parse(xml);
+            var query = document.Descendants().FirstOrDefault(x => x.Name.LocalName == "query" && x.Name.NamespaceName == "jabber:iq:roster");
+            if (query is null) { Log.Debug("JABBER", "roster response did not contain roster query"); return; }
+            var received = new Dictionary<string,JabberContact>(StringComparer.OrdinalIgnoreCase);
+            foreach (var item in query.Elements().Where(x => x.Name.LocalName == "item"))
+            {
+                string jid = ((string?)item.Attribute("jid") ?? "").Trim();
+                if (!jid.Contains('@') || (string?)item.Attribute("subscription") == "remove") continue;
+                string name = ((string?)item.Attribute("name") ?? "").Trim();
+                if (name.Length == 0) name = jid.Split('@')[0];
+                string group = item.Elements().FirstOrDefault(x => x.Name.LocalName == "group")?.Value?.Trim() ?? "Contacts";
+                if (group.Length == 0) group = "Contacts";
+                received[jid] = new JabberContact(jid, name, false, group);
+            }
+            lock (_gate)
+            {
+                // The server roster is authoritative. Preserve the last known presence while updating it.
+                foreach (var contact in received.Values)
+                    _contacts[contact.Jid] = contact with { Online = _contacts.TryGetValue(contact.Jid, out var old) && old.Online };
+            }
+            SaveChatData(); ChatChanged?.Invoke();
+            Log.Debug("JABBER", "roster loaded: " + received.Count + " contacts");
+        }
+        catch (Exception ex) { Log.Debug("JABBER", "roster parsing failed: " + ex.GetType().Name); }
+    }
+    private void ReadPresence(System.Xml.Linq.XElement presence)
+    {
+        string jid = ((string?)presence.Attribute("from") ?? "").Split('/')[0];
+        if (jid.Length == 0) return;
+        bool online = !string.Equals((string?)presence.Attribute("type"), "unavailable", StringComparison.OrdinalIgnoreCase);
+        lock (_gate)
+        {
+            if (!_contacts.TryGetValue(jid, out var contact)) return;
+            _contacts[jid] = contact with { Online = online };
+        }
+        ChatChanged?.Invoke();
+    }
+
     public IReadOnlyList<string> Rooms { get { lock (_gate) return _rooms.OrderBy(x => x).ToArray(); } }
     private void SaveChatData()
     {

@@ -7,7 +7,7 @@ namespace AUTZ.IronWorks.Preview.Views;
 internal sealed class JabberChatWindow : Window
 {
     private readonly JabberService _service;
-    private readonly ListBox _list = new() { Background = Brushes.Transparent, Foreground = Brushes.White, BorderThickness = new Thickness(0) };
+    private readonly TreeView _list = new() { Background = Brushes.Transparent, Foreground = Brushes.White, BorderThickness = new Thickness(0) };
     private readonly TextBox _history = new() { IsReadOnly = true, AcceptsReturn = true, TextWrapping = TextWrapping.Wrap, VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
     private readonly TextBox _message = new() { AcceptsReturn = true, TextWrapping = TextWrapping.Wrap, MinHeight = 30, MaxHeight = 85, Margin = new Thickness(0,0,6,0) };
     private readonly TextBlock _status = new() { Foreground = Brushes.LightGray, FontSize = 11 };
@@ -42,7 +42,10 @@ internal sealed class JabberChatWindow : Window
         };
         DockPanel.SetDock(add, Dock.Right); addRow.Children.Add(add); addRow.Children.Add(newAddress);
         DockPanel.SetDock(addRow, Dock.Bottom); left.Children.Add(addRow);
-        _list.SelectionChanged += (_,_) => { if (_list.SelectedItem is string name) { _selected = name; ShowConversation(); } };
+        _list.SelectedItemChanged += (_,_) =>
+        {
+            if (_list.SelectedItem is TreeViewItem { Tag: string jid }) { _selected = jid; ShowConversation(); }
+        };
         left.Children.Add(_list); grid.Children.Add(left);
         var right = new DockPanel();
         _heading.Margin = new Thickness(0,0,0,5); DockPanel.SetDock(_heading, Dock.Top); right.Children.Add(_heading);
@@ -80,12 +83,33 @@ internal sealed class JabberChatWindow : Window
         _status.Text = _service.Status;
         _contacts.Foreground = _showRooms ? Brushes.Gray : Brushes.White;
         _rooms.Foreground = _showRooms ? Brushes.White : Brushes.Gray;
-        string[] names = _showRooms
-            ? _service.Rooms.Concat(_service.Chats.Where(x => x.Peer.Contains("@conference.")).Select(x => x.Peer)).Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(x => x).ToArray()
-            : _service.Contacts.Select(x => x.Jid).Concat(_service.Chats.Where(x => !x.Peer.Contains("@conference.")).Select(x => x.Peer)).Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(x => x).ToArray();
-        _list.ItemsSource = names;
-        if (names.Contains(_selected, StringComparer.OrdinalIgnoreCase)) _list.SelectedItem = names.First(x => x.Equals(_selected,StringComparison.OrdinalIgnoreCase));
-        else if (names.Length > 0) _list.SelectedIndex = 0;
+        _list.Items.Clear();
+        if (_showRooms)
+        {
+            foreach (string room in _service.Rooms.OrderBy(x => x))
+            {
+                var item = new TreeViewItem { Header = room.Split('@')[0], Tag = room,
+                    Foreground = Brushes.White, IsSelected = room.Equals(_selected, StringComparison.OrdinalIgnoreCase) };
+                _list.Items.Add(item);
+            }
+        }
+        else
+        {
+            foreach (var group in _service.Contacts.GroupBy(x => x.Group).OrderBy(x => x.Key))
+            {
+                var parent = new TreeViewItem { Header = group.Key + " (" + group.Count(x => x.Online) + "/" + group.Count() + ")",
+                    Foreground = Brushes.White, IsExpanded = true };
+                foreach (var contact in group.OrderByDescending(x => x.Online).ThenBy(x => x.Name))
+                {
+                    var item = new TreeViewItem { Header = (contact.Online ? "● " : "○ ") + contact.Name,
+                        Tag = contact.Jid, ToolTip = contact.Jid,
+                        Foreground = contact.Online ? Brushes.LightGreen : Brushes.LightGray,
+                        IsSelected = contact.Jid.Equals(_selected, StringComparison.OrdinalIgnoreCase) };
+                    parent.Items.Add(item);
+                }
+                _list.Items.Add(parent);
+            }
+        }
         ShowConversation();
     }
     private void ShowConversation()

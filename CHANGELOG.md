@@ -1,5 +1,8 @@
 # Changelog
 Every version of EVE-IW-Preview, newest first.
+## v0.19.68 - Server Jabber buddy list
+- Load authenticated XMPP roster with groups, names and online presence.
+- Display contacts as expandable buddy-list groups.
 ## v0.19.67 - Jabber contacts and rooms
 - Dark Jabber contacts and rooms UI, direct/group messages and local history.
 - Correct GroupChat enum and preserve directorbot broadcast and PAP routing.
