@@ -204,7 +204,8 @@ internal sealed class JabberService : IDisposable
                 await Send(ssl, "<presence/>");
                 SetStatus("Connected");
                 Log.Debug("JABBER", "resource bound, presence sent; receive loop started");
-                while (await messages.ReadAsync())
+                Log.Debug("JABBER", "direct-message listener active");
+                while (!token.IsCancellationRequested && await messages.ReadAsync())
                 {
                     if (messages.NodeType != XmlNodeType.Element || messages.LocalName != "message") continue;
                     Log.Debug("JABBER", "incoming message stanza type=" + (messages.GetAttribute("type") ?? "normal"));
@@ -215,7 +216,8 @@ internal sealed class JabberService : IDisposable
                     var ping = new JabberPing(DateTime.Now, sender.Split('/').Last(), sender.Split('/')[0], body);
                     lock (_gate) { _history.Insert(0, ping); if (_history.Count > 500) _history.RemoveRange(500, _history.Count - 500); SaveHistory(); }
                     Log.Debug("JABBER", "message saved; notification subscribers=" + (Received?.GetInvocationList().Length ?? 0));
-                    Received?.Invoke(ping); Changed?.Invoke();
+                    try { Received?.Invoke(ping); } catch (Exception ex) { Log.Debug("JABBER", "notification subscriber error: " + ex.GetType().Name); }
+                    try { Changed?.Invoke(); } catch (Exception ex) { Log.Debug("JABBER", "viewer refresh error: " + ex.GetType().Name); }
                 }
                 }
                 finally { tcp.Dispose(); }
@@ -229,7 +231,3 @@ internal sealed class JabberService : IDisposable
     }
     public void Dispose() { _stop.Cancel(); _stop.Dispose(); }
 }
-
-
-
-

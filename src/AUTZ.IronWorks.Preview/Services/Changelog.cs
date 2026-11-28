@@ -11,7 +11,8 @@ internal static class Changelog
 {
     public static readonly ChangelogEntry[] Entries =  
       {
-        new("0.19.50", "Expanded New Eden map", new[] { "Universe region navigation, system stargates, search, zoom and activity overlays.", "No character tracking or SSO required." }),
+        new("0.19.51", "Intel channels and Jabber diagnostics", new[] { "Manually saved intel channels and duplicate-line filtering.", "Direct-message reception and notification diagnostics use existing logs." }),
+          new("0.19.50", "Expanded New Eden map", new[] { "Universe region navigation, system stargates, search, zoom and activity overlays.", "No character tracking or SSO required." }),
           new("0.19.49", "Map, intel and ping diagnostics", new[] { "Public ESI region map and local chat-log intel viewer.", "All settings sections start collapsed; Jabber traces use existing Diagnostics logs." }),
           new("0.19.48", "Jabber connection fallback", new[] { "Try the documented Jabber fallback host after a connection failure.", "Keep TLS required and simplify authentication errors." }),
           new("0.19.47", "Jabber connection diagnostics", new[] { "Simplified Jabber settings and XMPP DNS discovery.", "More specific server authentication errors." }),
@@ -541,12 +542,3 @@ internal static class Changelog
         })
     };
 }
-
-
-
-
-
-
-
-
-

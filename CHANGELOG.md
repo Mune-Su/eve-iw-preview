@@ -1,5 +1,8 @@
 # Changelog
 Every version of EVE-IW-Preview, newest first.
+## v0.19.51 - Intel channels and Jabber diagnostics
+- Manual intel channels, saved across restarts; prevent duplicate log entries.
+- Direct-message diagnostics and isolated notification errors.
 ## v0.19.50 - Expanded New Eden map
 - Universe and region navigation, stargates, search, zoom, jumps and kills.
 - Public ESI only; no character location.
@@ -550,12 +553,3 @@ Every version of EVE-IW-Preview, newest first. The app shows the same list under
 
 - AUTZ IronWorks emblem for the exe, tray and windows.
 - Drag the bottom-right corner to resize, colour pickers, and updates that never touch a running app.
-
-
-
-
-
-
-
-
-
