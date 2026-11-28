@@ -1,5 +1,9 @@
 # Changelog
-
+Every version of EVE-IW-Preview, newest first. The app shows the same list under About > What's New.
+## v0.19.38 - Owner-only Windows memory tracing
+- Admin-only 60-second Windows Performance Recorder ETW capture; automatically stops.
+- Saves ETL and one-second EVE memory samples locally for analysis.
+- No changes to memory-cleaning behaviour or public controls.
 Every version of EVE-IW-Preview, newest first. The app shows the same list under About > What's New.
 
 ## v0.19.37 - Settings build fix
@@ -510,3 +514,4 @@ Every version of EVE-IW-Preview, newest first. The app shows the same list under
 
 - AUTZ IronWorks emblem for the exe, tray and windows.
 - Drag the bottom-right corner to resize, colour pickers, and updates that never touch a running app.
+

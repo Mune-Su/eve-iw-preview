@@ -244,7 +244,7 @@ public partial class SettingsWindow : Window
         _pages.Add(new PageDef("Pings", NewPage("PagePings"), new Control[] { NewControl("CardPingsSetup") }));
         _pages.Add(new PageDef("Performance", PageMemory, new Control[] { CardComponents, CardMemoryNow, CardPerformance, CardMemoryTop, CardMemoryKeep }));
         _pages.Add(new PageDef("Diagnostics", PageDiagnostics, new Control[] { CardFiles, CardDiagnostics }));
-        if (AdminAccess.IsOwner) _pages.Add(new PageDef("Admin", PageAdmin, new Control[] { CardAdmin, CardAdminTools }));
+        if (AdminAccess.IsOwner) _pages.Add(new PageDef("Admin", PageAdmin, new Control[] { CardAdmin, NewControl("CardOwnerTrace"), CardAdminTools }));
         _pages.Add(new PageDef("About", PageAbout, new Control[] { CardAbout, CardCommunity, CardWhatsNew }));
         AddNavPage(0, NavPanel, false);
         AddNavGroup("Switcher", 1, 5);
@@ -2874,6 +2874,27 @@ public partial class SettingsWindow : Window
 
     private void AdminReleases_Click(object sender, RoutedEventArgs e) => OpenPath(this, ReleasesPage);
 
+    private async void OwnerTraceStart_Click(object sender, RoutedEventArgs e)
+    {
+        if (!AdminAccess.IsOwner) return;
+        OwnerTraceStartBtn.IsEnabled = false;
+        try { OwnerTraceStatus.Text = await OwnerMemoryTrace.StartAsync(); }
+        finally { OwnerTraceStartBtn.IsEnabled = true; }
+    }
+    private async void OwnerTraceStop_Click(object sender, RoutedEventArgs e)
+    {
+        if (!AdminAccess.IsOwner) return;
+        OwnerTraceStopBtn.IsEnabled = false;
+        try { OwnerTraceStatus.Text = await OwnerMemoryTrace.StopAsync(); }
+        finally { OwnerTraceStopBtn.IsEnabled = true; }
+    }
+    private void OwnerTraceFolder_Click(object sender, RoutedEventArgs e)
+    {
+        if (!AdminAccess.IsOwner) return;
+        string folder = Path.Combine(AppInfo.DataFolder, "memory-traces");
+        Directory.CreateDirectory(folder);
+        OpenPath(this, folder);
+    }
     private void AdminSounds_Click(object sender, RoutedEventArgs e)
     {
         try { Directory.CreateDirectory(SoundLibrary.Folder); } catch { }
@@ -3061,3 +3082,4 @@ public partial class SettingsWindow : Window
         return true;
     }
 }
+
