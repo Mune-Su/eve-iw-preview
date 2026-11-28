@@ -1,4 +1,4 @@
-// EVE-IW-Preview
+﻿// EVE-IW-Preview
 // Copyright (C) 2026 Mune-Su
 // SPDX-License-Identifier: GPL-3.0-only
 // This program is free software, licensed under the GNU GPL version 3. It comes with NO WARRANTY. See the LICENSE file.
@@ -18,7 +18,7 @@ namespace AUTZ.IronWorks.Preview.Services;
 internal static class AdminAccess
 {
     /// <summary>Public half of the owner's key. Filled in by tools\make-admin-key.ps1. Empty = no Admin menu for anyone.</summary>
-    private const string PublicKeyXml = "";
+    private const string PublicKeyXml = "<RSAKeyValue><Modulus>xzjaxBDhPYDICJNqG5MMsy1xiChWeiVtdDDX/f6fNJbd0tw5mX8UaSwGjJiO9/3wfVsNTskXb920Y9FjDpdQ1b7CJluM091uFM0dsoIp/NXbzyApwCBDuXt/0HlkbIyJ1zfPMiPF1Wgdjp3N+cvjnjRRT3Ba39yxs/qYXdN7dIF6rYWag8cWevLEL0LD61u/UjJi5nYk+EX7g5UhqMt/f+Es+2M6pwJgxdm83tx4pYKrSWtWf9ibQEo1DAkBLwVZqSAXEi0vXaV9YZ1OhxukqpJA9PMTSciJJtCutCRdw1PgFj6n4abJU8ivonZt8xnPOqwM9Ohx6/7J6KFqtrcT3Q==</Modulus><Exponent>AQAB</Exponent></RSAKeyValue>";
 
     public static string KeyFile => Path.Combine(AppInfo.DataFolder, "admin.key");
 
