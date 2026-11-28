@@ -151,6 +151,20 @@ internal sealed class JabberService : IDisposable
     }
 
     public IReadOnlyList<string> Rooms { get { lock (_gate) return _rooms.OrderBy(x => x).ToArray(); } }
+    private readonly Dictionary<string,string> _roomTopics = new(StringComparer.OrdinalIgnoreCase);
+    private static readonly string TopicsFile = Path.Combine(Folder, "topics.json");
+    public string RoomTopic(string room) { lock (_gate) return _roomTopics.TryGetValue(room, out var topic) ? topic : ""; }
+    private void ReadRoomTopic(System.Xml.Linq.XElement message)
+    {
+        string room = ((string?)message.Attribute("from") ?? "").Split('/')[0];
+        if (room.Length == 0) return;
+        var subject = message.Elements().FirstOrDefault(x => x.Name.LocalName == "subject");
+        if (subject is null) return;
+        lock (_gate) _roomTopics[room] = subject.Value;
+        SaveChatData();
+        try { ChatChanged?.Invoke(); } catch { }
+    }
+
     private void SaveChatData()
     {
         try
@@ -161,6 +175,7 @@ internal sealed class JabberService : IDisposable
                 File.WriteAllText(ChatFile, JsonSerializer.Serialize(_chats));
                 File.WriteAllText(ContactsFile, JsonSerializer.Serialize(_contacts.Values.ToArray()));
                 File.WriteAllText(RoomsFile, JsonSerializer.Serialize(_rooms.ToArray()));
+                File.WriteAllText(TopicsFile, JsonSerializer.Serialize(_roomTopics));
             }
         }
         catch (Exception ex) { Log.Debug("JABBER", "chat save error=" + ex.GetType().Name); }
@@ -231,6 +246,7 @@ internal sealed class JabberService : IDisposable
         try { if (File.Exists(ChatFile)) _chats.AddRange(JsonSerializer.Deserialize<List<JabberChatMessage>>(File.ReadAllText(ChatFile)) ?? new()); } catch { }
         try { if (File.Exists(ContactsFile)) foreach (var c in JsonSerializer.Deserialize<List<JabberContact>>(File.ReadAllText(ContactsFile)) ?? new()) _contacts[c.Jid] = c; } catch { }
         try { if (File.Exists(RoomsFile)) foreach (var room in JsonSerializer.Deserialize<List<string>>(File.ReadAllText(RoomsFile)) ?? new()) _rooms.Add(room); } catch { }
+        try { if (File.Exists(TopicsFile)) foreach (var pair in JsonSerializer.Deserialize<Dictionary<string,string>>(File.ReadAllText(TopicsFile)) ?? new()) _roomTopics[pair.Key] = pair.Value; } catch { }
         try { if (File.Exists(ConfigFile)) Config = JsonSerializer.Deserialize<JabberConfig>(File.ReadAllText(ConfigFile)) ?? new(); } catch { }
         try { if (File.Exists(HistoryFile)) _history = JsonSerializer.Deserialize<List<JabberPing>>(File.ReadAllText(HistoryFile)) ?? new(); } catch { }
         try { if (File.Exists(ParticipationFile)) Participation = JsonSerializer.Deserialize<ParticipationStats>(File.ReadAllText(ParticipationFile)); } catch { }

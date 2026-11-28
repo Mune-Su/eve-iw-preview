@@ -1,5 +1,8 @@
 # Changelog
 Every version of EVE-IW-Preview, newest first.
+## v0.19.69 - Jabber room topics and roster
+- Enter adds chat room or contact.
+- Show and save room topics, handle roster IQ and presence.
 ## v0.19.68 - Server Jabber buddy list
 - Load authenticated XMPP roster with groups, names and online presence.
 - Display contacts as expandable buddy-list groups.

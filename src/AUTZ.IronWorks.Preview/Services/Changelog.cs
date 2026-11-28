@@ -11,7 +11,8 @@ internal static class Changelog
 {
     public static readonly ChangelogEntry[] Entries =  
       {
-        new("0.19.68", "Server Jabber buddy list", new[] { "Load XMPP roster groups and display names from the server.", "Show presence and grouped contacts in the Jabber window." }),
+        new("0.19.69", "Jabber room topics and roster", new[] { "Enter adds a chat room or contact.", "Show and save XMPP room topics; handle roster IQ and presence updates." }),
+          new("0.19.68", "Server Jabber buddy list", new[] { "Load XMPP roster groups and display names from the server.", "Show presence and grouped contacts in the Jabber window." }),
           new("0.19.67", "Jabber contacts and rooms", new[] { "Contacts and Chat Rooms tabs with direct and group messaging.", "Use XmppDotNet MessageType.GroupChat and keep directorbot separate." }),
           new("0.19.65", "PAP capture and window restore", new[] { "Read account information received via direct or forwarded Jabber messages.", "Keep popouts open across application shutdown and restore their saved geometry." }),
           new("0.19.64", "Fix Account Info parser build", new[] { "Qualify Regex Match.Empty to resolve CS0103." }),

@@ -9,6 +9,8 @@ internal sealed class JabberChatWindow : Window
     private readonly JabberService _service;
     private readonly TreeView _list = new() { Background = Brushes.Transparent, Foreground = Brushes.White, BorderThickness = new Thickness(0) };
     private readonly TextBox _history = new() { IsReadOnly = true, AcceptsReturn = true, TextWrapping = TextWrapping.Wrap, VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
+    private readonly TextBox _topic = new() { IsReadOnly = true, TextWrapping = TextWrapping.Wrap,
+        MaxHeight = 90, VerticalScrollBarVisibility = ScrollBarVisibility.Auto, Margin = new Thickness(0,0,0,5) };
     private readonly TextBox _message = new() { AcceptsReturn = true, TextWrapping = TextWrapping.Wrap, MinHeight = 30, MaxHeight = 85, Margin = new Thickness(0,0,6,0) };
     private readonly TextBlock _status = new() { Foreground = Brushes.LightGray, FontSize = 11 };
     private readonly TextBlock _heading = new() { Foreground = Brushes.White, FontWeight = FontWeights.SemiBold };
@@ -34,12 +36,17 @@ internal sealed class JabberChatWindow : Window
         var addRow = new DockPanel { Margin = new Thickness(0,5,0,0) };
         var newAddress = new TextBox { MinWidth = 90 };
         var add = new Button { Content = "+", ToolTip = "Add full Jabber address" };
-        add.Click += async (_,_) =>
+        async Task AddAddress()
         {
             string jid = newAddress.Text.Trim(); if (jid.Length == 0) return;
-            try { if (_showRooms) await _service.JoinRoom(jid); else _service.AddContact(jid); _selected = jid; newAddress.Clear(); Refresh(); }
+            try { if (_showRooms) await _service.JoinRoom(jid); else _service.AddContact(jid); _selected = jid; newAddress.Clear(); Refresh(); newAddress.Focus(); }
             catch (Exception ex) { _status.Text = ex.Message; }
+        }
+        newAddress.PreviewKeyDown += async (_,e) =>
+        {
+            if (e.Key == Key.Enter) { e.Handled = true; await AddAddress(); }
         };
+        add.Click += async (_,_) => await AddAddress();
         DockPanel.SetDock(add, Dock.Right); addRow.Children.Add(add); addRow.Children.Add(newAddress);
         DockPanel.SetDock(addRow, Dock.Bottom); left.Children.Add(addRow);
         _list.SelectedItemChanged += (_,_) =>
@@ -49,6 +56,7 @@ internal sealed class JabberChatWindow : Window
         left.Children.Add(_list); grid.Children.Add(left);
         var right = new DockPanel();
         _heading.Margin = new Thickness(0,0,0,5); DockPanel.SetDock(_heading, Dock.Top); right.Children.Add(_heading);
+        DockPanel.SetDock(_topic, Dock.Top); right.Children.Add(_topic);
         var composer = new DockPanel { Margin = new Thickness(0,6,0,0) };
         var send = new Button { Content = "Send", MinWidth = 50 };
         async Task Send()
@@ -115,6 +123,9 @@ internal sealed class JabberChatWindow : Window
     private void ShowConversation()
     {
         _heading.Text = _selected;
+        string topic = _showRooms ? _service.RoomTopic(_selected) : "";
+        _topic.Text = topic;
+        _topic.Visibility = topic.Length == 0 ? Visibility.Collapsed : Visibility.Visible;
         _history.Text = string.Join("\n", _service.Chats.Where(x => x.Peer.Equals(_selected,StringComparison.OrdinalIgnoreCase))
             .OrderBy(x => x.Time).Select(x => $"[{x.Time:HH:mm}] {(x.Outgoing ? "You" : x.Peer)}: {x.Body}"));
         _history.ScrollToEnd();
