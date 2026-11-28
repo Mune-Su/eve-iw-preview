@@ -47,7 +47,9 @@ internal sealed class NewEdenMapWindow : Window
         bar.Children.Add(_status);
         DockPanel.SetDock(bar, Dock.Top); root.Children.Add(bar);
         _canvas.LayoutTransform = _scale; _scroll.Content = _canvas; root.Children.Add(_scroll); Content = root;
-        _canvas.MouseWheel += (_, e) => { Zoom(e.Delta > 0 ? 1.15 : .87); e.Handled = true; };
+                  Loaded += (_,_) => { if (Tag as string == "iron-chrome") return; Tag = "iron-chrome"; IronWindowChrome.Attach(this, "New Eden Map"); };
+          PopoutLayout.Track("Map", this);
+_canvas.MouseWheel += (_, e) => { Zoom(e.Delta > 0 ? 1.15 : .87); e.Handled = true; };
         Loaded += async (_, _) => await LoadUniverse();
     }
     private void Zoom(double factor) { _scale.ScaleX = _scale.ScaleY = Math.Clamp(_scale.ScaleX * factor, .35, 5); }

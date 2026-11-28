@@ -1515,14 +1515,14 @@ public sealed class PreviewManager : IDisposable
             _settings.LogMiningManualStop));
     }
 
-    public void OpenSettings()
+    public void OpenSettings(bool activate = true)
     {
         if (_settingsWindow is not null)
         {
             // the window is no longer always on top: bring it back to the front (and out of the taskbar if minimised)
             if (_settingsWindow.WindowState == WindowState.Minimized) _settingsWindow.WindowState = WindowState.Normal;
-            _settingsWindow.Activate();
-            return;
+            if (activate) _settingsWindow.Activate();
+              return;
         }
 
         _recordingHotkey = false;
@@ -1543,7 +1543,7 @@ public sealed class PreviewManager : IDisposable
             ScheduleTrim(3000);                        // the Configuration window is the biggest thing the app ever builds: give it back
         };
         dialog.Show();
-        dialog.Activate();
+          if (activate) dialog.Activate();
     }
 
     // ----- called by the settings window -----

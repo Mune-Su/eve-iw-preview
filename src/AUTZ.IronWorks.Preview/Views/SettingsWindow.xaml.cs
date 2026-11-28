@@ -121,7 +121,9 @@ public partial class SettingsWindow : Window
 
     public SettingsWindow(PreviewManager manager)
     {
-        InitializeComponent();
+                  InitializeComponent();
+          Loaded += (_,_) => { if (Tag as string == "iron-chrome") return; Tag = "iron-chrome"; IronWindowChrome.Attach(this, "Configuration"); };
+          PopoutLayout.Track("Settings", this);
         _manager = manager;
 
         _state = manager.State.Clone();

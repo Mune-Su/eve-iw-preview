@@ -1,5 +1,9 @@
 # Changelog
 Every version of EVE-IW-Preview, newest first.
+## v0.19.58 - Compact windows and saved layout
+- Seamless compact headers and active orange top line.
+- Save open popouts and their positions across restarts.
+- Distinct Fleet Under, System and Doctrine labels in pings.
 ## v0.19.57 - Compact broadcasts
 - Recognise directorbot broadcasts by footer, including GICE and unknown types.
 - Compact read-only furnace cards, STRAT/PCT labels and relative or short-form times.

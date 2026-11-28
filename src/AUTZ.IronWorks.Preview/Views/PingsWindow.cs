@@ -32,7 +32,9 @@ internal sealed class PingsWindow : Window
             HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled });
         Content = root;
         _service.Changed += RefreshSafe;
-        _clock.Tick += (_,_) => Refresh();
+        _clock.Tick += (_,_) =>           Loaded += (_,_) => { if (Tag as string == "iron-chrome") return; Tag = "iron-chrome"; IronWindowChrome.Attach(this, "Pings"); };
+          PopoutLayout.Track("Pings", this);
+Refresh();
         Loaded += (_,_) => _clock.Start();
         Closed += (_,_) => { _clock.Stop(); _service.Changed -= RefreshSafe; };
         Refresh();
@@ -104,9 +106,19 @@ internal sealed class PingsWindow : Window
         catch { }
         var content = new StackPanel { Margin = new Thickness(10,7,10,7) };
         if (fields.TryGetValue("FC Name", out var fc) && fc.Length > 0)
-            content.Children.Add(Line("Fleet under " + fc, 11, new SolidColorBrush(Color.FromRgb(175,190,198))));
+            {
+            var row = new TextBlock { FontSize = 12.5, TextWrapping = TextWrapping.Wrap };
+            row.Inlines.Add(new Run("Fleet Under: ") { Foreground = (Brush)FindResource("BrushMuted") });
+            row.Inlines.Add(new Run(fc) { Foreground = Brushes.White, FontWeight = FontWeights.SemiBold });
+            content.Children.Add(row);
+        }
         if (fields.TryGetValue("Formup Location", out var system) || fields.TryGetValue("Current System", out system))
-            content.Children.Add(Line(system, 11, new SolidColorBrush(Color.FromRgb(250,183,137))));
+            {
+            var row = new TextBlock { FontSize = 11.5, TextWrapping = TextWrapping.Wrap };
+            row.Inlines.Add(new Run("System: ") { Foreground = (Brush)FindResource("BrushMuted") });
+            row.Inlines.Add(new Run(system) { Foreground = new SolidColorBrush(Color.FromRgb(250,183,137)), FontWeight = FontWeights.SemiBold });
+            content.Children.Add(row);
+        }
         if (prose.Count > 0)
         {
             var title = new TextBlock { Text = prose[0], FontSize = 13, FontWeight = FontWeights.SemiBold,
@@ -120,7 +132,7 @@ internal sealed class PingsWindow : Window
         }
         if (fields.TryGetValue("Doctrine", out var doctrine) && doctrine.Length > 0)
         {
-            content.Children.Add(Line("Doctrine", 10, (Brush)FindResource("BrushMuted")));
+            content.Children.Add(Line("Doctrine:", 10, (Brush)FindResource("BrushMuted")));
             content.Children.Add(Line(doctrine, 11, Brushes.White));
         }
         var footer = new Border { Margin = new Thickness(-10,6,-10,-7), Padding = new Thickness(10,5,10,5),

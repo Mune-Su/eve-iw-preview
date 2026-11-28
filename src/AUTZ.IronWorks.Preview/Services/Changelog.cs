@@ -11,7 +11,8 @@ internal static class Changelog
 {
     public static readonly ChangelogEntry[] Entries =  
       {
-        new("0.19.57", "Compact broadcasts", new[] { "Receive GICE and other directorbot broadcast types without requiring fleet fields.", "Compact furnace-accented cards with STRAT/PCT labels and short timestamps." }),
+        new("0.19.58", "Compact windows and saved layout", new[] { "Compact seamless title bars with orange active indicator.", "Remember open popouts and their positions across restarts.", "Clear Fleet Under, System and Doctrine labels on ping cards." }),
+          new("0.19.57", "Compact broadcasts", new[] { "Receive GICE and other directorbot broadcast types without requiring fleet fields.", "Compact furnace-accented cards with STRAT/PCT labels and short timestamps." }),
           new("0.19.56", "Ping cards", new[] { "Single scrolling feed of complete fleet cards with FC, formup, doctrine, PAP and links.", "Keep unread status, copying and ping history without expandable panels." }),
           new("0.19.55", "Correct Jabber send API", new[] { "Use the documented XmppDotNet SendAsync message API and remove the unused send delegate." }),
           new("0.19.54", "Complete XmppDotNet dependencies", new[] { "Include socket transport and extension packages required by the Jabber client." }),

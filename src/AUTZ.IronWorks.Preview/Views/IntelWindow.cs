@@ -40,7 +40,9 @@ internal sealed class IntelWindow : Window
         top.Children.Add(_status); DockPanel.SetDock(top, Dock.Top); root.Children.Add(top);
         _feed.Foreground = Brushes.White; _feed.Background = new SolidColorBrush(Color.FromRgb(20,23,32));
         root.Children.Add(_feed); Content = root;
-        DrawChannels(); _timer.Tick += (_,_) => Poll();
+                  Loaded += (_,_) => { if (Tag as string == "iron-chrome") return; Tag = "iron-chrome"; IronWindowChrome.Attach(this, "Intel"); };
+          PopoutLayout.Track("Intel", this);
+DrawChannels(); _timer.Tick += (_,_) => Poll();
         Loaded += (_,_) => { Poll(); _timer.Start(); }; Closed += (_,_) => _timer.Stop();
     }
     private void SaveChannels()

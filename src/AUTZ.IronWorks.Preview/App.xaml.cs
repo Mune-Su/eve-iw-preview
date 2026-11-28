@@ -91,7 +91,15 @@ public partial class App : System.Windows.Application
 
         // No main window and no taskbar button: the app lives in the system tray (right-click the icon).
         _tray = new NotifyIconService(_manager);
-        _manager.Start();
+                  _manager.Start();
+          Dispatcher.BeginInvoke(new Action(() =>
+          {
+              if (PopoutLayout.WasOpen("Pings")) JabberHub.OpenWindow(false);
+              if (PopoutLayout.WasOpen("Chat")) JabberHub.OpenChat(false);
+              if (PopoutLayout.WasOpen("Settings")) _manager.OpenSettings(false);
+              if (PopoutLayout.WasOpen("Intel")) new IntelWindow().Show();
+              if (PopoutLayout.WasOpen("Map")) new NewEdenMapWindow().Show();
+          }), DispatcherPriority.ApplicationIdle);
         bool updated = UpdateService.ConsumeUpdatedLaunch();
         if (updated)
         {
@@ -167,7 +175,8 @@ public partial class App : System.Windows.Application
     protected override void OnExit(ExitEventArgs e)
     {
         Log.Trace("APP", $"shutdown: exitCode={e.ApplicationExitCode}");
-        UpdateService.Stop();
+                  PopoutLayout.Shutdown();
+          UpdateService.Stop();
         _tray?.Dispose();
         _manager?.Dispose();
         if (_ownsMutex && _mutex is not null)
@@ -178,7 +187,3 @@ public partial class App : System.Windows.Application
         base.OnExit(e);
     }
 }
-
-
-
-
